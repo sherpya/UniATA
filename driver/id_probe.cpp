@@ -38,7 +38,7 @@ Revision History:
          Chuck Park (ChuckP)
 
     Device search/init algorithm is completly rewritten by
-         Alter, Copyright (c) 2002-2003
+         Alter, Copyright (c) 2002-2004
 
     Fixes for Native/Compatible modes of onboard IDE controller by
          Vitaliy Vorobyov, deathsoft@yandex.ru (c) 2004
@@ -724,6 +724,10 @@ AtapiFindBusMasterController(
     MasterDev = IsMasterDev(&pciData);
 
     if(MasterDev) {
+        KdPrint2((PRINT_PREFIX "MasterDev\n"));
+    }
+
+    if(MasterDev) {
         if((channel==0) && ConfigInfo->AtdiskPrimaryClaimed) {
             KdPrint2((PRINT_PREFIX "Error: Primary channel already claimed by another driver\n"));
             return(SP_RETURN_NOT_FOUND);
@@ -759,9 +763,6 @@ AtapiFindBusMasterController(
         KdPrint2((PRINT_PREFIX "  Using MEM i/o (1)\n"));
     }
 
-    /* do extra chipset specific setups */
-    AtapiChipInit(HwDeviceExtension, i, -1);
-
     /*
      * the Cypress chip is a mess, it contains two ATA functions, but 
      * both channels are visible on the first one.
@@ -773,6 +774,9 @@ AtapiFindBusMasterController(
         KdPrint2((PRINT_PREFIX "dev_id == 0xc6931080 && FunctionNumber > 1 => exit_findbm\n"));
         goto exit_findbm;
     }
+
+    /* do extra chipset specific setups */
+    AtapiChipInit(HwDeviceExtension, i, -1);
 
     if(simplexOnly || !MasterDev || !WinVer_IsNT) {
         if(deviceExtension->NumberChannels < 2) {
@@ -1506,7 +1510,7 @@ CheckDevice(
     IN PVOID   HwDeviceExtension,
     IN ULONG   Channel,
     IN ULONG   deviceNumber,
-    IN BOOLEAN ResetBus
+    IN BOOLEAN ResetDev
     )
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
@@ -1523,7 +1527,7 @@ CheckDevice(
 
     KdPrint2((PRINT_PREFIX "CheckDevice: Device %#x\n",
                deviceNumber));
-    if(ResetBus) {
+    if(ResetDev) {
         KdPrint2((PRINT_PREFIX "CheckDevice: reset bus\n"));
         // Reset controller
         AtapiSoftReset(chan, baseIoAddress1,deviceNumber);
@@ -1535,7 +1539,6 @@ CheckDevice(
     ScsiPortStallExecution(10);
     statusByte = WaitOnBaseBusyLong(chan, baseIoAddress1);
 
-    // Check here for some SCSI adapters that incorporate IDE emulation.
     GetBaseStatus(chan, baseIoAddress1, statusByte);
 
     KdPrint2((PRINT_PREFIX "CheckDevice: status %#x\n", statusByte));
@@ -1661,6 +1664,7 @@ FindDevices(
     //ULONG                deviceNumber;
     ULONG                i;
     UCHAR                statusByte;
+    ULONG                ldev;
 
     // Disable interrupts
     AtapiDisableInterrupts(deviceExtension, Channel);
@@ -1677,7 +1681,7 @@ FindDevices(
     }
 
     for (i = 0; i < 2; i++) {
-        ULONG ldev = GET_LDEV2(Channel, i, 0);
+        ldev = GET_LDEV2(Channel, i, 0);
 
         if ((  deviceExtension->lun[ldev].DeviceFlags & DFLAGS_DEVICE_PRESENT) &&
              !(deviceExtension->lun[ldev].DeviceFlags & DFLAGS_LBA_ENABLED) &&
@@ -1793,10 +1797,7 @@ FindDevices(
         }
     }
 
-    // Make sure master device is selected on exit.
-    SelectDrive(chan, baseIoAddress1, 0);
-
-    // Reset the controller. This is a feeble attempt to leave the ESDI
+/*    // Reset the controller. This is a feeble attempt to leave the ESDI
     // controllers in a state that ATDISK driver will recognize them.
     // The problem in ATDISK has to do with timings as it is not reproducible
     // in debug. The reset should restore the controller to its poweron state
@@ -1807,11 +1808,26 @@ FindDevices(
         ScsiPortStallExecution(50 * 1000);
         AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_REENABLE_CONTROLLER);
     }
+*/
+    if(deviceResponded) {
+        for (i = 0; i < 2; i++) {
+            ldev = GET_LDEV2(Channel, i, 0);
+
+            if(deviceExtension->lun[ldev].DeviceFlags & DFLAGS_DEVICE_PRESENT) {
+                // Make sure some device (master is preferred) is selected on exit.
+                KdPrint2((PRINT_PREFIX 
+                           "FindDevices: select %d dev on exit\n", i));
+                SelectDrive(chan, baseIoAddress1, i);
+                break;
+            }
+        }
+    }
 
     GetBaseStatus(chan, baseIoAddress1, statusByte);
     // Enable interrupts
     AtapiEnableInterrupts(deviceExtension, Channel);
 //    AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus, IDE_DC_A_4BIT );
+    GetBaseStatus(chan, baseIoAddress1, statusByte);
 
     KdPrint2((PRINT_PREFIX 
                "FindDevices: returning %d\n",

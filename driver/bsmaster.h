@@ -31,7 +31,7 @@ Notes:
 Revision History:
 
     Code was created by
-         Alter, Copyright (c) 2002-2003
+         Alter, Copyright (c) 2002-2004
 
     Some definitions were taken from FreeBSD 4.3-4.6 ATA driver by
          Søren Schmidt, Copyright (c) 1998,1999,2000,2001

@@ -31,7 +31,11 @@ Notes:
 Revision History:
 
     Some parts of code were taken from FreeBSD 5.1 ATA driver by
-         Søren Schmidt, Copyright (c) 1998-2004
+        Søren Schmidt, Copyright (c) 1998-2004
+    added IT8172 IDE controller support from Linux
+    added VIA 8233/8235 fix from Linux
+    added 80-pin cable detection from Linux for
+        VIA, nVidia
 
 --*/
 
@@ -70,6 +74,7 @@ AtapiChipDetect(
     ULONG tmp32;
 
     KdPrint2((PRINT_PREFIX "AtapiChipDetect:\n" ));
+    KdPrint2((PRINT_PREFIX "HwFlags: %#x\n", deviceExtension->HwFlags));
 
     static BUSMASTER_CONTROLLER_INFORMATION const AcardAdapters[] = {
         PCI_DEV_HW_SPEC_BM( 0005, 1191, 0x00, ATA_UDMA2, "Acard ATP850" , ATPOLD | UNIATA_SIMPLEX_ONLY),
@@ -172,12 +177,12 @@ AtapiChipDetect(
         };
 
     static BUSMASTER_CONTROLLER_INFORMATION const SiliconImageAdapters[] = {
-        PCI_DEV_HW_SPEC_BM( 0680, 1095, 0x00, ATA_UDMA6, "SiI 0680" , SII_SETCLK  ),
-        PCI_DEV_HW_SPEC_BM( 0649, 1095, 0x00, ATA_UDMA5, "CMD 649"  , SII_INTR    ),
-        PCI_DEV_HW_SPEC_BM( 0648, 1095, 0x00, ATA_UDMA4, "CMD 648"  , SII_INTR    ),
-        PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x07, ATA_UDMA2, "CMD 646U2", SII_ENINTR  ),
-        PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x00, ATA_WDMA2, "CMD 646"  , SII_ENINTR  ),
-        PCI_DEV_HW_SPEC_BM( 0640, 1095, 0x00, ATA_PIO4 , "CMD 640"  , SII_ENINTR  ),
+        PCI_DEV_HW_SPEC_BM( 0680, 1095, 0x00, ATA_UDMA6, "SiI 0680" , SII_SETCLK           ),
+        PCI_DEV_HW_SPEC_BM( 0649, 1095, 0x00, ATA_UDMA5, "CMD 649"  , SII_INTR   | SII_CMD ),
+        PCI_DEV_HW_SPEC_BM( 0648, 1095, 0x00, ATA_UDMA4, "CMD 648"  , SII_INTR   | SII_CMD ),
+        PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x07, ATA_UDMA2, "CMD 646U2", SII_ENINTR | SII_CMD ),
+        PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x00, ATA_WDMA2, "CMD 646"  , SII_ENINTR | SII_CMD ),
+        PCI_DEV_HW_SPEC_BM( 0640, 1095, 0x00, ATA_PIO4 , "CMD 640"  , SII_ENINTR           ),
         PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL       , -1 )
         };
 
@@ -246,6 +251,8 @@ AtapiChipDetect(
         PCI_DEV_HW_SPEC_BM( 3102, 1106, 0x00, -1, "VIA 8662", VIASOUTH ),
         PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1, NULL      , -1 )
         };
+
+    KdPrint2((PRINT_PREFIX "VendorID/DeviceID/Rev %#x/%#x/%#x\n", VendorID, DeviceID, RevID));
                                   
     switch(VendorID) {
     case ATA_ACARD_ID: 
@@ -273,22 +280,27 @@ AtapiChipDetect(
         DevTypeInfo = (BUSMASTER_CONTROLLER_INFORMATION*)&ServerWorksAdapters[0];
         break;
     case ATA_SILICON_IMAGE_ID:
+        KdPrint2((PRINT_PREFIX "ATA_SILICON_IMAGE_ID\n"));
         DevTypeInfo = (BUSMASTER_CONTROLLER_INFORMATION*)&SiliconImageAdapters[0];
         break;
     case ATA_SIS_ID:
+        KdPrint2((PRINT_PREFIX "ATA_SIS_ID\n"));
         DevTypeInfo = (BUSMASTER_CONTROLLER_INFORMATION*)&SiSAdapters[0];
         i = AtapiFindListedDev(DevTypeInfo, -1, HwDeviceExtension, SystemIoBusNumber, -1, NULL);
         goto for_ugly_chips;
     case ATA_VIA_ID: 
+        KdPrint2((PRINT_PREFIX "ATA_VIA_ID\n"));
         DevTypeInfo = (BUSMASTER_CONTROLLER_INFORMATION*)&ViaSouthAdapters[0];
         i = AtapiFindListedDev(DevTypeInfo, -1, HwDeviceExtension, SystemIoBusNumber, slotNumber, NULL);
         if(i != -1) {
+            KdPrint2((PRINT_PREFIX "VIASOUTH\n"));
             deviceExtension->HwFlags |= VIASOUTH;
         }
         DevTypeInfo = (BUSMASTER_CONTROLLER_INFORMATION*)&ViaAdapters[0];
         i = AtapiFindListedDev(DevTypeInfo, -1, HwDeviceExtension, SystemIoBusNumber, slotNumber, NULL);
         goto for_ugly_chips;
     default:
+        KdPrint2((PRINT_PREFIX "Default\n"));
 
         deviceExtension->MaxTransferMode = deviceExtension->BaseIoAddressBM_0 ? ATA_DMA : ATA_PIO4;
         /* do extra chipset specific setups */
@@ -329,6 +341,11 @@ AtapiChipDetect(
             deviceExtension->MaxTransferMode = ATA_PIO4;
             break;
 
+        case 0x81721283:        /* IT8172 IDE controller */
+            deviceExtension->MaxTransferMode = ATA_UDMA2;
+            *simplexOnly = TRUE; 
+            break;
+
         default:
             return FALSE;
         }
@@ -337,12 +354,14 @@ AtapiChipDetect(
 
     i = Ata_is_dev_listed(DevTypeInfo, VendorID, DeviceID, RevID, -1);
 for_ugly_chips:
+    KdPrint2((PRINT_PREFIX "i: %#x\n", i));
     if(i == -1) {
         return FALSE;
     }
     deviceExtension->MaxTransferMode =  DevTypeInfo[i].MaxTransferMode;
     deviceExtension->HwFlags         |= DevTypeInfo[i].RaidFlags;
 
+    KdPrint2((PRINT_PREFIX "HwFlags: %#x\n", deviceExtension->HwFlags));
     if(deviceExtension->HwFlags & UNIATA_SIMPLEX_ONLY) {
         KdPrint2((PRINT_PREFIX "UNIATA_SIMPLEX_ONLY\n" ));
         *simplexOnly = TRUE; 
@@ -380,8 +399,10 @@ for_ugly_chips:
         }
         break;
     case ATA_SIS_ID:
-        if(ChipType != SIS_SOUTH)
+        if(ChipType != SIS_SOUTH) {
+            KdPrint2((PRINT_PREFIX "ChipType != SIS_SOUTH\n"));
             break;
+        }
         ChangePciConfig1(0x57, (a & 0x7f));
         GetPciConfig1(0x00, tmp32);
         if(tmp32 == ATA_SIS5518) {
@@ -509,6 +530,54 @@ hpt_cable80(
 } // end hpt_cable80()
 
 
+ULONG
+via_cable80(
+    IN PHW_DEVICE_EXTENSION deviceExtension,
+    IN ULONG channel               // physical channel number (0-1)
+    )
+{
+    PVOID HwDeviceExtension = (PVOID)deviceExtension;
+    ULONG slotNumber = deviceExtension->slotNumber;
+    ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
+
+    ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
+
+    ULONG reg50;
+    ULONG a;
+    ULONG i, j;
+
+    GetPciConfig1(0x50, reg50);
+
+    switch(ChipType) {
+    case VIA133:
+        a = 8;
+        break;
+    case VIA100:
+        a = 4;
+        break;
+    case VIA66:
+        a = 2;
+        break;
+    default:
+        return false;
+    }
+
+    for (j=0; j>=2; i -= 8) {
+        i = (3-(channel*2+j))*8;
+        if (((reg50 >> (i & 16)) & 8) &&
+            ((reg50 >> i) & 0x20) &&
+             (((reg50 >> i) & 7) < a)) {
+
+//            res |= TRUE; //(1 << (1 - (i >> 4)));
+        } else {
+            return FALSE;
+        }
+    }
+    return TRUE;
+
+} // end via_cable80()
+
+
 BOOLEAN
 AtapiChipInit(
     IN PVOID HwDeviceExtension,
@@ -546,6 +615,9 @@ AtapiChipInit(
         chan = &deviceExtension->chan[c];
         chan->MaxTransferMode = deviceExtension->MaxTransferMode;
     }
+
+    KdPrint2((PRINT_PREFIX "HwFlags: %#x\n", deviceExtension->HwFlags));
+    KdPrint2((PRINT_PREFIX "VendorID/DeviceID/Rev %#x/%#x/%#x\n", VendorID, DeviceID, RevID));
 
     switch(VendorID) {
 //  case ATA_ACARD_ID: 
@@ -663,14 +735,31 @@ AtapiChipInit(
             }
         }
         break; }
-    case ATA_NVIDIA_ID:
+    case ATA_NVIDIA_ID: {
+        UCHAR reg52;
         /* set prefetch, postwrite */
         if(ChipFlags & AMDBUG) {
             ChangePciConfig1(0x51, (a & 0x0f));
         } else {
             ChangePciConfig1(0x51, (a | 0xf0));
         }
-        break;
+        // check 80-pin cable
+        if(c == -1) {
+            for(c=0; c<deviceExtension->NumberChannels; c++) {
+                chan = &deviceExtension->chan[c];
+                GetPciConfig1(0x52, reg52);
+                if( !((reg52 >> (c*2)) & 0x01)) {
+                    chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
+                }
+            }
+        } else {
+            chan = &deviceExtension->chan[c];
+            GetPciConfig1(0x52, reg52);
+            if( !((reg52 >> (c*2)) & 0x01)) {
+                chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
+            }
+        }
+        break; }
     case ATA_PROMISE_ID: {
         USHORT Reg50;
         switch(ChipType) {
@@ -753,8 +842,40 @@ AtapiChipInit(
                 ChangePciConfig1(0x8a, (a & 0x0F) | 0x10);
             GetPciConfig1(0x8a, tmp8);
             if ((tmp8 & 0x30) != 0x10) {
-                KdPrint2((PRINT_PREFIX "Sil 0680 could not set ATA133 clock"));
+                KdPrint2((PRINT_PREFIX "Sil 0680 could not set ATA133 clock\n"));
+                deviceExtension->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA5);
             }
+        }
+        if(ChipFlags & SII_CMD) {
+            KdPrint2((PRINT_PREFIX "SII_CMD\n"));
+            /* Setup interrupts. */
+            GetPciConfig1(0x8a, tmp8);
+            tmp8 &= ~(0x30);
+            SetPciConfig1(0x71, tmp8);
+
+            /* Use MEMORY READ LINE for reads.
+             * NOTE: Although not mentioned in the PCI0646U specs,
+             *       these bits are write only and won't be read
+             *       back as set or not.  The PCI0646U2 specs clarify
+             *       this point.
+             */
+            tmp8 |= 0x02;
+            SetPciConfig1(0x71, tmp8);
+
+            /* Set reasonable active/recovery/address-setup values. */
+            tmp8 = 0x40;
+            SetPciConfig1(0x53, tmp8);
+            tmp8 = 0x3f;
+            SetPciConfig1(0x54, tmp8);
+            tmp8 = 0x40;
+            SetPciConfig1(0x55, tmp8);
+            tmp8 = 0x3f;
+            SetPciConfig1(0x56, tmp8);
+            tmp8 = 0x1c;
+            SetPciConfig1(0x57, tmp8);
+            tmp8 = 0x3f;
+            SetPciConfig1(0x58, tmp8);
+            SetPciConfig1(0x5b, tmp8);
         }
         break;
     case ATA_SIS_ID:
@@ -814,6 +935,21 @@ AtapiChipInit(
         if(ChipFlags & VIACLK) {
             ChangePciConfig4(0x50, (a | 0x030b030b));
         }
+        // check 80-pin cable
+        if(c == -1) {
+            for(c=0; c<2; c++) {
+                chan = &deviceExtension->chan[c];
+                if(!via_cable80(deviceExtension, c)) {
+                    chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
+                }
+            }
+        } else {
+            chan = &deviceExtension->chan[c];
+            if(!via_cable80(deviceExtension, c)) {
+                chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
+            }
+        }
+        
         /* the southbridge might need the data corruption fix */
         if(ChipFlags & VIABUG) {
             AtapiViaSouthBridgeFixup(HwDeviceExtension, PCIConfiguration,
@@ -836,6 +972,7 @@ AtapiChipInit(
         SetPciConfig2(0x68, DEV_BSIZE);
 
         break;
+
     }
 
     return TRUE;

@@ -1269,6 +1269,93 @@ set_new_acard:
             deviceExtension->lun[ldev].TransferMode = ATA_PIO+apiomode;
         }
         return;
+    case ATA_ITE_ID: {       /* IT8172 IDE controller */
+
+	int a_speed = 3 << (dev * 4);
+	int u_flag  = 1 << dev;
+	int u_speed = 0;
+	int pio     = 1;
+	UCHAR  reg48, reg4a;
+	USHORT drive_enables;
+	ULONG  drive_timing;
+
+	GetPciConfig1(0x48, reg48);
+	GetPciConfig1(0x4a, reg4a);
+
+        /*
+         * Setting the DMA cycle time to 2 or 3 PCI clocks (60 and 91 nsec
+         * at 33 MHz PCI clock) seems to cause BadCRC errors during DMA
+         * transfers on some drives, even though both numbers meet the minimum
+         * ATAPI-4 spec of 73 and 54 nsec for UDMA 1 and 2 respectively.
+         * So the faster times are just commented out here. The good news is
+         * that the slower cycle time has very little affect on transfer
+         * performance.
+         */
+
+        for(i=udmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+		SetPciConfig1(0x48, reg48 | u_flag);
+		reg4a &= ~a_speed;
+		SetPciConfig1(0x4a, reg4a | u_speed);
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
+                pio = 4;
+                goto setup_drive_ite;
+            }
+        }
+         
+        for(i=wdmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_WDMA0+i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+		SetPciConfig1(0x48, reg48 & ~u_flag);
+		SetPciConfig1(0x4a, reg4a & ~a_speed);
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA0+i);
+                pio = 3;
+                return;
+            }
+        }
+        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                            ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        SetPciConfig1(0x48, reg48 & ~u_flag);
+        SetPciConfig1(0x4a, reg4a & ~a_speed);
+
+        pio = apiomode;
+
+setup_drive_ite:
+
+	GetPciConfig2(0x40, drive_enables);
+	GetPciConfig4(0x44, drive_timing);
+
+	/*
+	 * FIX! The DIOR/DIOW pulse width and recovery times in port 0x44
+	 * are being left at the default values of 8 PCI clocks (242 nsec
+	 * for a 33 MHz clock). These can be safely shortened at higher
+	 * PIO modes. The DIOR/DIOW pulse width and recovery times only
+	 * apply to PIO modes, not to the DMA modes.
+	 */
+
+	/*
+	 * Enable port 0x44. The IT8172G spec is confused; it calls
+	 * this register the "Slave IDE Timing Register", but in fact,
+	 * it controls timing for both master and slave drives.
+	 */
+	drive_enables |= 0x4000;
+
+        drive_enables &= (0xc000 | (0x06 << (DeviceNumber*4)));
+        if (pio > 1) {
+        /* enable prefetch and IORDY sample-point */
+            drive_enables |= (0x06 << (DeviceNumber*4));
+        }    
+
+        SetPciConfig2(0x40, drive_enables);
+
+        return;
+        break; }
     }
 
 try_generic_dma:

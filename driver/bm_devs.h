@@ -218,14 +218,21 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_VIA8371		0x03911106
 #define ATA_VIA8662		0x31021106
 
+#define ATA_ITE_ID		0x1283
+#define ATA_IT8172G		0x81721283
+
+#define ATA_OPTI_ID             0x1045
+#define ATA_OPTI82C621          0xc6211045
+#define ATA_OPTI82C625          0xd5681045
+
 /* chipset setup related defines          */
 /* Used in HW_DEVICE_EXTENSION.InitMethod */
 
-#define CHIPTYPE_MASK   0x00ff
-#define CHIPFLAG_MASK   0xff00
+#define CHIPTYPE_MASK   0x000000ff
+#define CHIPFLAG_MASK   0xffffff00
 
-#define UNIATA_RAID_CONTROLLER  0x8000
-#define UNIATA_SIMPLEX_ONLY     0x4000
+#define UNIATA_RAID_CONTROLLER  0x80000000
+#define UNIATA_SIMPLEX_ONLY     0x40000000
 
 #define ATPOLD		0x0100
 
@@ -256,6 +263,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define SII_INTR	0x0100
 #define SII_SETCLK	0x0200
 #define SII_ENINTR	0x0400
+#define SII_CMD         0x0800
 
 #define SIS_SOUTH	1
 #define SIS133NEW	2

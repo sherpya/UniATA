@@ -325,6 +325,34 @@ AtapiReadBuffer2(
 
 UCHAR
 __fastcall
+AtapiSuckPort2(
+    IN PHW_CHANNEL chan,
+    PIDE_REGISTERS_1 baseIoAddress1,
+    PIDE_REGISTERS_2 baseIoAddress2
+    )
+{
+    UCHAR statusByte;
+    ULONG i;
+
+    WaitOnBusyLong(chan, baseIoAddress2);
+    for (i = 0; i < 0x10000; i++) {
+
+        GetStatus(chan, baseIoAddress2, statusByte);
+        if (statusByte & IDE_STATUS_DRQ) {
+            // Suck out any remaining bytes and throw away.
+            AtapiReadPort2(chan, (PUSHORT)&baseIoAddress1->i.Data);
+        } else {
+            break;
+        }
+    }
+    if(i) {
+        KdPrint2((PRINT_PREFIX "AtapiSuckPort2: overrun detected (%#x words)\n", i ));
+    }
+    return statusByte;
+} // AtapiSuckPort2()
+
+UCHAR
+__fastcall
 WaitOnBusy(
     IN PHW_CHANNEL   chan,
     PIDE_REGISTERS_2 BaseIoAddress
@@ -404,6 +432,28 @@ WaitOnBaseBusyLong(
             break; \
         } \
     } \
+    return Status;
+}
+
+UCHAR
+__fastcall
+WaitForIdleLong(
+    IN PHW_CHANNEL   chan,
+    PIDE_REGISTERS_2 BaseIoAddress
+    )
+{ \
+    ULONG i;
+    UCHAR Status;
+    for (i=0; i<20000; i++) { \
+        GetStatus(chan, BaseIoAddress, Status); \
+        if (Status & IDE_STATUS_BUSY ||
+            (Status & ~(IDE_STATUS_ERROR | IDE_STATUS_INDEX)) != IDE_STATUS_IDLE) { \
+            ScsiPortStallExecution(10); \
+            continue; \
+        } else { \
+            break; \
+        } \
+    }
     return Status;
 }
 
@@ -1191,8 +1241,9 @@ IssueIdentify(
     PIDE_REGISTERS_1     baseIoAddress1 = deviceExtension->BaseIoAddress1[lChannel];
     PIDE_REGISTERS_2     baseIoAddress2 = deviceExtension->BaseIoAddress2[lChannel];
     ULONG                waitCount = 50000;
-    ULONG                i,j;
+    ULONG                j;
     UCHAR                statusByte;
+    UCHAR                statusByte2;
     UCHAR                signatureLow,
                          signatureHigh;
     ULONG                ldev = (lChannel * 2) + DeviceNumber;
@@ -1202,18 +1253,21 @@ IssueIdentify(
     ScsiPortStallExecution(10);
     statusByte = WaitOnBusyLong(chan, baseIoAddress2);
     // Check that the status register makes sense.
-//    statusByte = GetBaseStatus(chan, baseIoAddress1);
+    GetBaseStatus(chan, baseIoAddress1, statusByte2);
 
     if (Command == IDE_COMMAND_IDENTIFY) {
         // Mask status byte ERROR bits.
         statusByte &= ~(IDE_STATUS_ERROR | IDE_STATUS_INDEX);
         KdPrint2((PRINT_PREFIX "IssueIdentify: Checking for IDE. Status (%#x)\n", statusByte));
         // Check if register value is reasonable.
+
         if (statusByte != IDE_STATUS_IDLE) {
             // Reset the controller.
-            AtapiSoftReset(chan,baseIoAddress1,DeviceNumber);
+            KdPrint2((PRINT_PREFIX "IssueIdentify: statusByte != IDE_STATUS_IDLE\n"));
+            //KdPrint2((PRINT_PREFIX "IssueIdentify: Reset ATAPI\n"));
+            //AtapiSoftReset(chan,baseIoAddress1,DeviceNumber);
 
-            SelectDrive(chan,baseIoAddress1, DeviceNumber);
+            SelectDrive(chan, baseIoAddress1, DeviceNumber);
             WaitOnBusyLong(chan, baseIoAddress2);
 
             signatureLow = AtapiReadPort1(chan,&baseIoAddress1->i.CylinderLow);
@@ -1222,6 +1276,7 @@ IssueIdentify(
             if (signatureLow == ATAPI_MAGIC_LSB &&
                 signatureHigh == ATAPI_MAGIC_MSB) {
                 // Device is Atapi.
+                KdPrint2((PRINT_PREFIX "IssueIdentify: this is ATAPI (ldev %d)\n", ldev));
                 return FALSE;
             }
 
@@ -1234,6 +1289,7 @@ IssueIdentify(
                 GetStatus(chan, baseIoAddress2, statusByte);
 
             } while ((statusByte & IDE_STATUS_BUSY) && waitCount--);
+            GetBaseStatus(chan, baseIoAddress1, statusByte2);
 
             SelectDrive(chan, baseIoAddress1, DeviceNumber);
             // Another check for signature, to deal with one model Atapi that doesn't assert signature after
@@ -1243,6 +1299,7 @@ IssueIdentify(
 
             if (signatureLow == ATAPI_MAGIC_LSB &&
                 signatureHigh == ATAPI_MAGIC_MSB) {
+                KdPrint2((PRINT_PREFIX "IssueIdentify: this is ATAPI (2) (ldev %d)\n", ldev));
                 // Device is Atapi.
                 return FALSE;
             }
@@ -1250,21 +1307,24 @@ IssueIdentify(
             statusByte &= ~IDE_STATUS_INDEX;
             if (statusByte != IDE_STATUS_IDLE) {
                 // Give up on this.
+                KdPrint2((PRINT_PREFIX "IssueIdentify: no dev (ldev %d)\n", ldev));
                 return FALSE;
             }
         }
     } else {
         KdPrint2((PRINT_PREFIX "IssueIdentify: Checking for ATAPI. Status (%#x)\n", statusByte));
+        statusByte = WaitForIdleLong(chan, baseIoAddress2);
+        KdPrint2((PRINT_PREFIX "IssueIdentify: Checking for ATAPI (2). Status (%#x)\n", statusByte));
     }
 
     for (j = 0; j < 4*2; j++) {
         // Send IDENTIFY command.
         statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel, Command, 0, 0, 0, (j >= 4) ? 0x200 : 0, 0, ATA_WAIT_INTR);
-
         // Clear interrupt
 
         if (statusByte & IDE_STATUS_DRQ) {
             // Read status to acknowledge any interrupts generated.
+            KdPrint2((PRINT_PREFIX "IssueIdentify: IDE_STATUS_DRQ (%#x)\n", statusByte));
             GetBaseStatus(chan, baseIoAddress1, statusByte);
             // One last check for Atapi.
             signatureLow = AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow);
@@ -1272,11 +1332,13 @@ IssueIdentify(
 
             if (signatureLow == ATAPI_MAGIC_LSB &&
                 signatureHigh == ATAPI_MAGIC_MSB) {
+                KdPrint2((PRINT_PREFIX "IssueIdentify: this is ATAPI (3) (ldev %d)\n", ldev));
                 // Device is Atapi.
                 return FALSE;
             }
             break;
         } else {
+            KdPrint2((PRINT_PREFIX "IssueIdentify: !IDE_STATUS_DRQ (%#x)\n", statusByte));
             if (Command == IDE_COMMAND_IDENTIFY) {
                 // Check the signature. If DRQ didn't come up it's likely Atapi.
                 signatureLow = AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow);
@@ -1285,12 +1347,14 @@ IssueIdentify(
                 if (signatureLow == ATAPI_MAGIC_LSB &&
                     signatureHigh == ATAPI_MAGIC_MSB) {
                     // Device is Atapi.
+                    KdPrint2((PRINT_PREFIX "IssueIdentify: this is ATAPI (4) (ldev %d)\n", ldev));
                     return FALSE;
                 }
             }
             // Device didn't respond correctly. It will be given one more chances.
             KdPrint2((PRINT_PREFIX "IssueIdentify: DRQ never asserted (%#x). Error reg (%#x)\n",
                         statusByte, AtapiReadPort1(chan, &baseIoAddress1->i.Error)));
+            GetBaseStatus(chan, baseIoAddress1, statusByte);
             AtapiSoftReset(chan, baseIoAddress1,DeviceNumber);
 
             GetBaseStatus(chan, baseIoAddress1, statusByte);
@@ -1301,19 +1365,33 @@ IssueIdentify(
     // Check for error on really stupid master devices that assert random
     // patterns of bits in the status register at the slave address.
     if ((Command == IDE_COMMAND_IDENTIFY) && (statusByte & IDE_STATUS_ERROR)) {
+        KdPrint2((PRINT_PREFIX "IssueIdentify: Exit on error (%#x)\n", statusByte));
         return FALSE;
     }
 
     KdPrint2((PRINT_PREFIX "IssueIdentify: Status before read words %#x\n", statusByte));
     // Suck out 256 words. After waiting for one model that asserts busy
     // after receiving the Packet Identify command.
+    statusByte = WaitForDrq(chan, baseIoAddress2);
     statusByte = WaitOnBusyLong(chan, baseIoAddress2);
 
     if (!(statusByte & IDE_STATUS_DRQ)) {
+        KdPrint2((PRINT_PREFIX "IssueIdentify: !IDE_STATUS_DRQ (2) (%#x)\n", statusByte));
+        GetBaseStatus(chan, baseIoAddress1, statusByte);
         return FALSE;
     }
+    GetBaseStatus(chan, baseIoAddress1, statusByte);
 
     ReadBuffer(chan, baseIoAddress1, (PUSHORT)&deviceExtension->FullIdentifyData, 256);
+    // Work around for some IDE and one model Atapi that will present more than
+    // 256 bytes for the Identify data.
+    statusByte = AtapiSuckPort2(chan, baseIoAddress1, baseIoAddress2);
+
+    statusByte = WaitForDrq(chan, baseIoAddress2);
+    GetBaseStatus(chan, baseIoAddress1, statusByte);
+
+    KdPrint2((PRINT_PREFIX "IssueIdentify: Status after read words %#x\n", statusByte));
+
     // Check out a few capabilities / limitations of the device.
     if (deviceExtension->FullIdentifyData.RevovableStatus & 1) {
         // Determine if this drive supports the MSN functions.
@@ -1458,6 +1536,7 @@ skip_lba_staff:
             LunExt->RwSwitchCost  = REORDER_COST_SWITCH_RW_CD;
             LunExt->RwSwitchMCost = REORDER_MCOST_SWITCH_RW_CD;
             LunExt->SeekBackMCost = REORDER_MCOST_SEEK_BACK_CD;
+            statusByte = WaitForDrq(chan, baseIoAddress2);
         } else {
             KdPrint2((PRINT_PREFIX "IssueIdentify: ATAPI drive type %#x.\n",
                 LunExt->IdentifyData.DeviceType));
@@ -1465,20 +1544,9 @@ skip_lba_staff:
     } else {
         KdPrint2((PRINT_PREFIX "IssueIdentify: hard drive.\n"));
     }
-    // Work around for some IDE and one model Atapi that will present more than
-    // 256 bytes for the Identify data.
-    WaitOnBusyLong(chan, baseIoAddress2);
-    for (i = 0; i < 0x10000; i++) {
 
-        GetStatus(chan, baseIoAddress2, statusByte);
-        if (statusByte & IDE_STATUS_DRQ) {
-            // Suck out any remaining bytes and throw away.
-            AtapiReadPort2(chan, (PUSHORT)&baseIoAddress1->i.Data);
-        } else {
-            break;
-        }
-    }
-    KdPrint2((PRINT_PREFIX "IssueIdentify: Status after read words (%#x)\n", statusByte));
+    GetBaseStatus(chan, baseIoAddress1, statusByte);
+    KdPrint2((PRINT_PREFIX "IssueIdentify: final Status on exit (%#x)\n", statusByte));
     return TRUE;
 
 } // end IssueIdentify()
@@ -2667,6 +2735,9 @@ AtapiInterrupt(
     ULONG _c;
     BOOLEAN status = FALSE;
     ULONG c_state;
+    ULONG i_res;
+
+    KdPrint2((PRINT_PREFIX "Intr: VendorID+DeviceID/Rev %#x/%#x\n", deviceExtension->DevID, deviceExtension->RevID));
 
     for(_c=0; _c<deviceExtension->NumberChannels; _c++) {
         c = (_c+deviceExtension->FirstChannelToCheck) % deviceExtension->NumberChannels;
@@ -2704,8 +2775,13 @@ AtapiInterrupt(
         }
 
         if((c_state == CHECK_INTR_DETECTED) ||
-           AtapiCheckInterrupt__(deviceExtension, (UCHAR)c)) {
+           (i_res = AtapiCheckInterrupt__(deviceExtension, (UCHAR)c))) {
 
+            if(i_res == 2) {
+                KdPrint2((PRINT_PREFIX "AtapiInterrupt(base): Catch unexpected\n"));
+                InterlockedExchange(&(deviceExtension->chan[c].CheckIntr), CHECK_INTR_IDLE);
+                return TRUE;
+            }
             if(!WinVer_IsNT && BMList[deviceExtension->DevIndex].MasterDev) {
                 AtapiDisableInterrupts(deviceExtension, !c);
             }
@@ -2753,6 +2829,7 @@ AtapiInterrupt2(
     ULONG c;
     BOOLEAN status = FALSE;
     ULONG c_count = 0;
+    ULONG i_res;
 
 //    i2c++;
 /*    if(i2c > 0x200) {
@@ -2782,9 +2859,14 @@ AtapiInterrupt2(
         }
 
         c_count++;
-        if(AtapiCheckInterrupt__(deviceExtension, (UCHAR)c)) {
+        if(i_res = AtapiCheckInterrupt__(deviceExtension, (UCHAR)c)) {
 
             KdPrint2((PRINT_PREFIX "AtapiInterrupt2: intr\n"));
+            if(i_res == 2) {
+                KdPrint2((PRINT_PREFIX "AtapiInterrupt2: Catch unexpected\n"));
+                InterlockedExchange(&(deviceExtension->chan[c].CheckIntr), CHECK_INTR_IDLE);
+                return TRUE;
+            }
 
             status = TRUE;
             InterlockedExchange(&(deviceExtension->chan[c].CheckIntr), CHECK_INTR_DETECTED);
@@ -2930,6 +3012,7 @@ AtapiCheckInterrupt__(
     UCHAR Channel;
     UCHAR lChannel;
     BOOLEAN DmaTransfer = FALSE;
+    BOOLEAN OurInterrupt = FALSE;
 
     KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__:\n"));
 
@@ -2988,10 +3071,18 @@ AtapiCheckInterrupt__(
         break; }
     case ATA_SILICON_IMAGE_ID:
 
+        if(!(deviceExtension->HwFlags & SII_INTR))
+            break;
         GetPciConfig1(0x71, dma_status);
+        KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__: 0x71 = %#x\n", dma_status));
         if (!(dma_status &
-              (Channel ? 0x08 : 0x04)))
+              (Channel ? 0x08 : 0x04))) {
             return FALSE;
+        }
+        if (!DmaTransfer) {
+            KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__: cmd our\n"));
+            OurInterrupt = 2;
+        }
         SetPciConfig1(0x71, (Channel ? 0x08 : 0x04));
         break;
 
@@ -3009,8 +3100,10 @@ AtapiCheckInterrupt__(
     }
 check_unknown:
     if (DmaTransfer) {
-        if (!((dma_status = GetDmaStatus(deviceExtension, lChannel)) & BM_STATUS_INTR))
+        if (!((dma_status = GetDmaStatus(deviceExtension, lChannel)) & BM_STATUS_INTR)) {
+            KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__: DmaTransfer + !BM_STATUS_INTR\n"));
             return FALSE;
+        }
 //        AtapiWritePort1(chan, &(deviceExtension->BaseIoAddressBM[lChannel]->Status), dma_status | BM_STATUS_INTR);
     }
 skip_dma_stat_check:
@@ -3018,6 +3111,7 @@ skip_dma_stat_check:
 
     /* if drive is busy it didn't interrupt */
     GetStatus(chan, baseIoAddress2, statusByte);
+    KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__: status %#x\n", statusByte));
     if (statusByte & IDE_STATUS_BUSY) {
         KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__: unexpected BUSY\n"));
         return FALSE;
@@ -3029,6 +3123,7 @@ skip_dma_stat_check:
 
     /* clear interrupt and get status */
     GetBaseStatus(chan, baseIoAddress1, statusByte);
+    KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__: base status %#x\n", statusByte));
     if(!(statusByte & (IDE_STATUS_DRQ | IDE_STATUS_DRDY))) {
         KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__: no DRQ/DRDY set\n"));
         return FALSE;
@@ -3041,7 +3136,7 @@ skip_dma_stat_check:
     if (!(chan->ExpectingInterrupt)) {
 
         KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__: Unexpected interrupt.\n"));
-        return FALSE;
+        return OurInterrupt;
     }
     ASSERT(!chan->queue_depth || chan->cur_req);
 
@@ -3083,6 +3178,7 @@ AtapiInterrupt__(
     BOOLEAN InDpc = (KeGetCurrentIrql() == DISPATCH_LEVEL) /*||
                     (chan->ChannelCtrlFlags & CTRFLAGS_INTR_DISABLED)*/;
     BOOLEAN UseDpc = deviceExtension->UseDpc;
+    BOOLEAN DataOverrun = FALSE;
 
     if(InDpc) {
         KdPrint2((PRINT_PREFIX "AtapiInterrupt: InDpc = TRUE\n"));
@@ -3506,6 +3602,9 @@ IntrPrepareResetController:
             // Verify this makes sense.
             if (wordCount > AtaReq->WordsLeft) {
                 wordCount = AtaReq->WordsLeft;
+                KdPrint2((PRINT_PREFIX 
+                           "AtapiInterrupt: Write underrun\n"));
+                DataOverrun = TRUE;
             }
 
         } else {
@@ -3595,6 +3694,7 @@ IntrPrepareResetController:
             // Verify this makes sense.
             if (wordCount > AtaReq->WordsLeft) {
                 wordCount = AtaReq->WordsLeft;
+                DataOverrun = TRUE;
             }
 
         } else {
@@ -3625,26 +3725,30 @@ IntrPrepareResetController:
 /*           KdPrint2((
                       "AtapiInterrupt: Read interrupt\n"));*/
 
-           statusByte = WaitOnBusy(chan, &baseIoAddress2->ide);
+            statusByte = WaitOnBusy(chan, &baseIoAddress2->ide);
 
-           if (atapiDev || !(LunExt->DeviceFlags & DFLAGS_DWORDIO_ENABLED) /*!deviceExtension->DWordIO*/) {
-               KdPrint2((PRINT_PREFIX 
-                          "IdeIntr: Read %#x words\n", wordCount));
+            if (atapiDev || !(LunExt->DeviceFlags & DFLAGS_DWORDIO_ENABLED) /*!deviceExtension->DWordIO*/) {
+                KdPrint2((PRINT_PREFIX 
+                           "IdeIntr: Read %#x words\n", wordCount));
 
-               ReadBuffer(chan, baseIoAddress1,
-                         AtaReq->DataBuffer,
-                         wordCount);
-               KdPrint2(("IdeIntr: Read AtaReq->DataBuffer %#x, srb->DataBuffer %#x\n", AtaReq->DataBuffer, (srb ? srb->DataBuffer : (void*)-1) ));
-               KdDump(AtaReq->DataBuffer, wordCount*2);
+                ReadBuffer(chan, baseIoAddress1,
+                          AtaReq->DataBuffer,
+                          wordCount);
+                KdPrint2(("IdeIntr: Read AtaReq->DataBuffer %#x, srb->DataBuffer %#x\n", AtaReq->DataBuffer, (srb ? srb->DataBuffer : (void*)-1) ));
+                KdDump(AtaReq->DataBuffer, wordCount*2);
 
-           } else {
-               KdPrint2((PRINT_PREFIX 
-                         "IdeIntr: Read %#x Dwords\n", wordCount/2));
+                if(DataOverrun) {
+                    AtapiSuckPort2(chan, &baseIoAddress1->ide, &baseIoAddress2->ide);
+                }
 
-               ReadBuffer2(chan, baseIoAddress1,
-                          (PULONG)(AtaReq->DataBuffer),
-                          wordCount / 2);
-           }
+            } else {
+                KdPrint2((PRINT_PREFIX 
+                          "IdeIntr: Read %#x Dwords\n", wordCount/2));
+
+                ReadBuffer2(chan, baseIoAddress1,
+                           (PULONG)(AtaReq->DataBuffer),
+                           wordCount / 2);
+            }
         } else {
 
             KdPrint2((PRINT_PREFIX 
@@ -6313,7 +6417,7 @@ AtapiRegCheckParameterValue(
 
     paramPath.Length = 0;
     paramPath.MaximumLength = RegistryPath->Length +
-        (wcslen(PathSuffix)+1)*sizeof(WCHAR);
+        (wcslen(PathSuffix)+2)*sizeof(WCHAR);
     paramPath.Buffer = (PUSHORT)ExAllocatePool(NonPagedPool, paramPath.MaximumLength);
     if(!paramPath.Buffer) {
         KdPrint(("AtapiCheckRegValue: couldn't allocate paramPath\n"));
@@ -6322,6 +6426,7 @@ AtapiRegCheckParameterValue(
 
     RtlZeroMemory(paramPath.Buffer, paramPath.MaximumLength);
     RtlAppendUnicodeToString(&paramPath, RegistryPath->Buffer);
+    RtlAppendUnicodeToString(&paramPath, L"\\");
     RtlAppendUnicodeToString(&paramPath, PathSuffix);
 
     // Check for the Xxx value.
@@ -6337,6 +6442,9 @@ AtapiRegCheckParameterValue(
     status = RtlQueryRegistryValues(RTL_REGISTRY_ABSOLUTE | RTL_REGISTRY_OPTIONAL,
                                     paramPath.Buffer, parameters, NULL, NULL);
     KdPrint(( "AtapiCheckRegValue: %ws -> %ws is %#x\n", paramPath.Buffer, Name, doRun));
+
+    ExFreePool(paramPath.Buffer);
+
     return doRun;
 
 #undef ITEMS_TO_QUERY

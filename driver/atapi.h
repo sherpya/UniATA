@@ -37,7 +37,7 @@ Revision History:
          Søren Schmidt, Copyright (c) 1998,1999,2000,2001
 
     Code was changed/updated by
-         Alter, Copyright (c) 2002-2003
+         Alter, Copyright (c) 2002-2004
 
 
 --*/
