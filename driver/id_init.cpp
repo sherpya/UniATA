@@ -792,28 +792,31 @@ via_cable80(
 VOID
 UniAtaReadLunConfig(
     IN PHW_DEVICE_EXTENSION deviceExtension,
-    IN ULONG c,
+    IN ULONG channel,  // physical channel
     IN ULONG ldev
     )
 {
     ULONG tmp32;
     PHW_CHANNEL chan;
     PHW_LU_EXTENSION   LunExt;
+    ULONG c;
+
+    c = channel - deviceExtension->Channel; // logical channel
 
     chan = &deviceExtension->chan[c];
     ldev &= 0x01;
     LunExt = &(deviceExtension->lun[c*2+ldev]);
 
-    tmp32 = AtapiRegCheckDevValue(deviceExtension, c, ldev, L"ReadCacheEnable", 1);
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, ldev, L"ReadCacheEnable", 1);
     LunExt->opt_ReadCacheEnable = tmp32 ? TRUE : FALSE;
 
-    tmp32 = AtapiRegCheckDevValue(deviceExtension, c, ldev, L"WriteCacheEnable", 1);
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, ldev, L"WriteCacheEnable", 1);
     LunExt->opt_WriteCacheEnable = tmp32 ? TRUE : FALSE;
 
-    tmp32 = AtapiRegCheckDevValue(deviceExtension, c, ldev, L"MaxTransferMode", chan->MaxTransferMode);
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, ldev, L"MaxTransferMode", chan->MaxTransferMode);
     LunExt->opt_MaxTransferMode = tmp32;
 
-    tmp32 = AtapiRegCheckDevValue(deviceExtension, c, ldev, L"PreferedTransferMode", 0xffffffff);
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, ldev, L"PreferedTransferMode", 0xffffffff);
     LunExt->opt_PreferedTransferMode = tmp32;
 
     return;
@@ -823,7 +826,7 @@ BOOLEAN
 AtapiChipInit(
     IN PVOID HwDeviceExtension,
     IN ULONG DeviceNumber,
-    IN ULONG c
+    IN ULONG channel // physical channel
     )
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
@@ -840,8 +843,15 @@ AtapiChipInit(
     UCHAR  tmp8;
     USHORT tmp16;
     ULONG  tmp32;
+    ULONG  c; // logical channel (for Compatible Mode controllers)
 
-    KdPrint2((PRINT_PREFIX "AtapiChipInit: dev %#x, chan %d\n", DeviceNumber, c ));
+    if(channel != -1) {
+        c = channel - deviceExtension->Channel; // logical channel (for Compatible Mode controllers)
+    } else {
+        c = -1;
+    }
+
+    KdPrint2((PRINT_PREFIX "AtapiChipInit: dev %#x, ph chan %d\n", DeviceNumber, channel ));
 
     if(AtapiRegCheckDevValue(deviceExtension, -1, -1, L"ForceSimplex", 0)) {
         deviceExtension->simplexOnly = TRUE; 
@@ -851,7 +861,7 @@ AtapiChipInit(
         for(c=0; c<deviceExtension->NumberChannels; c++) {
             chan = &deviceExtension->chan[c];
             chan->MaxTransferMode = deviceExtension->MaxTransferMode;
-            tmp32 = AtapiRegCheckDevValue(deviceExtension, c, -1, L"MaxTransferMode", chan->MaxTransferMode);
+            tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, -1, L"MaxTransferMode", chan->MaxTransferMode);
             if(tmp32 != 0xffffffff) {
                 KdPrint2((PRINT_PREFIX "MaxTransferMode (overriden): %#x\n", chan->MaxTransferMode));
                 chan->MaxTransferMode = tmp32;
@@ -868,8 +878,11 @@ AtapiChipInit(
             KdPrint2((PRINT_PREFIX "MaxTransferMode (overriden): %#x\n", chan->MaxTransferMode));
             chan->MaxTransferMode = tmp32;
         }
-        UniAtaReadLunConfig(deviceExtension, c, 0);
-        UniAtaReadLunConfig(deviceExtension, c, 1);
+        tmp32 = AtapiRegCheckDevValue(deviceExtension, c, -1, L"ReorderEnable", TRUE);
+        chan->UseReorder = tmp32 ? TRUE : FALSE;
+
+        UniAtaReadLunConfig(deviceExtension, channel, 0);
+        UniAtaReadLunConfig(deviceExtension, channel, 1);
     }
 
     KdPrint2((PRINT_PREFIX "HwFlags: %#x\n", deviceExtension->HwFlags));
@@ -894,14 +907,14 @@ AtapiChipInit(
                 for(c=0; c<deviceExtension->NumberChannels; c++) {
                     chan = &deviceExtension->chan[c];
                     GetPciConfig1(0x4a, tmp8);
-                    if(!(tmp8 & (1 << c))) {
+                    if(!(tmp8 & (1 << channel))) {
                         chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                     }
                 }
             } else {
                 chan = &deviceExtension->chan[c];
                 GetPciConfig1(0x4a, tmp8);
-                if(!(tmp8 & (1 << c))) {
+                if(!(tmp8 & (1 << channel))) {
                     chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                 }
             }
@@ -931,14 +944,14 @@ AtapiChipInit(
                 for(c=0; c<deviceExtension->NumberChannels; c++) {
                     chan = &deviceExtension->chan[c];
                     GetPciConfig1(0x42, tmp8);
-                    if(!(tmp8 & (1 << c))) {
+                    if(!(tmp8 & (1 << channel))) {
                         chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                     }
                 }
             } else {
                 chan = &deviceExtension->chan[c];
                 GetPciConfig1(0x42, tmp8);
-                if(!(tmp8 & (1 << c))) {
+                if(!(tmp8 & (1 << channel))) {
                     chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                 }
             }
@@ -965,13 +978,13 @@ AtapiChipInit(
         if(c == -1) {
             for(c=0; c<deviceExtension->NumberChannels; c++) {
                 chan = &deviceExtension->chan[c];
-                if(!hpt_cable80(deviceExtension, c)) {
+                if(!hpt_cable80(deviceExtension, channel)) {
                     chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                 }
             }
         } else {
             chan = &deviceExtension->chan[c];
-            if(!hpt_cable80(deviceExtension, c)) {
+            if(!hpt_cable80(deviceExtension, channel)) {
                 chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
             }
         }
@@ -990,14 +1003,14 @@ AtapiChipInit(
             for(c=0; c<deviceExtension->NumberChannels; c++) {
                 chan = &deviceExtension->chan[c];
                 GetPciConfig2(0x54, reg54);
-                if( ((reg54 >> (c*2)) & 30) != 30) {
+                if( ((reg54 >> (channel*2)) & 30) != 30) {
                     chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                 }
             }
         } else {
             chan = &deviceExtension->chan[c];
             GetPciConfig2(0x54, reg54);
-            if( ((reg54 >> (c*2)) & 30) != 30) {
+            if( ((reg54 >> (channel*2)) & 30) != 30) {
                 chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
             }
         }
@@ -1015,14 +1028,14 @@ AtapiChipInit(
             for(c=0; c<deviceExtension->NumberChannels; c++) {
                 chan = &deviceExtension->chan[c];
                 GetPciConfig1(0x52, reg52);
-                if( !((reg52 >> (c*2)) & 0x01)) {
+                if( !((reg52 >> (channel*2)) & 0x01)) {
                     chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                 }
             }
         } else {
             chan = &deviceExtension->chan[c];
             GetPciConfig1(0x52, reg52);
-            if( !((reg52 >> (c*2)) & 0x01)) {
+            if( !((reg52 >> (channel*2)) & 0x01)) {
                 chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
             }
         }
@@ -1047,14 +1060,14 @@ AtapiChipInit(
                 for(c=0; c<2; c++) {
                     chan = &deviceExtension->chan[c];
                     GetPciConfig2(0x50, Reg50);
-                    if(Reg50 & (1 << (c+10))) {
+                    if(Reg50 & (1 << (channel+10))) {
                         chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                     }
                 }
             } else {
                 chan = &deviceExtension->chan[c];
                 GetPciConfig2(0x50, Reg50);
-                if(Reg50 & (1 << (c+10))) {
+                if(Reg50 & (1 << (channel+10))) {
                     chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                 }
             }
@@ -1086,7 +1099,7 @@ AtapiChipInit(
                 for(c=0; c<4; c++) {
                     chan = &deviceExtension->chan[c];
                     AtapiWritePort4(chan, (PULONG)(&deviceExtension->BaseIoAddressBM[c]->Command), 
-                        (AtapiReadPort4(chan, (PULONG)(deviceExtension->BaseIoAddressBM[c]->Command)) & ~0x00000f8f) | c );
+                        (AtapiReadPort4(chan, (PULONG)(deviceExtension->BaseIoAddressBM[c]->Command)) & ~0x00000f8f) | channel );
                     AtapiWritePort4(chan, (PULONG)(&deviceExtension->BaseIoAddressBM[c]->DeviceSpecific0), 0x00000001);
                     if(chan->MaxTransferMode < ATA_SA150 &&
                        (AtapiReadPort4(chan, (PULONG)(deviceExtension->BaseIoAddressBM[c]->Command)) & 0x01000000)) {
@@ -1096,7 +1109,7 @@ AtapiChipInit(
             } else {
                 chan = &deviceExtension->chan[c];
                 AtapiWritePort4(chan, (PULONG)(&deviceExtension->BaseIoAddressBM[c]->Command), 
-                    (AtapiReadPort4(chan, (PULONG)(&deviceExtension->BaseIoAddressBM[c]->Command)) & ~0x00000f8f) | c );
+                    (AtapiReadPort4(chan, (PULONG)(&deviceExtension->BaseIoAddressBM[c]->Command)) & ~0x00000f8f) | channel );
                 AtapiWritePort4(chan, (PULONG)(&deviceExtension->BaseIoAddressBM[c]->DeviceSpecific0), 0x00000001);
                 if(chan->MaxTransferMode < ATA_SA150 &&
                    (AtapiReadPort4(chan, (PULONG)(deviceExtension->BaseIoAddressBM[c]->Command)) & 0x01000000)) {
@@ -1139,14 +1152,14 @@ AtapiChipInit(
                     for(c=0; c<2; c++) {
                         chan = &deviceExtension->chan[c];
                         GetPciConfig2(0x79, Reg79);
-                        if(Reg79 & (c ? 0x02 : 0x01)) {
+                        if(Reg79 & (channel ? 0x02 : 0x01)) {
                             chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                         }
                     }
                 } else {
                     chan = &deviceExtension->chan[c];
                     GetPciConfig2(0x79, Reg79);
-                    if(Reg79 & (c ? 0x02 : 0x01)) {
+                    if(Reg79 & (channel ? 0x02 : 0x01)) {
                         chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                     }
                 }
@@ -1213,14 +1226,14 @@ AtapiChipInit(
             if(c == -1) {
                 for(c=0; c<2; c++) {
                     chan = &deviceExtension->chan[c];
-                    GetPciConfig2(c ? 0x52 : 0x50, tmp16);
+                    GetPciConfig2(channel ? 0x52 : 0x50, tmp16);
                     if(tmp16 & 0x8000) {
                         chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                     }
                 }
             } else {
                 chan = &deviceExtension->chan[c];
-                GetPciConfig2(c ? 0x52 : 0x50, tmp16);
+                GetPciConfig2(channel ? 0x52 : 0x50, tmp16);
                 if(tmp16 & 0x8000) {
                     chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                 }
@@ -1230,14 +1243,14 @@ AtapiChipInit(
                 for(c=0; c<2; c++) {
                     chan = &deviceExtension->chan[c];
                     GetPciConfig1(48, tmp8);
-                    if(tmp8 & (0x10 << c)) {
+                    if(tmp8 & (0x10 << channel)) {
                         chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                     }
                 }
             } else {
                 chan = &deviceExtension->chan[c];
                 GetPciConfig1(48, tmp8);
-                if(tmp8 & (0x10 << c)) {
+                if(tmp8 & (0x10 << channel)) {
                     chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                 }
             }
@@ -1257,13 +1270,13 @@ AtapiChipInit(
         if(c == -1) {
             for(c=0; c<2; c++) {
                 chan = &deviceExtension->chan[c];
-                if(!via_cable80(deviceExtension, c)) {
+                if(!via_cable80(deviceExtension, channel)) {
                     chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                 }
             }
         } else {
             chan = &deviceExtension->chan[c];
-            if(!via_cable80(deviceExtension, c)) {
+            if(!via_cable80(deviceExtension, channel)) {
                 chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
             }
         }
@@ -1309,13 +1322,13 @@ AtapiChipInit(
         if(c == -1) {
             for(c=0; c<2; c++) {
                 chan = &deviceExtension->chan[c];
-                if(!(tmp16 & (c ? 0x08 : 0x04))) {
+                if(!(tmp16 & (channel ? 0x08 : 0x04))) {
                     chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
                 }
             }
         } else {
             chan = &deviceExtension->chan[c];
-            if(!(tmp16 & (c ? 0x08 : 0x04))) {
+            if(!(tmp16 & (channel ? 0x08 : 0x04))) {
                 chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
             }
         }

@@ -260,12 +260,13 @@ typedef struct _HW_CHANNEL {
     // Placeholder for the sub-command value of the last
     // SMART command.
     UCHAR               SmartCommand;
+    // Reorder anabled
+    BOOLEAN             UseReorder;
     // Placeholder for status register after a GET_MEDIA_STATUS command
     UCHAR               ReturningMediaStatus;
 
     BOOLEAN             CopyDmaBuffer;
     BOOLEAN             MemIo;
-    UCHAR               Padding0[1];
 
     MECHANICAL_STATUS_INFORMATION_HEADER MechStatusData;
     SENSE_DATA          MechStatusSense;
@@ -321,13 +322,14 @@ typedef struct _HW_CHANNEL {
 
 } HW_CHANNEL, *PHW_CHANNEL;
 
-#define CTRFLAGS_DMA_ACTIVE             0x01
-#define CTRFLAGS_DMA_RO                 0x02
-#define CTRFLAGS_DMA_OPERATION          0x04
-#define CTRFLAGS_INTR_DISABLED          0x08
-#define CTRFLAGS_DPC_REQ                0x10
-#define CTRFLAGS_ENABLE_INTR_REQ        0x20
-#define CTRFLAGS_LBA48                  0x40
+#define CTRFLAGS_DMA_ACTIVE             0x0001
+#define CTRFLAGS_DMA_RO                 0x0002
+#define CTRFLAGS_DMA_OPERATION          0x0004
+#define CTRFLAGS_INTR_DISABLED          0x0008
+#define CTRFLAGS_DPC_REQ                0x0010
+#define CTRFLAGS_ENABLE_INTR_REQ        0x0020
+#define CTRFLAGS_LBA48                  0x0040
+#define CTRFLAGS_DSC_BSY                0x0080
 
 // Logical unit extension
 typedef struct _HW_LU_EXTENSION {
@@ -365,6 +367,8 @@ typedef struct _HW_LU_EXTENSION {
     ULONG          opt_PreferedTransferMode;
     BOOLEAN        opt_ReadCacheEnable;
     BOOLEAN        opt_WriteCacheEnable;
+    // padding
+    BOOLEAN        opt_reserved[2];
 
 #ifdef IO_STATISTICS
 
@@ -432,6 +436,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     BOOLEAN MemIo;
     BOOLEAN UnknownDev;
     BOOLEAN MasterDev;
+
     LONG  ReCheckIntr;
 
     ULONG MaxTransferMode;  // max transfer mode supported by controller

@@ -641,7 +641,7 @@ AtapiFindBusMasterController(
     *Again = FALSE;
 
     if(ForceSimplex) {
-        KdPrint2((PRINT_PREFIX "ForceSimplex (1)"));
+        KdPrint2((PRINT_PREFIX "ForceSimplex (1)\n"));
         simplexOnly = TRUE;
     }
 
@@ -660,7 +660,7 @@ AtapiFindBusMasterController(
             }
         }
         if(i >= BMListLen) {
-            KdPrint2((PRINT_PREFIX "unexpected device arrival => SP_RETURN_NOT_FOUND"));
+            KdPrint2((PRINT_PREFIX "unexpected device arrival => SP_RETURN_NOT_FOUND\n"));
             return(SP_RETURN_NOT_FOUND);
         }
         channel = 0;
@@ -670,10 +670,10 @@ AtapiFindBusMasterController(
 
 //    PORT_CONFIGURATION_INFORMATION SavedConfigInfo = *ConfigInfo;
 
-    KdPrint2((PRINT_PREFIX "AtapiFindBusMasterController"));
+    KdPrint2((PRINT_PREFIX "AtapiFindBusMasterController\n"));
 
     if (!deviceExtension) {
-        KdPrint2((PRINT_PREFIX "!deviceExtension => SP_RETURN_ERROR"));
+        KdPrint2((PRINT_PREFIX "!deviceExtension => SP_RETURN_ERROR\n"));
         return SP_RETURN_ERROR;
     }
 
@@ -694,7 +694,7 @@ AtapiFindBusMasterController(
                                      PCI_COMMON_HDR_LENGTH);
 
     if (busDataRead < PCI_COMMON_HDR_LENGTH) {
-        KdPrint2((PRINT_PREFIX "busDataRead < PCI_COMMON_HDR_LENGTH => SP_RETURN_ERROR"));
+        KdPrint2((PRINT_PREFIX "busDataRead < PCI_COMMON_HDR_LENGTH => SP_RETURN_ERROR\n"));
         return SP_RETURN_ERROR;
     }
 
@@ -1104,6 +1104,7 @@ AtapiFindBusMasterController(
 
             if(deviceExtension->BusMaster) {
                 KdPrint2((PRINT_PREFIX "set BusMaster io-range in DO\n"));
+                // bm_offset already inludes (channel ? ATA_BM_OFFSET1 : 0)
                 deviceExtension->BaseIoAddressBM[c] = (PIDE_BUSMASTER_REGISTERS)
                     ((ULONG)(deviceExtension->BaseIoAddressBM_0) + bm_offset + (c ? ATA_BM_OFFSET1 : 0));
             }
@@ -1136,7 +1137,7 @@ AtapiFindBusMasterController(
         KdPrint2((PRINT_PREFIX "Check drive 0\n"));
         // Check master.
         SelectDrive(chan, (PIDE_REGISTERS_1)ioSpace, 0);
-        ScsiPortStallExecution(10);
+        AtapiStallExecution(10);
         GetBaseStatus(chan, (PIDE_REGISTERS_1)ioSpace, statusByte);
         skip_find_dev = FALSE;
         if ((statusByte & 0xf8) == 0xf8 || 
@@ -1144,7 +1145,7 @@ AtapiFindBusMasterController(
             // Check slave.
             KdPrint2((PRINT_PREFIX "Check drive 1\n"));
             SelectDrive(chan, (PIDE_REGISTERS_1)ioSpace, 1);
-            ScsiPortStallExecution(1);
+            AtapiStallExecution(1);
             GetBaseStatus(chan, (PIDE_REGISTERS_1)ioSpace, statusByte);
             if ((statusByte & 0xf8) == 0xf8 || 
                 (statusByte == 0xa5)) {
@@ -1548,7 +1549,7 @@ retryIdentifier:
                 // Could be the TEAC in a thinkpad. Their dos driver puts it in a sleep-mode that
                 // warm boots don't clear.
                 do {
-                    ScsiPortStallExecution(1000);
+                    AtapiStallExecution(1000);
                     statusByte = AtapiReadPort1(chan, &((PATAPI_REGISTERS_1)ioSpace)->i.Status);
                     KdPrint2((PRINT_PREFIX 
                                 "AtapiFindController: First access to status %#x\n",
@@ -1755,14 +1756,14 @@ CheckDevice(
                deviceNumber));
     if(ResetDev) {
         KdPrint2((PRINT_PREFIX "CheckDevice: reset bus\n"));
-        // Reset controller
+        // Reset device
         AtapiSoftReset(chan, baseIoAddress1,deviceNumber);
         statusByte = WaitOnBusy(chan, baseIoAddress2);
     }
     // Select the device.
     SelectDrive(chan, baseIoAddress1, deviceNumber);
 
-    ScsiPortStallExecution(10);
+    AtapiStallExecution(10);
     statusByte = WaitOnBaseBusyLong(chan, baseIoAddress1);
 
     GetBaseStatus(chan, baseIoAddress1, statusByte);
@@ -1981,13 +1982,13 @@ FindDevices(
                             "FindDevices: Resetting controller before SetDriveParameters.\n"));
 
                 AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_RESET_CONTROLLER );
-                ScsiPortStallExecution(500 * 1000);
+                AtapiStallExecution(500 * 1000);
                 AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_REENABLE_CONTROLLER);
                 SelectDrive(chan, baseIoAddress1, i & 0x01);
 
                 do {
                     // Wait for Busy to drop.
-                    ScsiPortStallExecution(100);
+                    AtapiStallExecution(100);
                     GetStatus(chan, baseIoAddress2, statusByte);
 
                 } while ((statusByte & IDE_STATUS_BUSY) && waitCount--);
@@ -2032,7 +2033,7 @@ FindDevices(
     if (!deviceResponded) {
 
         AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_RESET_CONTROLLER );
-        ScsiPortStallExecution(50 * 1000);
+        AtapiStallExecution(50 * 1000);
         AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_REENABLE_CONTROLLER);
     }
 */

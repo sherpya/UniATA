@@ -128,6 +128,8 @@ DbgPrint(
 */
 #endif // SCSI_PORT_DBG_PRINT
 
+#define AtapiStallExecution(dt)  {/*KdPrint2(("  AtapiStallExecution(%d)\n", dt));*/ ScsiPortStallExecution(dt); }
+
 #endif // _DBGNT_
 
 #else // _DEBUG
@@ -135,6 +137,8 @@ DbgPrint(
 #define KdPrint2(_x_)
 #define KdPrint(_x_)
 #define Connect_DbgPrint()   {;}
+
+#define AtapiStallExecution(dt)  ScsiPortStallExecution(dt)
 
 #endif // _DEBUG
 
