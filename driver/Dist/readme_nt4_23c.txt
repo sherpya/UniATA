@@ -26,7 +26,7 @@ Installation steps:
     d) click on Have Disk button
     e) enter path to OEMSETUP.INF from UniATA distribution
        and click on OK button
-    f) select "Universal BusMaster ATA/ATAPI Driver v x.xxx (alpha)
+    f) select "Universal BusMaster ATA/ATAPI Driver v x.xxx (alpha)"
        from list and click on OK button
     g) enter path to UniATA.sys from UniATA distribution
        and click on OK button

@@ -2413,7 +2413,15 @@ AtapiHwInitialize(
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     ULONG                numberChannels  = deviceExtension->NumberChannels;
     ULONG c;
+/*    NTSTATUS status;
 
+    status = AtapiConnectIntr2(HwDeviceExtension);
+
+    if(!NT_SUCCESS(status)) {
+        KdPrint2((PRINT_PREFIX "HwInitialize: AtapiConnectIntr2() failed\n"));
+        deviceExtension->simplexOnly = TRUE;
+    }
+*/
     for (c = 0; c < numberChannels; c++) {
         FindDevices(HwDeviceExtension, FALSE, c);
         AtapiHwInitialize__(deviceExtension, c);
@@ -2543,6 +2551,7 @@ AtapiHwInitialize__(
 
         AtapiDmaInit__(deviceExtension, i);
         deviceExtension->lun[i].OrigTransferMode =
+        deviceExtension->lun[i].LimitedTransferMode =
             deviceExtension->lun[i].TransferMode;
 
         // We need to get our device ready for action before
@@ -3280,7 +3289,13 @@ AtapiCheckInterrupt__(
         if (((dma_status = GetDmaStatus(deviceExtension, lChannel)) &
             (BM_STATUS_ACTIVE | BM_STATUS_INTR)) != BM_STATUS_INTR)
             return FALSE;
-        AtapiWritePort1(chan, &(deviceExtension->BaseIoAddressBM[lChannel]->Status), dma_status & ~BM_STATUS_ERR);
+        if(ChipFlags & ICH4_FIX) {
+            AtapiWritePort1(chan, &(deviceExtension->BaseIoAddressBM[lChannel]->Status),
+                            (dma_status & ~(BM_STATUS_ERR | 0x80)) | BM_STATUS_INTR);
+        } else {
+            AtapiWritePort1(chan, &(deviceExtension->BaseIoAddressBM[lChannel]->Status),
+                            dma_status & ~BM_STATUS_ERR);
+        }
         goto skip_dma_stat_check;
     case ATA_HIGHPOINT_ID:
         if (!DmaTransfer)
@@ -3739,7 +3754,7 @@ continue_err:
         KdPrint2((PRINT_PREFIX "Some higher mode doesn't work right :((\n"));
         chan->lun[DeviceNumber]->RecoverCount[AtaReq->retry]++;
         if(chan->lun[DeviceNumber]->RecoverCount[AtaReq->retry] >= chan->lun[DeviceNumber]->IoCount/3) {
-            deviceExtension->lun[DeviceNumber].OrigTransferMode =
+            deviceExtension->lun[DeviceNumber].LimitedTransferMode =
                 deviceExtension->lun[DeviceNumber].TransferMode;
         }
 #endif //IO_STATISTICS
@@ -6315,9 +6330,25 @@ reject_srb:
 
                     KdPrint2((PRINT_PREFIX "AtapiStartIo: Set transfer mode\n"));
                     PSETTRANSFERMODE  setTransferMode = (PSETTRANSFERMODE)(((PUCHAR)Srb->DataBuffer) + sizeof(SRB_IO_CONTROL));
+                    PHW_LU_EXTENSION lun = &(deviceExtension->lun[ldev]);
 
-/*                    deviceExtension->lun[targetId].TransferMode =
-                    deviceExtension->lun[targetId].OrigTransferMode = (UCHAR)(setTransferMode->Mode);*/
+                    if(setTransferMode->OrigMode != -1) {
+                        lun->OrigTransferMode = (UCHAR)(setTransferMode->OrigMode);
+                    }
+                    if(setTransferMode->MaxMode != -1) {
+                        lun->LimitedTransferMode = (UCHAR)(setTransferMode->MaxMode);
+                        if(lun->LimitedTransferMode > 
+                           lun->OrigTransferMode) {
+                            // check for incorrect value
+                            lun->LimitedTransferMode =
+                                lun->OrigTransferMode;
+                        }
+                    }
+                    if(setTransferMode->ApplyImmediately) {
+                        AtapiDmaInit__(deviceExtension, ldev);
+                    }
+/*                    deviceExtension->lun[ldev].TransferMode =
+                    deviceExtension->lun[ldev].LimitedTransferMode = (UCHAR)(setTransferMode->Mode);*/
                     status = SRB_STATUS_SUCCESS;
                     break;
                 }
@@ -6415,7 +6446,7 @@ DriverEntry(
 {
     HW_INITIALIZATION_DATA_COMMON hwInitializationData;
     ULONG                  adapterCount;
-    ULONG                  i, c;
+    ULONG                  i, c, alt;
     ULONG                  statusToReturn, newStatus;
     PUNICODE_STRING        RegistryPath = (PUNICODE_STRING)Argument2;
     BOOLEAN                ReEnter = FALSE;
@@ -6524,28 +6555,44 @@ DriverEntry(
             }
             continue;
         }
-        for(c=0; c<2; c++) {
-            hwInitializationData.comm.HwFindAdapter = AtapiFindBusMasterController;
-            hwInitializationData.comm.NumberOfAccessRanges = 5;
-            hwInitializationData.comm.AdapterInterfaceType = Isa;
+        BMList[i].AltInitMasterDev = (UCHAR)0xff;
+        for(alt = 0; alt < 2; alt++) {
 
-            BMList[i].channel = (UCHAR)c;
+            for(c=0; c<2; c++) {
+                hwInitializationData.comm.HwFindAdapter = AtapiFindBusMasterController;
+                hwInitializationData.comm.NumberOfAccessRanges = 5;
+                hwInitializationData.comm.AdapterInterfaceType = Isa;
 
-            KdPrint2((PRINT_PREFIX "Try init channel %d\n", c));
-            newStatus = ScsiPortInitialize(DriverObject,
-                                           Argument2,
-                                           &hwInitializationData.comm,
-                                           (PVOID)i);
-            if (newStatus < statusToReturn)
-                statusToReturn = newStatus;
-            if (newStatus == STATUS_SUCCESS) {
-                BMList[i].ChanInitOk |= 0x01 << c;
-                if(BMList[i].MasterDev && !WinVer_IsNT) {
-                    c = 1;
+                BMList[i].channel = (UCHAR)c;
+
+                KdPrint2((PRINT_PREFIX "Try init channel %d\n", c));
+                newStatus = ScsiPortInitialize(DriverObject,
+                                               Argument2,
+                                               &hwInitializationData.comm,
+                                               (PVOID)(i | (alt ? 0 : 0x80000000)));
+                if (newStatus < statusToReturn)
+                    statusToReturn = newStatus;
+                if (newStatus == STATUS_SUCCESS) {
                     BMList[i].ChanInitOk |= 0x01 << c;
+                    if(BMList[i].MasterDev && (WinVer_Id() > WinVer_NT)) {
+                        c = 1; // this will break our for()
+                        BMList[i].ChanInitOk |= 0x01 << c;
+                    }
                 }
             }
+            if(!WinVer_IsNT) {
+                // the following doesn't work under higher OSes
+                continue;
+            }
+            if(BMList[i].ChanInitOk & 0x03) {
+                // under NT we receive status immediately, so
+                // we can omit alternative init method id STATUS_SUCCESS returned
+                break;
+            }
+            // if (WinVer_Id() == WinVer_NT) and some error occured
+            // try alternative init method
         }
+
     }
 
 /*    KeBugCheckEx(0xc000000e,

@@ -333,9 +333,10 @@ typedef struct _HW_LU_EXTENSION {
     BOOLEAN        DWordIO;        // Indicates use of 32-bit PIO
     UCHAR          ReturningMediaStatus;
     UCHAR          TransferMode;
+    UCHAR          LimitedTransferMode;
     UCHAR          OrigTransferMode;
     UCHAR          MaximumBlockXfer;
-    UCHAR          Padding0[3];    // padding
+    UCHAR          Padding0[2];    // padding
     ULONG          ErrorCount;     // Count of errors. Used to turn off features.
  //   ATA_QUEUE      cmd_queue;
     LONGLONG       ReadCmdCost;

@@ -6,8 +6,28 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=SCSIAdapter
 CatalogFile=uniata.cat
-DriverVer=07/26/2004,0.29.8.0
+DriverVer=10/01/2004,0.30.0.0
 
+;
+; Source file information
+;
+
+[SourceDisksNames]
+1 = %DiskId1%,,,""
+
+[SourceDisksFiles]
+; Files for disk Initio Installation Disk #1 (SCSIAdapter)
+uniata.sys = 1,,
+uniata2k.inf = 1,,
+
+;Class Install
+[ClassInstall32.NT]
+AddReg=HDC_Class
+
+[HDC_Class]
+HKR,,,,%HDCClassName%
+HKR,,Icon,,"-9"
+HKR,,Installer32,,"SysSetup.Dll,HdcClassInstaller"
 
 [DestinationDirs]
 DefaultDestDir = 11 ; DIRID_DRIVERS
@@ -137,12 +157,12 @@ ExcludeFromSelect = *
 ; General installation section
 ;
 
+[DISABLE_PCIIDE]
+HKLM, system\currentcontrolset\services\pciide, "Start", %REG_DWORD%, 0x00000004
+
 [uniata_Inst]
-AddReg = uniata_Inst.AddReg
+AddReg = RegUninstall,DISABLE_PCIIDE
 CopyFiles = uniata_Inst.Miniport
-
-[uniata_Inst.AddReg]
-
 
 ;
 ; File sections
@@ -157,41 +177,22 @@ uniata.sys
 ;
 
 [uniata_Inst.Services]
-AddService = UniATA, 0x00000002, uniata_Service_Inst, DISABLE_PCIIDE
+AddService = UniATA, %SPSVCINST_ASSOCSERVICE%, uniata_Service_Inst
 
 [uniata_Service_Inst]
-ServiceType    = 1 ; %SERVICE_KERNEL_DRIVER%
-StartType      = 0 ; %SERVICE_BOOT_START%
-ErrorControl   = 0 ; %SERVICE_ERROR_NORMAL%
+ServiceType    = %SERVICE_KERNEL_DRIVER%
+StartType      = %SERVICE_BOOT_START%
+ErrorControl   = %SERVICE_ERROR_NORMAL%
 LoadOrderGroup = System Bus Extender
 ServiceBinary  = %12%\uniata.sys
-AddReg         = uniata_PNP_Inst_AddReg
 
 [uniata_Inst.PosDup]            ;; BUGBUG: What does this do?
 *PNP0600
 
-[uniata_PNP_Inst_AddReg]
+;[uniata_PNP_Inst_AddReg]
 ;HKR, "Parameters\PnpInterface", "1", 0x00010001, 0x00000001
 ;HKR, "Parameters\PnpInterface", "5", 0x00010001, 0x00000001
 
-
-[DISABLE_PCIIDE]
-AddReg         = DISABLE_PCIIDE_Reg
-
-[DISABLE_PCIIDE_Reg]
-HKLM, "system\currentcontrolset\services\pciide", "Start", 0x00010001, 0x00000004
-
-
-;
-; Source file information
-;
-
-[SourceDisksNames.x86]
-1 = %DiskId1%,,,""
-
-[SourceDisksFiles]
-; Files for disk Initio Installation Disk #1 (SCSIAdapter)
-uniata.sys = 1,,
 
 
 [Strings]
@@ -303,8 +304,8 @@ PCI\VEN_1283&DEV_8172.DeviceDesc="IT8172 ATA-33 controller "
 ;Compatible adapters
 ;DEVNAMELIST
 UniATA_Name = "Universal ATA Driver"
-*PNP0600.PriDeviceDesc  = "Primary IDE Channel"
-*PNP0600.SecDeviceDesc  = "Secondary IDE Channel"
+;*PNP0600.PriDeviceDesc  = "Primary IDE Channel"
+;*PNP0600.SecDeviceDesc  = "Secondary IDE Channel"
 PCI\CC_0101.DeviceDesc  = "Standard Dual Channel PCI BusMaster IDE Controller"
 ALTERWARE = "AlterWare"
 

@@ -644,6 +644,7 @@ AtapiFindBusMasterController(
 
     if(InDriverEntry) {
         i = (ULONG)Context;
+        i &= ~0x80000000;
         channel   = BMList[i].channel;
     } else {
         for(i=0; i<BMListLen; i++) {
@@ -791,6 +792,14 @@ AtapiFindBusMasterController(
             KdPrint2((PRINT_PREFIX "Error: Secondary channel already claimed by another driver\n"));
             return(SP_RETURN_NOT_FOUND);
         }
+/*
+        if(BMList[i].AltInitMasterDev == 0x01) {
+            // revert to 0x00 ?
+            BMList[i].AltInitMasterDev = 0;
+        } else {
+            BMList[i].AltInitMasterDev++;
+        }
+*/
     }
 
     if(!deviceExtension->MemIo) {
@@ -951,15 +960,29 @@ AtapiFindBusMasterController(
         // thanks to Vitaliy Vorobyov aka deathsoft@yandex.ru for
         // better solution:
 
-        if(ConfigInfo->AdapterInterfaceType == PCIBus &&
-           InDriverEntry) {
-            KdPrint2((PRINT_PREFIX "AdapterInterfaceType == PCIBus\n"));
-            ConfigInfo->SlotNumber = slotNumber;
-            ConfigInfo->SystemIoBusNumber = SystemIoBusNumber;
+        if(/*BMList[i].AltInitMasterDev == 0x00 ||*/
+           ((ULONG)Context & 0x80000000) /*||
+           (WinVer_Id() > WinVer_NT)*/) {
+            // I'm sorry, I have to do this
+            // when Win doesn't 
+
+            if(ConfigInfo->AdapterInterfaceType == Isa /*&&
+//               InDriverEntry*/) {
+                KdPrint2((PRINT_PREFIX "AdapterInterfaceType Isa => PCIBus\n"));
+                ConfigInfo->AdapterInterfaceType = PCIBus;
+            }
+            if(ConfigInfo->AdapterInterfaceType == PCIBus /*&&
+//               InDriverEntry*/) {
+                KdPrint2((PRINT_PREFIX "AdapterInterfaceType PCIBus, update address\n"));
+                ConfigInfo->SlotNumber = slotNumber;
+                ConfigInfo->SystemIoBusNumber = SystemIoBusNumber;
+            }
         }
 
+#ifndef USE_OWN_DMA
         ConfigInfo->Master        = TRUE;
         ConfigInfo->DmaWidth      = Width16Bits;
+#endif //USE_OWN_DMA
         ConfigInfo->CachesData    = TRUE;
         ConfigInfo->ScatterGather = TRUE;
     }
@@ -1181,7 +1204,7 @@ exit_findbm:
         KdPrint2((PRINT_PREFIX "MasterDev=%#x, NumberChannels=%#x, Isr2DevObj=%#x\n",
             MasterDev, deviceExtension->NumberChannels, BMList[i].Isr2DevObj));
 
-        // !!! move this to HwInitialize()
+        // ConnectIntr2 should be moved to HwInitialize
         status = AtapiConnectIntr2(HwDeviceExtension);
 
         if(!NT_SUCCESS(status)) {
@@ -1749,10 +1772,10 @@ CheckDevice(
                 LunExt->DeviceFlags |= (DFLAGS_DEVICE_PRESENT | DFLAGS_ATAPI_DEVICE);
 
                 // some ATAPI devices doesn't work with DPC on CMD-649
-                switch(deviceExtension->DevID) {
-                case 0x06491095:    /* CMD 649 */
+                // and probably some other controllers
+                if(deviceExtension->HwFlags & UNIATA_NO_DPC) {
+                    /* CMD 649, ROSB SWK33, ICH4 */
                     deviceExtension->UseDpc = FALSE;
-                    break;
                 }
 
                 GetStatus(chan, baseIoAddress2, statusByte);

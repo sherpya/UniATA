@@ -26,8 +26,9 @@ Notes:
   and Secondary channels to disappear from Device Manager.
 
   In order to install UniATA for some newer controller, you can add
-  entries in device list in uata2k.inf and uata2kh.inf with help of
-  rebuild_inf.bat. Just run this batch file to rebuild .INF file.
+  entries in device list in uata2k.inf (for RAID) and uata2kh.inf (for IDE)
+  with help of rebuild_inf.bat.
+  Just run this batch file to rebuild .INF file.
 
   You can also modify .INF-files manually:
   Add line before ';DEVLIST' and type there something like this:
@@ -41,7 +42,7 @@ Notes:
     PCI\VEN_$DD$&DEV_$VV$.DeviceDesc="Your new ATA controller"
   PS. this process will be automated in future.
 
-  Another installation way is setup_w2k.bat
+  The alternative way of installation is running setup_w2k.bat
 
 RAID Notes:
   
@@ -58,7 +59,7 @@ RAID Notes:
 
 Installation steps:
 
-1.  unpack archive (for ex. C:\temp\uniata)
+1.  unpack archive (for ex. to C:\temp\uniata)
 2.  My Computer -> Properties -> Hardware -> Device Manager
 3.  select device, chose it's
        Properties -> Driver
@@ -76,10 +77,15 @@ Installation steps:
     [v] Specify a location
     [ ] Microsift Windows Update
 8.  Next
-9.  enter path to .INF file for new driver (C:\temp\uniata\Release_Dist\uata2k.inf or
-    C:\temp\uniata\Release_Dist\uata2kh.inf). First file treats all 
-    controllers as SCSI/Raid, second - as ATA/IDE. I saw w2k installations 
-    those didn't accept SCSI .inf-file for ATA driver update.
+9.  enter path to .INF file for new driver
+    If this is usual onboard IDE controller, use
+        C:\temp\uniata\Release_Dist\uata2kh.inf
+            or for UniATA versions below v29a
+        C:\temp\uniata\Release_Dist\uniata2kh.inf
+    If this is IDE RAID controller or additional PCI IDE controller, use
+        C:\temp\uniata\Release_Dist\uata2k.inf
+            or for UniATA versions below v29a
+        C:\temp\uniata\Release_Dist\uniata2k.inf
 10. OK
 
 11. !!! IMPORTANT !!!
@@ -91,6 +97,8 @@ Installation steps:
 13. chose in the list of available drivers the following line:
 
       SCSI and RAID controllers | AlterWare | .......
+         or
+      IDE controllers           | AlterWare | .......
 
     the keyword here is 'AlterWare' in Provider column
 

@@ -97,6 +97,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
     KAFFINITY  Isr2Affinity;
     ULONG      Isr2Vector;
     PKINTERRUPT Isr2InterruptObject;
+    CHAR    AltInitMasterDev;       // 0xff - uninitialized,  0x00 - normal,  0x01 - change ISA to PCI
 #endif
 
 }BUSMASTER_CONTROLLER_INFORMATION, *PBUSMASTER_CONTROLLER_INFORMATION;
@@ -304,6 +305,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define UNIATA_SIMPLEX_ONLY     0x40000000
 #define UNIATA_NO_SLAVE         0x20000000
 #define UNIATA_SATA             0x10000000
+#define UNIATA_NO_DPC           0x08000000
 
 #define ATPOLD		0x0100
 
@@ -351,6 +353,8 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 
 #define SIS_BASE        0x0100
 #define SIS_SOUTH       0x0200
+
+#define ICH4_FIX        0x0100
 
 #define VIA33		0
 #define VIA66		1
@@ -414,8 +418,8 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
     PCI_DEV_HW_SPEC_BM( 244b, 8086, 0x00, ATA_UDMA5, "Intel ICH2"       , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 248a, 8086, 0x00, ATA_UDMA5, "Intel ICH3"       , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 248b, 8086, 0x00, ATA_UDMA5, "Intel ICH3"       , 0                                       ),
-    PCI_DEV_HW_SPEC_BM( 24cb, 8086, 0x00, ATA_UDMA5, "Intel ICH4"       , 0                                       ),
-    PCI_DEV_HW_SPEC_BM( 24ca, 8086, 0x00, ATA_UDMA5, "Intel ICH4"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 24cb, 8086, 0x00, ATA_UDMA5, "Intel ICH4"       , ICH4_FIX | UNIATA_NO_DPC                ),
+    PCI_DEV_HW_SPEC_BM( 24ca, 8086, 0x00, ATA_UDMA5, "Intel ICH4"       , ICH4_FIX | UNIATA_NO_DPC                ),
     PCI_DEV_HW_SPEC_BM( 24db, 8086, 0x00, ATA_UDMA5, "Intel ICH5 EB"    , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 24d1, 8086, 0x00, ATA_SA150, "Intel ICH5 EB1"   , UNIATA_SATA                             ),
     PCI_DEV_HW_SPEC_BM( 24df, 8086, 0x00, ATA_SA150, "Intel ICH5 EB2"   , UNIATA_SATA                             ),
@@ -460,7 +464,7 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
 /*    PCI_DEV_HW_SPEC_BM( 6621, 105a, 0x00, ATA_UDMA6, "Promise PDC20621" , PRMIO | PRSX4X  | UNIATA_RAID_CONTROLLER),
     PCI_DEV_HW_SPEC_BM( 6622, 105a, 0x00, ATA_UDMA6, "Promise PDC20622" , PRMIO | PRSX4X  | UNIATA_RAID_CONTROLLER),*/
 
-    PCI_DEV_HW_SPEC_BM( 0211, 1166, 0x00, ATA_UDMA2, "ServerWorks ROSB4", SWKS33                                  ),
+    PCI_DEV_HW_SPEC_BM( 0211, 1166, 0x00, ATA_UDMA2, "ServerWorks ROSB4", SWKS33  | UNIATA_NO_DPC                 ),
     PCI_DEV_HW_SPEC_BM( 0212, 1166, 0x92, ATA_UDMA5, "ServerWorks CSB5" , SWKS100                                 ),
     PCI_DEV_HW_SPEC_BM( 0212, 1166, 0x00, ATA_UDMA4, "ServerWorks CSB5" , SWKS66                                  ),
     PCI_DEV_HW_SPEC_BM( 0213, 1166, 0x00, ATA_UDMA5, "ServerWorks CSB6" , SWKS100                                 ),
@@ -614,7 +618,10 @@ Ata_is_dev_listed(
 #define IOCTL_SCSI_MINIPORT_UNIATA_SET_MAX_MODE    ((FILE_DEVICE_SCSI << 16) + 0x09a2)
 
 typedef struct _SETTRANSFERMODE {
-    ULONG Mode;
+    ULONG MaxMode;
+    ULONG OrigMode;
+    BOOLEAN ApplyImmediately;
+    UCHAR Reserved[3];
 } SETTRANSFERMODE, *PSETTRANSFERMODE;
 
 #endif //__IDE_BUSMASTER_H__
