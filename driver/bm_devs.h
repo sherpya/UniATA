@@ -31,6 +31,12 @@ Revision History:
 
 --*/
 
+#define IDE_MAX_CHAN          8
+#define IDE_MAX_LUN_PER_CHAN  2
+#define IDE_MAX_LUN           (IDE_MAX_CHAN*IDE_MAX_LUN_PER_CHAN)
+
+#define MAX_QUEUE_STAT        8
+
 //
 // values for TransferMode
 //
@@ -625,15 +631,5 @@ Ata_is_dev_listed(
     ((pciData)->BaseClass == PCI_DEV_CLASS_STORAGE && \
      (pciData)->SubClass == PCI_DEV_SUBCLASS_IDE)
 
-#define IOCTL_SCSI_MINIPORT_UNIATA_FIND_DEVICES    ((FILE_DEVICE_SCSI << 16) + 0x09a0)
-#define IOCTL_SCSI_MINIPORT_UNIATA_DELETE_DEVICE   ((FILE_DEVICE_SCSI << 16) + 0x09a1)
-#define IOCTL_SCSI_MINIPORT_UNIATA_SET_MAX_MODE    ((FILE_DEVICE_SCSI << 16) + 0x09a2)
-
-typedef struct _SETTRANSFERMODE {
-    ULONG MaxMode;
-    ULONG OrigMode;
-    BOOLEAN ApplyImmediately;
-    UCHAR Reserved[3];
-} SETTRANSFERMODE, *PSETTRANSFERMODE;
 
 #endif //__IDE_BUSMASTER_H__

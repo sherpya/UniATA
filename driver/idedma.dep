@@ -7,6 +7,7 @@
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\
+	".\uata_ctl.h"\
 	".\bsmaster.h"\
 	
 .\id_dma.cpp : \
@@ -16,6 +17,7 @@
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\
+	".\uata_ctl.h"\
 	".\bsmaster.h"\
 	
 .\id_init.cpp : \
@@ -25,6 +27,7 @@
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\
+	".\uata_ctl.h"\
 	".\bsmaster.h"\
 	
 .\id_probe.cpp : \
@@ -34,6 +37,7 @@
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\
+	".\uata_ctl.h"\
 	".\bsmaster.h"\
 	
 BusMaster_v$(VER).rar : \

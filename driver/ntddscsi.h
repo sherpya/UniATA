@@ -22,6 +22,8 @@ Revision History:
 #ifndef _NTDDSCSIH_
 #define _NTDDSCSIH_
 
+#pragma pack(push, 8)
+
 //
 // Device Name - this string is the name of the device.  It is the name
 // that should be passed to NtOpenFile when accessing the device.
@@ -226,4 +228,8 @@ typedef struct _DUMP_POINTERS {
 #define SCSI_IOCTL_DATA_OUT          0
 #define SCSI_IOCTL_DATA_IN           1
 #define SCSI_IOCTL_DATA_UNSPECIFIED  2
+
+#pragma pack(pop)
+
 #endif
+

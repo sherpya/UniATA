@@ -34,11 +34,15 @@ Revision History:
 #ifndef __UNIATA_TOOLS_H__
 #define __UNIATA_TOOLS_H__
 
+#ifdef __cplusplus
 extern "C" {
+#endif //__cplusplus
 
 //----------------
 
+#ifndef USER_MODE
 #include <ntddk.h>                  // various NT definitions
+#endif //USER_MODE
 
 //----------------
 
@@ -382,13 +386,17 @@ __inline ULONG CountOfSetBitsULong(ULONG _X)
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 //#define abs(a) (((a) < 0) ? (-(a)) : (a))
 
+#ifdef __cplusplus
 };
+#endif //__cplusplus
 
 extern ULONG  MajorVersion;
 extern ULONG  MinorVersion;
 extern ULONG  BuildNumber;
 extern ULONG  SPVersion;
+#ifndef USER_MODE
 extern UNICODE_STRING SavedSPString;
+#endif //USER_MODE
 
 
 #define WinVer_IsNT   (MajorVersion==0x04)
@@ -402,5 +410,11 @@ extern UNICODE_STRING SavedSPString;
 #define WinVer_2k     (0x0500)
 #define WinVer_XP     (0x0501)
 #define WinVer_dNET   (0x0502)
+
+#define PtrOffset(BASE,OFFSET) ((ULONG)((ULONG)(OFFSET) - (ULONG)(BASE)))
+
+#ifndef offsetof
+#define offsetof(type, field)   (ULONG)&(((type *)0)->field)
+#endif //offsetof
 
 #endif // __UNIATA_TOOLS_H__

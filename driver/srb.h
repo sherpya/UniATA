@@ -29,6 +29,9 @@
 // begin_ntminitape
 #define MAXIMUM_CDB_SIZE 12
 // end_ntminitape
+
+#ifndef USER_MODE
+
 typedef PHYSICAL_ADDRESS SCSI_PHYSICAL_ADDRESS, *PSCSI_PHYSICAL_ADDRESS;
 
 typedef struct _ACCESS_RANGE {
@@ -888,5 +891,7 @@ ScsiDebugPrint(
     );
 
 // end_ntminitape
+
+#endif //USER_MODE
 
 #endif //

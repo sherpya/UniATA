@@ -66,7 +66,8 @@ Revision History:
 
 #define QUEUE_STATISTICS
 #define IO_STATISTICS
-#define MAX_QUEUE_STAT                  8
+
+#include "uata_ctl.h"
 
 #define MAX_RETRIES                     6
 #define RETRY_UDMA2                     1
@@ -330,7 +331,7 @@ typedef struct _HW_CHANNEL {
 typedef struct _HW_LU_EXTENSION {
     IDENTIFY_DATA2 IdentifyData;
     ULONGLONG      NumOfSectors;
-    ULONG          DeviceFlags;    // Flags word for each possible device.
+    ULONG          DeviceFlags;    // Flags word for each possible device. DFLAGS_XXX
     ULONG          DiscsPresent;   // Indicates number of platters on changer-ish devices.
     BOOLEAN        DWordIO;        // Indicates use of 32-bit PIO
     UCHAR          ReturningMediaStatus;
@@ -363,10 +364,6 @@ typedef struct _HW_LU_EXTENSION {
 
 #endif//IO_STATISTICS
 } HW_LU_EXTENSION, *PHW_LU_EXTENSION;
-
-#define IDE_MAX_CHAN          8
-#define IDE_MAX_LUN_PER_CHAN  2
-#define IDE_MAX_LUN           (IDE_MAX_CHAN*IDE_MAX_LUN_PER_CHAN)
 
 // Device extension
 typedef struct _HW_DEVICE_EXTENSION {

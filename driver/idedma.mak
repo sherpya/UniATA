@@ -79,12 +79,21 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 "build_inf.exe" : "bm_devs.h"
 !IF "$(NO_BUILD_INF)" == ""
 	cd ..\build_inf
-	nmake CFG="build_inf - Win32 Release"
+	nmake /A CFG="build_inf - Win32 Release"
 	cd ..\driver
 	copy ..\build_inf\Release\build_inf.exe .\build_inf.exe
 	copy ..\build_inf\Release\build_inf.exe .\Dist\build_inf.exe
 !ENDIF 
 
+
+"atactl.exe" : "uata_ctl.h"
+!IF "$(NO_BUILD_INF)" == ""
+	cd ..\atactl
+	nmake /A CFG="atactl - Win32 Release"
+	cd ..\driver
+	copy ..\atactl\Release\atactl.exe .\atactl.exe
+	copy ..\atactl\Release\atactl.exe .\Dist\atactl.exe
+!ENDIF 
 
 #ALL :
 #	nmake CFG="UniATA - Win32 Release"
@@ -92,19 +101,23 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 
 PKG : "BusMaster_v$(VER).rar"
 
+
 "Release\idedma.sys" :
-	nmake CFG="UniATA - Win32 Release"
+	nmake /A CFG="UniATA - Win32 Release"
 
 "Debug\idedma.sys" :
-	nmake CFG="UniATA - Win32 Debug"
+	nmake /A CFG="UniATA - Win32 Debug"
 
 "BusMaster_v$(VER).rar" : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
+	cd ..
+	driver\Dist\fix_dep.bat
+	cd driver
 !IF  "$(CFG)" == "UniATA - Win32 Release"
-	nmake CFG="UniATA - Win32 Debug"
-	nmake CFG="UniATA - Win32 Release"
+	nmake /A CFG="UniATA - Win32 Debug"
+	nmake /A CFG="UniATA - Win32 Release"
 !ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
-	nmake CFG="UniATA - Win32 Release"
-	nmake CFG="UniATA - Win32 Debug"
+	nmake /A CFG="UniATA - Win32 Release"
+	nmake /A CFG="UniATA - Win32 Debug"
 !ENDIF 
 	rar a -s -mdD -m5 BusMaster_v$(VER).rar @pkg_files.dist
 	rar a -s -mdD -m5 BusMaster_v$(VER)_src.rar @pkg_files.src
@@ -179,7 +192,7 @@ LINK32_FLAGS=$(BaseDir)\Lib\i386\Checked\ntoskrnl.lib $(BaseDir)\Lib\i386\Checke
   $(LINK32_FLAGS) $(LINK32_OBJS)
 <<
 
-".\copy.msg" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)" "$(DistDir)" "build_inf.exe"
+".\copy.msg" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)" "$(DistDir)" "build_inf.exe" "atactl.exe"
 	<<tempfile.bat 
 	@echo off 
 	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDma.sys 
@@ -211,7 +224,7 @@ SRC=id_ata
 SRC=id_dma
 !INCLUDE build.mak
 
-SRC=id_init.cpp
+SRC=id_init
 !INCLUDE build.mak
 
 SRC=id_probe

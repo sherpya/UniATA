@@ -1771,7 +1771,7 @@ CheckDevice(
             if (IssueIdentify(HwDeviceExtension,
                               deviceNumber,
                               Channel,
-                              IDE_COMMAND_ATAPI_IDENTIFY)) {
+                              IDE_COMMAND_ATAPI_IDENTIFY, FALSE)) {
 
                 // Indicate ATAPI device.
                 KdPrint2((PRINT_PREFIX "CheckDevice: Device %#x is ATAPI\n",
@@ -1814,7 +1814,7 @@ CheckDevice(
         if (IssueIdentify(HwDeviceExtension,
                           deviceNumber,
                           Channel,
-                          IDE_COMMAND_IDENTIFY)) {
+                          IDE_COMMAND_IDENTIFY, FALSE)) {
 
             // IDE drive found.
             KdPrint2((PRINT_PREFIX "CheckDevice: Device %#x is IDE\n",

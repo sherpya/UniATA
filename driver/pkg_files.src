@@ -25,6 +25,8 @@
 ..\driver\todo.txt
 ..\driver\tools.h
 ..\driver\pkg_files.*
+..\driver\uata_ctl.h
+..\driver\uniata.mak
 ..\build_inf\build_inf.cpp
 ..\build_inf\build_inf.dep
 ..\build_inf\build_inf.dsp
@@ -34,4 +36,7 @@
 ..\atactl\atactl.cpp
 ..\atactl\atactl.dsp
 ..\atactl\atactl.dsw
+..\atactl\atactl.dep
+..\atactl\atactl.mak
+..\atactl\Makefile
 ..\building.txt

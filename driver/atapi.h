@@ -44,7 +44,9 @@ Revision History:
 #ifndef __GLOBAL_H__
 #define __GLOBAL_H__
 
+#ifdef __cplusplus
 extern "C" {
+#endif //__cplusplus
 
 #include "scsi.h"
 #include "stdio.h"
@@ -181,6 +183,7 @@ typedef struct _IDE_REGISTERS_3 {
 #define DFLAGS_WCACHE_ENABLED        0x0800    // Indicates that we use write cache
 #define DFLAGS_RCACHE_ENABLED        0x1000    // Indicates that we use read cache
 #define DFLAGS_ORIG_GEOMETRY         0x2000    // 
+#define DFLAGS_REINIT_DMA            0x4000    // 
 //
 // Used to disable 'advanced' features.
 //
@@ -236,13 +239,16 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_COMMAND_READ48           0x24
 #define IDE_COMMAND_READ_DMA48       0x25
 #define IDE_COMMAND_READ_DMA_Q48     0x26
+#define IDE_COMMAND_READ_NATIVE_SIZE48 0x27
 #define IDE_COMMAND_READ_MUL48       0x29
 #define IDE_COMMAND_WRITE            0x30
 #define IDE_COMMAND_WRITE48          0x34
 #define IDE_COMMAND_WRITE_DMA48      0x35
 #define IDE_COMMAND_WRITE_DMA_Q48    0x36
+#define IDE_COMMAND_SET_NATIVE_SIZE48  0x37
 #define IDE_COMMAND_WRITE_MUL48      0x39
 #define IDE_COMMAND_VERIFY           0x40
+#define IDE_COMMAND_VERIFY48         0x42
 #define IDE_COMMAND_SEEK             0x70
 #define IDE_COMMAND_SET_DRIVE_PARAMETERS 0x91
 #define IDE_COMMAND_ATAPI_PACKET     0xA0
@@ -267,8 +273,6 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
                                                  IDE_COMMAND_ENABLE_MEDIA_STATUS */
 #define IDE_COMMAND_READ_NATIVE_SIZE 0xF8
 #define IDE_COMMAND_SET_NATIVE_SIZE  0xF9
-#define IDE_COMMAND_READ_NATIVE_SIZE48 0x27
-#define IDE_COMMAND_SET_NATIVE_SIZE48  0x37
 
 //
 // IDE status definitions
@@ -298,7 +302,6 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_DRIVE_SELECT_2           (IDE_DRIVE_SELECT | IDE_DRIVE_2)
 
 #define IDE_USE_LBA                  0x40
-#define IDE_USE_HOB                  0x80 // use high-order byte(s)
 
 //
 // IDE drive control definitions
@@ -307,6 +310,7 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_DC_DISABLE_INTERRUPTS    0x02
 #define IDE_DC_RESET_CONTROLLER      0x04
 #define IDE_DC_A_4BIT                0x80
+#define IDE_DC_USE_HOB               0x80 // use high-order byte(s)
 #define IDE_DC_REENABLE_CONTROLLER   0x00
 
 // IDE error definitions
@@ -839,6 +843,8 @@ AtapiSoftReset(
     (OperationCode == SCSIOP_BLANK)||*/ \
     (OperationCode == SCSIOP_WRITE_FILEMARKS))
 
+#ifndef USER_MODE
+
 PSCSI_REQUEST_BLOCK
 BuildMechanismStatusSrb (
     IN PVOID HwDeviceExtension,
@@ -932,7 +938,8 @@ IssueIdentify(
     IN PVOID HwDeviceExtension,
     IN ULONG DeviceNumber,
     IN ULONG Channel,
-    IN UCHAR Command
+    IN UCHAR Command,
+    IN BOOLEAN NoSetup
     );
 
 BOOLEAN
@@ -957,7 +964,13 @@ FindDevices(
     IN ULONG   Channel
     );
 
+#endif //USER_MODE
+
+#ifdef __cplusplus
 };
+#endif //__cplusplus
+
+#ifndef USER_MODE
 
 BOOLEAN
 AtapiResetController(
@@ -1069,6 +1082,8 @@ PrintNtConsole(
 #else //_DEBUG
 #define PrintNtConsole(x)  {;}
 #endif //_DEBUG
+
+#endif //USER_MODE
 
 #pragma pack(pop)
 
