@@ -4918,7 +4918,7 @@ IdeSendCommand(
     )
 {
     SetCheckPoint(1);
-    //KdPrint2((PRINT_PREFIX "** Ide: Command: entryway\n"));
+    KdPrint2((PRINT_PREFIX "** Ide: Command: entryway\n"));
     SetCheckPoint(2);
 
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
@@ -4941,7 +4941,7 @@ IdeSendCommand(
     //ULONG __ebp__ = 0;
 
     SetCheckPoint(0x20);
-    //KdPrint2((PRINT_PREFIX "** Ide: Command:\n\n"));
+    KdPrint2((PRINT_PREFIX "** Ide: Command:\n\n"));
 /*    __asm {
         mov eax,ebp
         mov __ebp__, eax
@@ -4960,11 +4960,11 @@ IdeSendCommand(
     SetCheckPoint(0x30);
     AtaReq = (PATA_REQ)(Srb->SrbExtension);
 
-    /*KdPrint2((PRINT_PREFIX "** Ide: Command &AtaReq %#x\n",
+    KdPrint2((PRINT_PREFIX "** Ide: Command &AtaReq %#x\n",
         &AtaReq));
     KdPrint2((PRINT_PREFIX "** Ide: Command AtaReq %#x\n",
         AtaReq));
-    KdPrint2((PRINT_PREFIX "** --- **\n"));*/
+    KdPrint2((PRINT_PREFIX "** --- **\n"));
 
     lChannel = GET_CHANNEL(Srb);
     chan = &(deviceExtension->chan[lChannel]);
@@ -5548,8 +5548,9 @@ AtapiStartIo__(
                 // Send command to device.
                 KdPrint2((PRINT_PREFIX "Send to device\n"));
                 if(TopLevel) {
-                    KdPrint2((PRINT_PREFIX "TopLevel (2)\n"));
+                    KdPrint2((PRINT_PREFIX "TopLevel (2), srb %#x\n", Srb));
                     AtaReq = (PATA_REQ)(Srb->SrbExtension);
+                    KdPrint2((PRINT_PREFIX "TopLevel (3), AtaReq %#x\n", AtaReq));
                     ASSERT(!AtaReq->Flags);
                     AtapiQueueRequest(chan, Srb);
 //                    AtaReq = (PATA_REQ)(Srb->SrbExtension);
@@ -5561,8 +5562,8 @@ AtapiStartIo__(
                     KdPrint2((PRINT_PREFIX "Try ATAPI send\n"));
                     status = AtapiSendCommand(HwDeviceExtension, Srb, CMD_ACTION_ALL);
                 } else {
-/*                    KdPrint2((PRINT_PREFIX "Try IDE send\n"));
-                    {
+                    KdPrint2((PRINT_PREFIX "Try IDE send\n"));
+/*                    {
                         ULONG __ebp__ = 0;
                         ULONG __esp__ = 0;
 
@@ -6399,6 +6400,7 @@ AtapiAdapterControl(
             // Enable all the interrupts on the adapter while port driver call
             // for power up an HBA that was shut down for power management
             for (c = 0; c < numberChannels; c++) {
+                AtapiChipInit(HwDeviceExtension, -1, c);
                 FindDevices(HwDeviceExtension, FALSE, c);
                 AtapiEnableInterrupts(deviceExtension, c);
                 AtapiHwInitialize__(deviceExtension, c);

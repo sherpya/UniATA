@@ -60,7 +60,7 @@
 ;-----------------------------------------------------------------------------------------
 
 [MiniportDrivers]
-    uniata  = !SERVICE_KERNEL_DRIVER, "SCSI Miniport", !SERVICE_ERROR_IGNORE,  17, %SystemRoot%\System32\IoLogMsg.dll , 7
+    uniata  = !SERVICE_KERNEL_DRIVER, "SCSI Miniport", !SERVICE_ERROR_IGNORE,  31, %SystemRoot%\System32\IoLogMsg.dll , 7
 
 ;---------------------------------------------------------------------------
 ; 1. Identify

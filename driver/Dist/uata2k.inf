@@ -1,30 +1,18 @@
-[version]
-Signature="$WINDOWS NT$"
-Class=SCSIAdapter
-ClassGuid={4D36E97B-E325-11CE-BFC1-08002BE10318}
+[Version]
+Signature="$Windows NT$"
 Provider=%ALTERWARE%
-DriverVer=07/04/2004
+ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
+Class=SCSIAdapter
 CatalogFile=uniata.cat
+DriverVer=07/04/2004
 
-
-[SourceDisksNames]
-1 = "UniATA Installation disk",,,
-
-[SourceDisksFiles]
-uniata.sys = 1
-uniata2k.inf = 1
-
-;Class Install
-[ClassInstall32.NT]
-AddReg=HDC_Class
-
-[HDC_Class]
-HKR,,,,%HDCClassName%
-HKR,,Icon,,"-9"
-HKR,,Installer32,,"SysSetup.Dll,HdcClassInstaller"
 
 [DestinationDirs]
-DefaultDestDir = 12 ; DIRID_DRIVERS
+DefaultDestDir = 11 ; DIRID_DRIVERS
+
+;
+; Driver information
+;
 
 [Manufacturer]
 %ALTERWARE%=UNIATA_HDC
@@ -83,31 +71,66 @@ DefaultDestDir = 12 ; DIRID_DRIVERS
 %PCI\VEN_16ca&DEV_0001.DeviceDesc%=uniata_Inst, PCI\VEN_16ca&DEV_0001
 ;Compatible adapters
 ;DEVLIST
-uniata_Inst
+%UniATA_Name% = uniata_Inst
 
-[DISABLE_PCIIDE]
-HKLM, system\currentcontrolset\services\pciide, "Start", %REG_DWORD%, 0x00000004
+;
+; General installation section
+;
 
 [uniata_Inst]
-AddReg = RegUninstall,DISABLE_PCIIDE
-CopyFiles = @uniata.sys
+AddReg = uniata_Inst.AddReg
+CopyFiles = uniata_Inst.Miniport
+
+[uniata_Inst.AddReg]
+
+
+;
+; File sections
+;
+
+[uniata_Inst.Miniport]
+uniata.sys
+
+
+;
+; Service Installation
+;
 
 [uniata_Inst.Services]
-AddService = UniATA, %SPSVCINST_ASSOCSERVICE%, uniata_Service_Inst
+AddService = UniATA, 0x00000002, uniata_Service_Inst, uniata_EventLog_Inst
 
 [uniata_Service_Inst]
-ServiceType    = %SERVICE_KERNEL_DRIVER%
-StartType      = %SERVICE_BOOT_START%
-ErrorControl   = %SERVICE_ERROR_NORMAL%
-ServiceBinary  = %12%\uniata.sys
+ServiceType    = 1 ; %SERVICE_KERNEL_DRIVER%
+StartType      = 0 ; %SERVICE_BOOT_START%
+ErrorControl   = 0 ; %SERVICE_ERROR_NORMAL%
 LoadOrderGroup = System Bus Extender
+ServiceBinary  = %12%\uniata.sys
 
-[uniata_Inst.PosDup]            ;; BUGBUG: What does this do?
-*PNP0600
+AddReg = DISABLE_PCIIDE
+
+[uniata_EventLog_Inst]
+AddReg = uniata_EventLog_AddReg
+
+[uniata_EventLog_AddReg]
+
+
+[DISABLE_PCIIDE]
+HKLM, "system\currentcontrolset\services\pciide", "Start", 0x00010001, 0x00000004
+
+
+;
+; Source file information
+;
+
+[SourceDisksNames.x86]
+1 = %DiskId1%,,,""
+
+[SourceDisksFiles]
+; Files for disk Initio Installation Disk #1 (SCSIAdapter)
+uniata.sys = 1,,
+
 
 [Strings]
-HDCClassName            = "SCSI and RAID controllers"
-ALTERWARE="AlterWare"
 ;Well-known adapters
 PCI\VEN_8086&DEV_24db.DeviceDesc="Intel ICH5"
 PCI\VEN_8086&DEV_24cb.DeviceDesc="Intel ICH4"
@@ -161,15 +184,20 @@ PCI\VEN_1191&DEV_0005.DeviceDesc="Acard ATP850UF controller"
 PCI\VEN_16ca&DEV_0001.DeviceDesc="Cenatek Rocket Drive controller"
 ;Compatible adapters
 ;DEVNAMELIST
-"Universal ATA Driver"
+UniATA_Name = "Universal ATA Driver"
+ALTERWARE = "AlterWare"
 
 ;*******************************************
-;Handy macro substitutions (non-localizable)
-SPSVCINST_ASSOCSERVICE = 0x00000002
-SERVICE_KERNEL_DRIVER  = 1
-SERVICE_BOOT_START     = 0
-SERVICE_ERROR_NORMAL   = 1
-REG_EXPAND_SZ          = 0x00020000
-REG_DWORD              = 0x00010001
-REG_MULTI_SZ           = 0x00010000
+;
+; Non-Localizable Strings
+;
+
+REG_SZ         = 0x00000000
+REG_MULTI_SZ   = 0x00010000
+REG_EXPAND_SZ  = 0x00020000
+REG_BINARY     = 0x00000001
+REG_DWORD      = 0x00010001
+SERVICEROOT    = "System\CurrentControlSet\Services"
+
+DiskId1 = "UniATA Installation disk"
 

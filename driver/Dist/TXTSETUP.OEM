@@ -37,7 +37,7 @@ d1 = "UniATA", \uniata, \
 # <id> is a unique <within the component> string to be associated
 #   with an option.
 
-scsi = UniATA
+scsi = OEMSCSI
 
 
 
@@ -51,11 +51,11 @@ scsi = UniATA
 #   HKEY_LOCAL_MACHINE\ControlSet001\Services
 
 
-UniATA = "Universal ATA Driver", uniata
+OEMSCSI = "Universal ATA Driver", uniata
 
 
 
-[Files.scsi.UniATA]
+[Files.scsi.OEMSCSI]
 
 # This section lists the files that should be copied if the user
 # selects a particular component option.
@@ -68,12 +68,12 @@ UniATA = "Universal ATA Driver", uniata
 #   directory specified for the disk in the [Disks] section to form the
 #   full path of the file on the disk.
 
-driver = d1, uniata.sys
+driver = d1, uniata.sys, uniata
 inf    = d1, oemsetup.inf
 
 
 
-[Config.scsi.UniATA]
+[Config.scsi.OEMSCSI]
 
 # This section specifies values to be set in the registry for
 # particular component options.  Required values in the services\xxx
