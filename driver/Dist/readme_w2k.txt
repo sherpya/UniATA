@@ -26,7 +26,7 @@ Notes:
   and Secondary channels to disappear from Device Manager.
 
   In order to install UniATA for some newer controller, you can add
-  entries in device list in uata2k.inf (for RAID) and uata2kh.inf (for IDE)
+  entries in device list in uata_2k.inf (for RAID) and uata_2kh.inf (for IDE)
   with help of rebuild_inf.bat.
   Just run this batch file to rebuild .INF file.
 

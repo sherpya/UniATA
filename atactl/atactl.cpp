@@ -202,6 +202,12 @@ ata_mode_to_str(
     }
 } // end ata_mode_to_str()
 
+#define check_atamode_str(str, mode) \
+   (!_stricmp(str, "UDMA##mode") || \
+    !_stricmp(str, "UDMA-##mode") || \
+    !_stricmp(str, "ATA-##mode") || \
+    !_stricmp(str, "ATA##mode"))
+
 int
 ata_str_to_mode(
     char* str
@@ -212,33 +218,20 @@ ata_str_to_mode(
 
     if(!_stricmp(str, "SATA"))
         return ATA_SA150;
-    if(!_stricmp(str, "UDMA33"))
+
+    if(check_atamode_str(str, 16))
+        return ATA_UDMA0;
+    if(check_atamode_str(str, 25))
+        return ATA_UDMA1;
+    if(check_atamode_str(str, 33))
         return ATA_UDMA2;
-    if(!_stricmp(str, "UDMA44"))
+    if(check_atamode_str(str, 44))
         return ATA_UDMA3;
-    if(!_stricmp(str, "UDMA66"))
+    if(check_atamode_str(str, 66))
         return ATA_UDMA4;
-    if(!_stricmp(str, "UDMA100"))
+    if(check_atamode_str(str, 100))
         return ATA_UDMA5;
-    if(!_stricmp(str, "UDMA133"))
-        return ATA_UDMA6;
-    if(!_stricmp(str, "ATA33"))
-        return ATA_UDMA2;
-    if(!_stricmp(str, "ATA66"))
-        return ATA_UDMA4;
-    if(!_stricmp(str, "ATA100"))
-        return ATA_UDMA5;
-    if(!_stricmp(str, "ATA133"))
-        return ATA_UDMA6;
-    if(!_stricmp(str, "ATA-33"))
-        return ATA_UDMA2;
-    if(!_stricmp(str, "ATA-44"))
-        return ATA_UDMA3;
-    if(!_stricmp(str, "ATA-66"))
-        return ATA_UDMA4;
-    if(!_stricmp(str, "ATA-100"))
-        return ATA_UDMA5;
-    if(!_stricmp(str, "ATA-133"))
+    if(check_atamode_str(str, 122))
         return ATA_UDMA6;
 
     len = strlen(str);

@@ -64,6 +64,8 @@ ULONG         BMListLen = 0;
 ULONG         maxPciBus = 16;
 PDRIVER_OBJECT SavedDriverObject = NULL;
 
+BOOLEAN FirstMasterOk = FALSE;
+
 // local routines 
 
 ULONG
@@ -296,10 +298,10 @@ AtapiEnumBusMasterController__(
                     deviceExtension->RevID = pciData.RevisionID;
                 }
 
-                found = (BOOLEAN)AtapiRegCheckDevValue(deviceExtension, L"Include", 0);
+                found = (BOOLEAN)AtapiRegCheckDevValue(deviceExtension, -1, -1, L"Include", 0);
                 if(!found) {
                     KdPrint2((PRINT_PREFIX "No force include, check exclude\n"));
-                    found = !AtapiRegCheckDevValue(deviceExtension, L"Exclude", 0);
+                    found = !AtapiRegCheckDevValue(deviceExtension, -1, -1, L"Exclude", 0);
                     if(!found) {
                         KdPrint2((PRINT_PREFIX "Device excluded\n"));
                         continue;
@@ -627,6 +629,7 @@ AtapiFindBusMasterController(
     BOOLEAN MasterDev;
     BOOLEAN simplexOnly = FALSE;
     BOOLEAN skip_find_dev = FALSE;
+    BOOLEAN AltInit = FALSE;
 
     SCSI_PHYSICAL_ADDRESS IoBasePort1;
     SCSI_PHYSICAL_ADDRESS IoBasePort2;
@@ -644,6 +647,9 @@ AtapiFindBusMasterController(
 
     if(InDriverEntry) {
         i = (ULONG)Context;
+        if(i & 0x80000000) {
+            AltInit = TRUE;
+        }
         i &= ~0x80000000;
         channel   = BMList[i].channel;
     } else {
@@ -793,13 +799,18 @@ AtapiFindBusMasterController(
     }
 
     if(MasterDev) {
-        if((channel==0) && ConfigInfo->AtdiskPrimaryClaimed) {
-            KdPrint2((PRINT_PREFIX "Error: Primary channel already claimed by another driver\n"));
-            return(SP_RETURN_NOT_FOUND);
-        }
-        if((channel==1) && ConfigInfo->AtdiskSecondaryClaimed) {
-            KdPrint2((PRINT_PREFIX "Error: Secondary channel already claimed by another driver\n"));
-            return(SP_RETURN_NOT_FOUND);
+        if(WinVer_IsNT && AltInit && FirstMasterOk) {
+            // this is the 2nd attempt to init this controller by OUR driver
+            KdPrint2((PRINT_PREFIX "Skip primary/secondary claiming checks\n"));
+        } else {
+            if((channel==0) && ConfigInfo->AtdiskPrimaryClaimed) {
+                KdPrint2((PRINT_PREFIX "Error: Primary channel already claimed by another driver\n"));
+                return(SP_RETURN_NOT_FOUND);
+            }
+            if((channel==1) && ConfigInfo->AtdiskSecondaryClaimed) {
+                KdPrint2((PRINT_PREFIX "Error: Secondary channel already claimed by another driver\n"));
+                return(SP_RETURN_NOT_FOUND);
+            }
         }
 /*
         if(BMList[i].AltInitMasterDev == 0x01) {
@@ -1014,6 +1025,9 @@ AtapiFindBusMasterController(
         chan->lun[1] = &(deviceExtension->lun[c*2+1]);
         chan->MemIo  = deviceExtension->MemIo;
 
+        /* do extra channel-specific setups */
+        AtapiChipInit(HwDeviceExtension, i, channel);
+
         if(!deviceExtension->MemIo) {
             // Check if the range specified is not used by another driver
             if(MasterDev) {
@@ -1165,15 +1179,19 @@ AtapiFindBusMasterController(
                 ConfigInfo->AtdiskPrimaryClaimed = TRUE;
                 chan->PrimaryAddress = TRUE;
 
+                FirstMasterOk = TRUE;
+
             } else
             if (channel == 1) {
                 KdPrint2((PRINT_PREFIX "claim Secondary\n"));
                 ConfigInfo->AtdiskSecondaryClaimed = TRUE;
+    
+                FirstMasterOk = TRUE;
             }
         }
 
         AtapiDmaAlloc(HwDeviceExtension, ConfigInfo, c);
-    }
+    } // end for(channel)
 
 exit_findbm:
 
@@ -1225,6 +1243,12 @@ exit_findbm:
 
     KdPrint2((PRINT_PREFIX "return SP_RETURN_FOUND\n"));
     //PrintNtConsole("return SP_RETURN_FOUND, de %#x, c0.lun0 %#x\n", deviceExtension, deviceExtension->chan[0].lun[0]);
+
+    if(MasterDev) {
+        KdPrint2((PRINT_PREFIX "Attempt %d of MasterDev ok\n", AltInit));
+        FirstMasterOk = TRUE;
+    }
+
     return SP_RETURN_FOUND;
 
 } // end AtapiFindBusMasterController()

@@ -80,7 +80,7 @@ AtapiChipDetect(
 
     i = Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[0], VendorID, 0xffff, 0, NUM_BUSMASTER_ADAPTERS);
 
-    c = AtapiRegCheckDevValue(deviceExtension, L"ForceSimplex", 0);
+    c = AtapiRegCheckDevValue(deviceExtension, -1, -1, L"ForceSimplex", 0);
     if(c) {
         *simplexOnly = TRUE; 
     }
@@ -411,9 +411,26 @@ for_ugly_chips:
     deviceExtension->HwFlags         |= DevTypeInfo[i].RaidFlags;
 
     KdPrint2((PRINT_PREFIX "HwFlags: %#x\n", deviceExtension->HwFlags));
+    
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, -1, -1, L"HwFlagsOverride", deviceExtension->HwFlags);
+    KdPrint2((PRINT_PREFIX "HwFlagsOverride: %#x\n", tmp32));
+    deviceExtension->HwFlags = tmp32;
+
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, -1, -1, L"HwFlagsAdd", 0);
+    KdPrint2((PRINT_PREFIX "HwFlagsAdd: %#x\n", tmp32));
+    deviceExtension->HwFlags |= tmp32;
+
+    KdPrint2((PRINT_PREFIX "HwFlags (final): %#x\n", deviceExtension->HwFlags));
     if(deviceExtension->HwFlags & UNIATA_SIMPLEX_ONLY) {
         KdPrint2((PRINT_PREFIX "UNIATA_SIMPLEX_ONLY\n" ));
         *simplexOnly = TRUE; 
+    }
+
+    KdPrint2((PRINT_PREFIX "MaxTransferMode: %#x\n", deviceExtension->MaxTransferMode));
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, -1, -1, L"MaxTransferMode", deviceExtension->MaxTransferMode);
+    if(tmp32 != 0xffffffff) {
+        KdPrint2((PRINT_PREFIX "MaxTransferMode (overriden): %#x\n", deviceExtension->MaxTransferMode));
+        deviceExtension->MaxTransferMode = tmp32;
     }
 
     if(deviceExtension->MaxTransferMode >= ATA_SA150) {
@@ -523,8 +540,8 @@ for_ugly_chips:
             ChipType = SIS133NEW;
             deviceExtension->HwFlags = (deviceExtension->HwFlags & ~CHIPTYPE_MASK) | SIS133NEW;
             deviceExtension->MaxTransferMode = ATA_UDMA6;
-            KdPrint2((PRINT_PREFIX "AtapiChipInit: SiS 962/963 DMA %#x controller\n", deviceExtension->MaxTransferMode));
-            //PrintNtConsole("AtapiChipInit: SiS 962/963 DMA %#x controller\n", deviceExtension->MaxTransferMode);
+            KdPrint2((PRINT_PREFIX "AtapiChipDetect: SiS 962/963 DMA %#x controller\n", deviceExtension->MaxTransferMode));
+            //PrintNtConsole("AtapiChipDetect: SiS 962/963 DMA %#x controller\n", deviceExtension->MaxTransferMode);
             // Restore device ID
             ChangePciConfig1(0x57, (a | 0x80));
         } else {
@@ -556,8 +573,8 @@ for_ugly_chips:
             }
             // Restore settings
             SetPciConfig1(0x4a, tmp8);
-            KdPrint2((PRINT_PREFIX "AtapiChipInit: SiS 961 DMA %#x controller\n", deviceExtension->MaxTransferMode));
-            //PrintNtConsole("AtapiChipInit: SiS 961 DMA %#x controller\n", deviceExtension->MaxTransferMode);
+            KdPrint2((PRINT_PREFIX "AtapiChipDetect: SiS 961 DMA %#x controller\n", deviceExtension->MaxTransferMode));
+            //PrintNtConsole("AtapiChipDetect: SiS 961 DMA %#x controller\n", deviceExtension->MaxTransferMode);
         }
         //ChangePciConfig1(0x57, (a | 0x80));
         break; }
@@ -772,6 +789,35 @@ via_cable80(
 
 } // end via_cable80()
 
+VOID
+UniAtaReadLunConfig(
+    IN PHW_DEVICE_EXTENSION deviceExtension,
+    IN ULONG c,
+    IN ULONG ldev
+    )
+{
+    ULONG tmp32;
+    PHW_CHANNEL chan;
+    PHW_LU_EXTENSION   LunExt;
+
+    chan = &deviceExtension->chan[c];
+    ldev &= 0x01;
+    LunExt = &(deviceExtension->lun[c*2+ldev]);
+
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, c, ldev, L"ReadCacheEnable", 1);
+    LunExt->opt_ReadCacheEnable = tmp32 ? TRUE : FALSE;
+
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, c, ldev, L"WriteCacheEnable", 1);
+    LunExt->opt_WriteCacheEnable = tmp32 ? TRUE : FALSE;
+
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, c, ldev, L"MaxTransferMode", chan->MaxTransferMode);
+    LunExt->opt_MaxTransferMode = tmp32;
+
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, c, ldev, L"PreferedTransferMode", 0xffffffff);
+    LunExt->opt_PreferedTransferMode = tmp32;
+
+    return;
+} // end UniAtaReadLunConfig()
 
 BOOLEAN
 AtapiChipInit(
@@ -791,33 +837,48 @@ AtapiChipInit(
     ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
     ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
     PHW_CHANNEL chan;
-    UCHAR tmp8;
+    UCHAR  tmp8;
     USHORT tmp16;
+    ULONG  tmp32;
 
-    KdPrint2((PRINT_PREFIX "AtapiChipInit:\n" ));
+    KdPrint2((PRINT_PREFIX "AtapiChipInit: dev %#x, chan %d\n", DeviceNumber, c ));
 
-    if(AtapiRegCheckDevValue(deviceExtension, L"ForceSimplex", 0)) {
+    if(AtapiRegCheckDevValue(deviceExtension, -1, -1, L"ForceSimplex", 0)) {
         deviceExtension->simplexOnly = TRUE; 
-    }
-
-    if(deviceExtension->UnknownDev) {
-        KdPrint2((PRINT_PREFIX "  Unknown chip, exiting\n" ));
-        return TRUE;
     }
 
     if(c == -1) {
         for(c=0; c<deviceExtension->NumberChannels; c++) {
             chan = &deviceExtension->chan[c];
             chan->MaxTransferMode = deviceExtension->MaxTransferMode;
+            tmp32 = AtapiRegCheckDevValue(deviceExtension, c, -1, L"MaxTransferMode", chan->MaxTransferMode);
+            if(tmp32 != 0xffffffff) {
+                KdPrint2((PRINT_PREFIX "MaxTransferMode (overriden): %#x\n", chan->MaxTransferMode));
+                chan->MaxTransferMode = tmp32;
+            }
+            //UniAtaReadLunConfig(deviceExtension, c, 0);
+            //UniAtaReadLunConfig(deviceExtension, c, 1);
         }
         c = -1;
     } else {
         chan = &deviceExtension->chan[c];
         chan->MaxTransferMode = deviceExtension->MaxTransferMode;
+        tmp32 = AtapiRegCheckDevValue(deviceExtension, c, -1, L"MaxTransferMode", chan->MaxTransferMode);
+        if(tmp32 != 0xffffffff) {
+            KdPrint2((PRINT_PREFIX "MaxTransferMode (overriden): %#x\n", chan->MaxTransferMode));
+            chan->MaxTransferMode = tmp32;
+        }
+        UniAtaReadLunConfig(deviceExtension, c, 0);
+        UniAtaReadLunConfig(deviceExtension, c, 1);
     }
 
     KdPrint2((PRINT_PREFIX "HwFlags: %#x\n", deviceExtension->HwFlags));
     KdPrint2((PRINT_PREFIX "VendorID/DeviceID/Rev %#x/%#x/%#x\n", VendorID, DeviceID, RevID));
+
+    if(deviceExtension->UnknownDev) {
+        KdPrint2((PRINT_PREFIX "  Unknown chip, exiting\n" ));
+        return TRUE;
+    }
 
     switch(VendorID) {
 //  case ATA_ACARD_ID: 

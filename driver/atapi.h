@@ -296,8 +296,9 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_STATUS_CORRECTED_ERROR   0x04
 #define IDE_STATUS_DRQ               0x08
 #define IDE_STATUS_DSC               0x10
-#define IDE_STATUS_DWF               0x10      /* drive write fault */
-#define IDE_STATUS_DMA               0x10      /* DMA ready */
+//#define IDE_STATUS_DWF               0x10      /* drive write fault */
+#define IDE_STATUS_DMA               0x20      /* DMA ready */
+#define IDE_STATUS_DWF               0x20      /* drive write fault */
 #define IDE_STATUS_DRDY              0x40
 #define IDE_STATUS_IDLE              0x50
 #define IDE_STATUS_BUSY              0x80
@@ -1072,6 +1073,8 @@ AtapiDisableInterrupts(
 extern ULONG
 AtapiRegCheckDevValue(
     IN PVOID HwDeviceExtension,
+    IN ULONG chan,
+    IN ULONG dev,
     IN PWSTR Name,
     IN ULONG Default
     );
