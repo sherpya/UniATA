@@ -163,6 +163,10 @@ AtapiDmaSetup(
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: count=0\n" ));
         return FALSE;
     }
+    if(count > deviceExtension->MaximumDmaTransferLength) {
+        KdPrint2((PRINT_PREFIX "AtapiDmaSetup: deviceExtension->MaximumDmaTransferLength > count\n" ));
+        return FALSE;
+    }
 
     dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, NULL, (PUCHAR)&(AtaReq->dma_tab) /*chan->dma_tab*/, &i);
 
@@ -525,6 +529,41 @@ AtapiDmaInit(
         goto try_generic_dma;
     }
 
+    if(ChipFlags & UNIATA_SATA) {
+        /****************/
+        /* SATA Generic *
+        /****************/
+        UCHAR ModeByte;
+
+        if(udmamode > 5) {
+            if(deviceExtension->lun[ldev].IdentifyData.SataCapabilities != 0x0000 &&
+               deviceExtension->lun[ldev].IdentifyData.SataCapabilities != 0xffff) {
+                //udmamode = min(udmamode, 6);
+            } else {
+                udmamode = min(udmamode, 5);
+            }
+        }
+        if(udmamode >= 0) {
+            ModeByte = ATA_UDMA0 + udmamode;
+        } else
+        if(wdmamode >= 0) {
+            ModeByte = ATA_WDMA0 + wdmamode;
+        } else
+        if(apiomode >= 0) {
+            ModeByte = ATA_PIO0  + apiomode;
+        } else {
+            ModeByte = ATA_PIO;
+        }
+
+        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                            ModeByte,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        if (!(statusByte & IDE_STATUS_ERROR)) {
+            deviceExtension->lun[ldev].TransferMode = ModeByte;
+        }
+        return;
+    }
+
     switch(VendorID) {
     case ATA_ACARD_ID: {
         /*********/
@@ -660,13 +699,14 @@ set_new_acard:
         /* AMD, nVidia, VIA */
         /********************/
         static const UCHAR via_modes[5][7] = {
-            { 0xc2, 0xc1, 0xc0, 0x00, 0x00, 0x00, 0x00 },        /* ATA33 */
+            { 0xc2, 0xc1, 0xc0, 0x00, 0x00, 0x00, 0x00 },        /* ATA33 and New Chips */
             { 0xee, 0xec, 0xea, 0xe9, 0xe8, 0x00, 0x00 },        /* ATA66 */
             { 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0, 0x00 },        /* ATA100 */
             { 0xf7, 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0 },        /* VIA ATA133 */
             { 0xc2, 0xc1, 0xc0, 0xc4, 0xc5, 0xc6, 0xc7 }};       /* AMD/nVIDIA */
         static const via_pio[] =
-            { 0xff, 0xff, 0xff, 0x55, 0x51, 0xff, 0x55 };
+            { 0xa8, 0x65, 0x42, 0x22, 0x20, 0x42, 0x22, 0x20,
+              0x20, 0x20, 0x20, 0x20, 0x20, 0x20 };
         const UCHAR *reg_val = NULL;
         UCHAR reg = 0x53-(UCHAR)dev;
 
@@ -676,22 +716,22 @@ set_new_acard:
             reg += 0x10;
 
         for(i = udmamode; i>=0; i--) {
+            SetPciConfig1(reg-0x08, via_pio[8+i]);
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                                 ATA_UDMA0+(UCHAR)i,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
             if (!(statusByte & IDE_STATUS_ERROR)) {
-                SetPciConfig1(reg-0x08, 0x51);
                 SetPciConfig1(reg, (UCHAR)reg_val[i]);
                 deviceExtension->lun[ldev].TransferMode = ATA_UDMA0+(UCHAR)i;
                 return;
             }
         }
         for(i = wdmamode; i>=0; i--) {
+            SetPciConfig1(reg-0x08, via_pio[5+i]);
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                                 ATA_WDMA0+(UCHAR)i,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
             if (!(statusByte & IDE_STATUS_ERROR)) {
-                SetPciConfig1(reg-0x08, i ? 0x51 : 0x55);
                 SetPciConfig1(reg, 0x8b);
                 deviceExtension->lun[ldev].TransferMode = ATA_UDMA0+(UCHAR)i;
                 return;
@@ -748,6 +788,52 @@ set_new_acard:
             deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_PIO0 + i);
             AtapiWritePort4(chan, (PULONG)((PUCHAR)(&(deviceExtension->BaseIoAddressBM_0->Command))+0x24+(dev << 3)), 
                   cyr_piotiming[apiomode]);
+            return;
+        }
+
+        break; }
+    case ATA_NATIONAL_ID: {
+        /************/
+        /* National */
+        /************/
+        ULONG nat_piotiming[] =
+           { 0x9172d132, 0x21717121, 0x00803020, 0x20102010, 0x00100010,
+              0x00803020, 0x20102010, 0x00100010,
+              0x00100010, 0x00100010, 0x00100010 };
+        ULONG nat_dmatiming[] = { 0x80077771, 0x80012121, 0x80002020 };
+        ULONG nat_udmatiming[] = { 0x80921250, 0x80911140, 0x80911030 };
+
+        if(apiomode >= 4)
+            apiomode = 4;
+        for(i=udmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
+                SetPciConfig4(0x44 + (dev * 8), nat_udmatiming[i]);
+                SetPciConfig4(0x40 + (dev * 8), nat_piotiming[i+8]);
+                return;
+            }
+        }
+        for(i=wdmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_WDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA + i);
+                SetPciConfig4(0x44 + (dev * 8), nat_dmatiming[i]);
+                SetPciConfig4(0x40 + (dev * 8), nat_piotiming[i+5]);
+                return;
+            }
+        }
+        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                            (UCHAR)(ATA_PIO0 + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        if (!(statusByte & IDE_STATUS_ERROR)) {
+            deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_PIO0 + i);
+            ChangePciConfig4(0x44 + (dev * 8), a | 0x80000000);
+            SetPciConfig4(0x40 + (dev * 8), nat_piotiming[i]);
             return;
         }
 
@@ -812,6 +898,19 @@ set_new_acard:
         /*********/
         /* Intel */
         /*********/
+
+        BOOLEAN udma_ok = FALSE;
+        ULONG  idx = 0;
+        ULONG  reg40;
+        UCHAR  reg44;
+        UCHAR  reg48;
+        USHORT reg4a;
+        USHORT reg54;
+        ULONG  mask40 = 0, new40 = 0;
+        UCHAR  mask44 = 0, new44 = 0;
+        UCHAR  intel_timings[] = { 0x00, 0x00, 0x10, 0x21, 0x23, 0x10, 0x21, 0x23,
+    		                   0x23, 0x23, 0x23, 0x23, 0x23, 0x23 };
+        
         if(deviceExtension->DevID == ATA_I82371FB) {
             if (wdmamode >= 2 && apiomode >= 4) {
                 ULONG word40;
@@ -837,123 +936,85 @@ set_new_acard:
             }
             break;
         }
-        if(udmamode >= ATA_SA150) {
-            deviceExtension->lun[ldev].TransferMode = udmamode;
-            return;
-        }
-        if (udmamode >= 5) {
-            ULONG  mask48, new48;
-            USHORT word54;
 
-            GetPciConfig2(0x54, word54);
-            if (word54 & (0x10 << dev)) {
+        GetPciConfig4(0x40, reg40);
+        GetPciConfig1(0x44, reg44);
+        GetPciConfig1(0x48, reg48);
+        GetPciConfig2(0x4a, reg4a);
+        GetPciConfig2(0x54, reg54);
 
-                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                    ATA_UDMA5,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        reg40 &= ~0x00ff00ff;
+        reg40 |= 0x40774077;
 
-                if (!(statusByte & IDE_STATUS_ERROR)) {
-                    mask48 = (1 << dev) + (3 << (16 + (dev << 2)));
-                    new48 = (1 << dev) + (1 << (16 + (dev << 2)));
-                    ChangePciConfig4(0x48, (a & ~mask48) | new48);
-                    SetPciConfig2(0x54, word54 | (0x1000<<dev));
-                    deviceExtension->lun[ldev].TransferMode = ATA_UDMA5;
-                    return;
-                }
-            }
-        }
-        /* make sure eventual ATA100 mode from the BIOS is disabled */
-        ChangePciConfig2(0x54, a & ~(0x1000<<dev));
-
-        if (udmamode >= 4) {
-            ULONG  mask48, new48;
-            USHORT word54;
-
-            GetPciConfig2(0x54, word54);
-            if (word54 & (0x10 << dev)) {
-                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                    ATA_UDMA4,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-
-                if (!(statusByte & IDE_STATUS_ERROR)) {
-                    mask48 = (1 << dev) + (3 << (16 + (dev << 2)));
-                    new48 = (1 << dev) + (2 << (16 + (dev << 2)));
-                    ChangePciConfig4(0x48, (a & ~mask48) | new48);
-                    SetPciConfig2(0x54, word54 | (1<<dev));
-                    deviceExtension->lun[ldev].TransferMode = ATA_UDMA4;
-                    return;
-                }
-            }
-        }           
-        /* make sure eventual ATA66 mode from the BIOS is disabled */
-        ChangePciConfig2(0x54, a & ~(1<<dev));
-        
-        if (udmamode >= 2) {
-            ULONG mask48, new48;
-
+        for(i=udmamode; i>=0; i--) {
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_UDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-
+                                (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
             if (!(statusByte & IDE_STATUS_ERROR)) {
-                mask48 = (1 << dev) + (3 << (16 + (dev << 2)));
-                new48 = (1 << dev) + (2 << (16 + (dev << 2)));
-                ChangePciConfig4(0x48, (a & ~mask48) | new48);
-                    deviceExtension->lun[ldev].TransferMode = ATA_UDMA2;
-                return;
-            }
-        }
-        /* make sure eventual ATA33 mode from the BIOS is disabled */
-        ChangePciConfig2(0x48, a & ~(1<<dev));
 
-        if (wdmamode >= 2 && apiomode >= 4) {
-            ULONG mask40, new40, mask44, new44;
-
-            /* if SITRE not set doit for both channels */
-            GetPciConfig4(0x40, new40);
-            if (!(( new40 >> (Channel<<8)) & 0x4000)) {
-                //GetPciConfig4(0x40, new40);
-                GetPciConfig4(0x44, new44);
-                if (!(new40 & 0x00004000)) {
-                    new44 &= ~0x0000000f;
-                    new44 |= ((new40&0x00003000)>>10)|((new40&0x00000300)>>8);
-                }
-                if (!(new40 & 0x40000000)) {
-                    new44 &= ~0x000000f0;
-                    new44 |= ((new40&0x30000000)>>22)|((new40&0x03000000)>>20);
-                }
-                new40 |= 0x40004000;
-                SetPciConfig4(0x40, new40);
-                SetPciConfig4(0x44, new44);
-            }
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                if (!(DeviceNumber & 1)) {
-                    mask40 = 0x0000330f;
-                    new40 = 0x00002307;
-                    mask44 = 0;
-                    new44 = 0;
+                SetPciConfig2(0x48, reg48 | (0x0001 << dev));
+                SetPciConfig2(0x4a, (reg4a & ~(0x3 << (dev<<2))) |
+                                    (0x01 + !(i & 0x01))  );
+                if(i >= 2) {
+                    SetPciConfig4(0x54, reg54 | (0x1 << dev) );
                 } else {
-                    mask40 = 0x000000f0;
-                    new40 = 0x00000070;
-                    mask44 = 0x0000000f;
-                    new44 = 0x0000000b;
+                    SetPciConfig4(0x54, reg54 & ~(0x1 << dev) );
                 }
-                if (Channel) {
-                    mask40 <<= 16;
-                    new40 <<= 16;
-                    mask44 <<= 4;
-                    new44 <<= 4;
+                if(i >= 5) {
+                    SetPciConfig4(0x54, reg54 | (0x10000 << dev) );
+                } else {
+                    SetPciConfig4(0x54, reg54 & ~(0x10000 << dev) );
                 }
-                ChangePciConfig4(0x40, (a & ~mask40) | new40);
-                ChangePciConfig4(0x44, (a & ~mask44) | new44);
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                return;
+                
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
+                udma_ok = TRUE;
+                idx = i+8;
+                break;
             }
         }
+
+        for(i=wdmamode; i>=0 && !udma_ok; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_WDMA0+i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA0+i);
+                udma_ok = TRUE;
+                idx = i+5;
+                break;
+            }
+        }
+
+        SetPciConfig2(0x48, reg48 & ~(0x0001 << dev));
+        SetPciConfig2(0x4a, (reg4a & ~(0x3 << (dev << 2)))  );
+
+        if(!udma_ok) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_PIO0+apiomode);
+            idx = apiomode;
+        }
+
+        if(!(DeviceNumber & 1)) {
+            mask40 = 0x3300;
+            new40 = intel_timings[idx] << 8;
+        } else {
+            mask44 = 0x0f;
+            new44 = ((intel_timings[idx] & 0x30) >> 2) |
+                     (intel_timings[idx] & 0x03);
+        }
+        if (Channel) {
+            mask40 <<= 16;
+            new40 <<= 16;
+            mask44 <<= 4;
+            new44 <<= 4;
+        }
+
+        SetPciConfig4(0x40, (reg40 & ~mask40) | new40);
+        SetPciConfig1(0x44, (reg44 & ~mask44) | new44);
+
         break; }
     case ATA_PROMISE_ID:
         /***********/
@@ -964,10 +1025,6 @@ set_new_acard:
                 udmamode =
                 wdmamode = -1;
             }
-        }
-        if(udmamode > ATA_SA150) {
-            deviceExtension->lun[ldev].TransferMode = udmamode;
-            return;
         }
         for(i=udmamode; i>=0; i--) {
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
@@ -1011,20 +1068,34 @@ set_new_acard:
         /***************/
         /* ServerWorks */
         /***************/
-        static const UCHAR sw_wdma_modes[] = { 0x34, 0x22, 0x20 };
-        static const UCHAR sw_pio_modes[] = { 0x5d, 0x47, 0x34, 0x22, 0x20, 0x34 };
+        static const ULONG sw_dma_modes[] = { 0x70, 0x21, 0x20 };
+        static const UCHAR sw_pio_modes[] = { 0x5d, 0x47, 0x34, 0x22, 0x20, 0x34, 0x22, 0x20,
+                                              0x20, 0x20, 0x20, 0x20, 0x20, 0x20 };
         USHORT reg56;
+        ULONG  reg44;
+        ULONG  reg40;
+        ULONG  offset = dev ^ 0x01;
+
         for(i=udmamode; i>=0; i--) {
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                                 (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
             if (!(statusByte & IDE_STATUS_ERROR)) {
-                ChangePciConfig1(0x54, a | (0x01 << dev));
                 GetPciConfig2(0x56, reg56);
                 reg56 &= ~(0xf << (dev * 4));
                 reg56 |= ((UCHAR)i << (dev * 4));
                 SetPciConfig2(0x56, reg56);
-                SetPciConfig4(0x44, 0x20);
+                ChangePciConfig1(0x54, a | (0x01 << dev));
+                // 44
+                GetPciConfig4(0x44, reg44);
+                reg44 = (reg44 & ~(0xff << (offset << 8))) |
+                             (sw_dma_modes[2]<<(offset<<8));
+                SetPciConfig4(0x44, reg44);
+                // 40
+                GetPciConfig4(0x40, reg40);
+                reg40 = (reg40 & ~(0xff << (offset << 8))) |
+                             (sw_pio_modes[8+i]<<(offset<<8));
+                SetPciConfig4(0x40, reg40);
                 deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
                 return;
             }
@@ -1038,7 +1109,16 @@ set_new_acard:
                 ULONG offset = dev ^ 0x1;
 
                 ChangePciConfig1(0x54, a & ~(0x01 << dev));
-                SetPciConfig4(0x44, sw_wdma_modes[i]);
+                // 44
+                GetPciConfig4(0x44, reg44);
+                reg44 = (reg44 & ~(0xff << (offset << 8))) |
+                             (sw_dma_modes[wdmamode]<<(offset<<8));
+                SetPciConfig4(0x44, reg44);
+                // 40
+                GetPciConfig4(0x40, reg40);
+                reg40 = (reg40 & ~(0xff << (offset << 8))) |
+                             (sw_pio_modes[5+i]<<(offset<<8));
+                SetPciConfig4(0x40, reg40);
                 deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA0+i);
                 return;
             }
@@ -1046,7 +1126,12 @@ set_new_acard:
         statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                             IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                             ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-        SetPciConfig4(0x44, sw_pio_modes[apiomode]);
+//        SetPciConfig4(0x44, sw_pio_modes[apiomode]);
+        // 40
+        GetPciConfig4(0x40, reg40);
+        reg40 = (reg40 & ~(0xff << (offset << 8))) |
+                       (sw_pio_modes[apiomode]<<(offset<<8));
+        SetPciConfig4(0x40, reg40);
         deviceExtension->lun[ldev].TransferMode = ATA_PIO0 + apiomode;
         return;
         break; }
@@ -1054,7 +1139,7 @@ set_new_acard:
         /********************/
         /* SiliconImage/CMD */
         /********************/
-        if(ChipFlags & SII_SETCLK) {
+        if(ChipType == SIIMIO) {
 
             static const UCHAR sil_modes[7] = 
                 { 0xf, 0xb, 0x7, 0x5, 0x3, 0x2, 0x1 };
@@ -1176,9 +1261,9 @@ set_new_acard:
         static const ULONG sis_modes_old[] =
                 { 0x0c0b, 0x0607, 0x0404, 0x0303, 0x0301, 0x0404, 0x0303, 0x0301,
                   0xf301, 0xd301, 0xb301, 0xa301, 0x9301, 0x8301 };
-	static const ULONG sis_modes_new100[] =
-		{ 0x00cb, 0x0067, 0x0044, 0x0033, 0x0031, 0x0044, 0x0033, 0x0031,
-		  0x8b31, 0x8731, 0x8531, 0x8431, 0x8231, 0x8131 };
+        static const ULONG sis_modes_new100[] =
+                { 0x00cb, 0x0067, 0x0044, 0x0033, 0x0031, 0x0044, 0x0033, 0x0031,
+                  0x8b31, 0x8731, 0x8531, 0x8431, 0x8231, 0x8131 };
 
         ULONG reg;
         UCHAR reg57;
@@ -1200,8 +1285,8 @@ set_new_acard:
         case SIS100NEW:
             sis_modes = (PULONG)(&sis_modes_new100[0]);
             reg_size = 2;
-	    reg = 0x40 + (dev * 2);
-	    break;
+            reg = 0x40 + (dev * 2);
+            break;
         case SIS100OLD:
         case SIS66:
         case SIS33:
@@ -1271,16 +1356,16 @@ set_new_acard:
         return;
     case ATA_ITE_ID: {       /* IT8172 IDE controller */
 
-	int a_speed = 3 << (dev * 4);
-	int u_flag  = 1 << dev;
-	int u_speed = 0;
-	int pio     = 1;
-	UCHAR  reg48, reg4a;
-	USHORT drive_enables;
-	ULONG  drive_timing;
+        int a_speed = 3 << (dev * 4);
+        int u_flag  = 1 << dev;
+        int u_speed = 0;
+        int pio     = 1;
+        UCHAR  reg48, reg4a;
+        USHORT drive_enables;
+        ULONG  drive_timing;
 
-	GetPciConfig1(0x48, reg48);
-	GetPciConfig1(0x4a, reg4a);
+        GetPciConfig1(0x48, reg48);
+        GetPciConfig1(0x4a, reg4a);
 
         /*
          * Setting the DMA cycle time to 2 or 3 PCI clocks (60 and 91 nsec
@@ -1297,9 +1382,9 @@ set_new_acard:
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                                 (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
             if (!(statusByte & IDE_STATUS_ERROR)) {
-		SetPciConfig1(0x48, reg48 | u_flag);
-		reg4a &= ~a_speed;
-		SetPciConfig1(0x4a, reg4a | u_speed);
+                SetPciConfig1(0x48, reg48 | u_flag);
+                reg4a &= ~a_speed;
+                SetPciConfig1(0x4a, reg4a | u_speed);
                 deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
                 pio = 4;
                 goto setup_drive_ite;
@@ -1311,8 +1396,8 @@ set_new_acard:
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                                 (UCHAR)(ATA_WDMA0+i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
             if (!(statusByte & IDE_STATUS_ERROR)) {
-		SetPciConfig1(0x48, reg48 & ~u_flag);
-		SetPciConfig1(0x4a, reg4a & ~a_speed);
+                SetPciConfig1(0x48, reg48 & ~u_flag);
+                SetPciConfig1(0x4a, reg4a & ~a_speed);
                 deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA0+i);
                 pio = 3;
                 return;
@@ -1328,23 +1413,23 @@ set_new_acard:
 
 setup_drive_ite:
 
-	GetPciConfig2(0x40, drive_enables);
-	GetPciConfig4(0x44, drive_timing);
+        GetPciConfig2(0x40, drive_enables);
+        GetPciConfig4(0x44, drive_timing);
 
-	/*
-	 * FIX! The DIOR/DIOW pulse width and recovery times in port 0x44
-	 * are being left at the default values of 8 PCI clocks (242 nsec
-	 * for a 33 MHz clock). These can be safely shortened at higher
-	 * PIO modes. The DIOR/DIOW pulse width and recovery times only
-	 * apply to PIO modes, not to the DMA modes.
-	 */
+        /*
+         * FIX! The DIOR/DIOW pulse width and recovery times in port 0x44
+         * are being left at the default values of 8 PCI clocks (242 nsec
+         * for a 33 MHz clock). These can be safely shortened at higher
+         * PIO modes. The DIOR/DIOW pulse width and recovery times only
+         * apply to PIO modes, not to the DMA modes.
+         */
 
-	/*
-	 * Enable port 0x44. The IT8172G spec is confused; it calls
-	 * this register the "Slave IDE Timing Register", but in fact,
-	 * it controls timing for both master and slave drives.
-	 */
-	drive_enables |= 0x4000;
+        /*
+         * Enable port 0x44. The IT8172G spec is confused; it calls
+         * this register the "Slave IDE Timing Register", but in fact,
+         * it controls timing for both master and slave drives.
+         */
+        drive_enables |= 0x4000;
 
         drive_enables &= (0xc000 | (0x06 << (DeviceNumber*4)));
         if (pio > 1) {

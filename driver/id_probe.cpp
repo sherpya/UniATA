@@ -68,12 +68,12 @@ PDRIVER_OBJECT SavedDriverObject = NULL;
 
 ULONG
 AtapiEnumBusMasterController__(
-    IN PVOID HwDeviceExtension,
+/*    IN PVOID HwDeviceExtension,
     IN PVOID Context,
     IN PVOID BusInformation,
     IN PCHAR ArgumentString,
     IN OUT PPORT_CONFIGURATION_INFORMATION ConfigInfo,
-    OUT PBOOLEAN Again
+    OUT PBOOLEAN Again*/
     );
 
 VOID
@@ -81,7 +81,7 @@ AtapiDoNothing(VOID)
 {
     ULONG i = 0;
     return;
-}
+} // end AtapiDoNothing()
 
 /*
     Get PCI address by ConfigInfo and RID
@@ -158,7 +158,7 @@ AtapiEnumBusMasterController(
     PVOID Argument2
     )
 {
-    HW_INITIALIZATION_DATA hwInitializationData;
+/*    HW_INITIALIZATION_DATA hwInitializationData;
 
     // Zero out structure.
     RtlZeroMemory(((PCHAR)&hwInitializationData), sizeof(HW_INITIALIZATION_DATA));
@@ -188,8 +188,11 @@ AtapiEnumBusMasterController(
     ScsiPortInitialize(DriverObject,
                        Argument2,
                        &hwInitializationData,
-                       NULL);
-}
+                       NULL);*/
+
+    AtapiEnumBusMasterController__();
+
+} // end AtapiEnumBusMasterController()
 
 
 /*
@@ -198,15 +201,16 @@ AtapiEnumBusMasterController(
 */
 ULONG
 AtapiEnumBusMasterController__(
-    IN PVOID HwDeviceExtension,
+/*    IN PVOID HwDeviceExtension,
     IN PVOID Context,
     IN PVOID BusInformation,
     IN PCHAR ArgumentString,
     IN OUT PPORT_CONFIGURATION_INFORMATION ConfigInfo,
-    OUT PBOOLEAN Again
+    OUT PBOOLEAN Again*/
     )
 {
-    PHW_DEVICE_EXTENSION  deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
+//    PHW_DEVICE_EXTENSION  deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
+    PHW_DEVICE_EXTENSION  deviceExtension = NULL;
     PCI_SLOT_NUMBER       slotData;
     PCI_COMMON_CONFIG     pciData;
     ULONG                 busNumber;
@@ -214,7 +218,7 @@ AtapiEnumBusMasterController__(
     ULONG                 funcNumber;
     BOOLEAN               no_buses = FALSE;
     ULONG                 busDataRead;
-    BOOLEAN               SimplexOnly;
+//    BOOLEAN               SimplexOnly;
 
     UCHAR                 vendorString[5];
     UCHAR                 deviceString[5];
@@ -227,8 +231,10 @@ AtapiEnumBusMasterController__(
     ULONG   DeviceID;
     ULONG   dev_id;
 
-//    ULONG   i;
+    ULONG   i;
     ULONG   pass=0;
+
+    ULONG   RaidFlags;
 
     BOOLEAN found;
     BOOLEAN known;
@@ -236,6 +242,8 @@ AtapiEnumBusMasterController__(
     vendorStrPtr = vendorString;
     deviceStrPtr = deviceString;
     slotData.u.AsULONG = 0;
+
+    deviceExtension = (PHW_DEVICE_EXTENSION)ExAllocatePool(NonPagedPool, sizeof(HW_DEVICE_EXTENSION));
 
     for(pass=0; pass<3; pass++) {
         for(busNumber=0 ;busNumber<maxPciBus && !no_buses; busNumber++) {
@@ -246,7 +254,10 @@ AtapiEnumBusMasterController__(
                 slotData.u.bits.DeviceNumber   = slotNumber;
                 slotData.u.bits.FunctionNumber = funcNumber;
 
-                busDataRead = ScsiPortGetBusData(HwDeviceExtension,
+                busDataRead = HalGetBusData
+                              //ScsiPortGetBusData
+                                           (
+                                            //HwDeviceExtension,
                                             PCIConfiguration, busNumber, slotData.u.AsULONG, 
                                             &pciData, PCI_COMMON_HDR_LENGTH);
                 // no more buses
@@ -267,39 +278,48 @@ AtapiEnumBusMasterController__(
                 BaseClass = pciData.BaseClass;
                 SubClass  = pciData.SubClass;
                 dev_id = VendorID | (DeviceID << 16);
-    //            KdPrint2((PRINT_PREFIX "DevId = %8.8X Class = %4.4X/%4.4X\n", dev_id, BaseClass, SubClass ));
+                //KdPrint2((PRINT_PREFIX "DevId = %8.8X Class = %4.4X/%4.4X\n", dev_id, BaseClass, SubClass ));
 
                 if(BaseClass != PCI_DEV_CLASS_STORAGE)
                     continue;
 
                 KdPrint2((PRINT_PREFIX "Storage Class\n"));
+                KdPrint2((PRINT_PREFIX "DevId = %8.8X Class = %4.4X/%4.4X\n", dev_id, BaseClass, SubClass ));
                 // look for known chipsets
                 found = FALSE;
                 known = FALSE;
 
-                deviceExtension->slotNumber = slotData.u.AsULONG;
-                deviceExtension->SystemIoBusNumber = busNumber;
-                deviceExtension->DevID = dev_id;
-                deviceExtension->RevID = pciData.RevisionID;
+                if(deviceExtension) {
+                    deviceExtension->slotNumber = slotData.u.AsULONG;
+                    deviceExtension->SystemIoBusNumber = busNumber;
+                    deviceExtension->DevID = dev_id;
+                    deviceExtension->RevID = pciData.RevisionID;
+                }
 
-                found = (BOOLEAN)AtapiRegCheckDevValue(NULL, L"Include", 0);
+                found = (BOOLEAN)AtapiRegCheckDevValue(deviceExtension, L"Include", 0);
                 if(!found) {
                     KdPrint2((PRINT_PREFIX "No force include, check exclude\n"));
-                    found = !AtapiRegCheckDevValue(NULL, L"Exclude", 0);
+                    found = !AtapiRegCheckDevValue(deviceExtension, L"Exclude", 0);
                     if(!found) {
                         KdPrint2((PRINT_PREFIX "Device excluded\n"));
                         continue;
                     }
                 }
 
-                known = AtapiChipDetect(HwDeviceExtension, NULL, -1, ConfigInfo, &SimplexOnly);
-//                i = Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[0], VendorID, DeviceID, 0, NUM_BUSMASTER_ADAPTERS);
+                //known = AtapiChipDetect(HwDeviceExtension, NULL, -1, ConfigInfo, &SimplexOnly);
+                i = Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[0], VendorID, DeviceID, 0, NUM_BUSMASTER_ADAPTERS);
+
+                known = (i != -1);
                 if(known) {
-                    if((deviceExtension->HwFlags & UNIATA_RAID_CONTROLLER) &&
+                    RaidFlags = BusMasterAdapters[i].RaidFlags;
+                    if((RaidFlags & UNIATA_RAID_CONTROLLER) &&
                         SkipRaids) {
+                        KdPrint2((PRINT_PREFIX "Skip RAID\n"));
                         continue;
                     }
                     found = TRUE;
+                } else {
+                    RaidFlags = 0;
                 }
 
                 switch(dev_id) {
@@ -319,6 +339,7 @@ AtapiEnumBusMasterController__(
 
                 if(found) {
 
+                    KdPrint2((PRINT_PREFIX "found, pass %d\n", pass));
                     if(pass) {
                         // fill list of detected devices
                         // it'll be used for further init
@@ -346,13 +367,14 @@ AtapiEnumBusMasterController__(
                             newBMListPtr->DeviceId = (PCHAR)&(newBMListPtr->DeviceIdStr);
                             newBMListPtr->DeviceIdLength = 4;
 
-                            newBMListPtr->RaidFlags = deviceExtension->HwFlags;
+                            newBMListPtr->RaidFlags = RaidFlags;
 //                        }
                         newBMListPtr->slotNumber = slotData.u.AsULONG;
                         newBMListPtr->MasterDev = IsMasterDev(&pciData) ? 1 : 0;
                         newBMListPtr->busNumber = busNumber;
                     }
 
+                    KdPrint2((PRINT_PREFIX "Add to BMList\n"));
                     BMListLen++;
                 }
             }
@@ -366,6 +388,9 @@ AtapiEnumBusMasterController__(
              no_buses = FALSE;
              BMListLen=0;
         }
+    }
+    if(deviceExtension) {
+        ExFreePool(deviceExtension);
     }
     return(SP_RETURN_NOT_FOUND);
 } // end AtapiEnumBusMasterController__()
@@ -588,12 +613,12 @@ AtapiFindBusMasterController(
     ULONG   dev_id;
     PCI_SLOT_NUMBER       slotData;
 
-    ULONG   i = (ULONG)Context;
-    ULONG   channel = BMList[i].channel;
+    ULONG   i;
+    ULONG   channel;
     ULONG   c = 0;
     PUCHAR  ioSpace;
     UCHAR   statusByte;
-    ULONG   bm_offset = channel ? ATA_BM_OFFSET1 : 0;
+    ULONG   bm_offset;
 
 //    UCHAR   tmp8;
 //    ULONG   irq;
@@ -610,8 +635,33 @@ AtapiFindBusMasterController(
     PPORT_CONFIGURATION_INFORMATION_COMMON _ConfigInfo =
         (PPORT_CONFIGURATION_INFORMATION_COMMON)ConfigInfo;
 
-//    PORT_CONFIGURATION_INFORMATION SavedConfigInfo = *ConfigInfo;
     *Again = FALSE;
+
+    if(ForceSimplex) {
+        KdPrint2((PRINT_PREFIX "ForceSimplex (1)"));
+        simplexOnly = TRUE;
+    }
+
+    if(InDriverEntry) {
+        i = (ULONG)Context;
+        channel   = BMList[i].channel;
+    } else {
+        for(i=0; i<BMListLen; i++) {
+            if(BMList[i].slotNumber == ConfigInfo->SlotNumber &&
+               BMList[i].busNumber  == ConfigInfo->SystemIoBusNumber) {
+                break;
+            }
+        }
+        if(i >= BMListLen) {
+            KdPrint2((PRINT_PREFIX "unexpected device arrival => SP_RETURN_NOT_FOUND"));
+            return(SP_RETURN_NOT_FOUND);
+        }
+        channel = 0;
+    }
+
+    bm_offset = channel ? ATA_BM_OFFSET1 : 0;
+
+//    PORT_CONFIGURATION_INFORMATION SavedConfigInfo = *ConfigInfo;
 
     KdPrint2((PRINT_PREFIX "AtapiFindBusMasterController"));
 
@@ -661,6 +711,9 @@ AtapiFindBusMasterController(
     deviceExtension->DevID = dev_id;
     deviceExtension->RevID = RevID;
 
+    _snprintf(deviceExtension->Signature, sizeof(deviceExtension->Signature),
+              "UATA%8.8x/%1.1x@%8.8x", dev_id, channel, slotNumber);
+
     if(BaseClass != PCI_DEV_CLASS_STORAGE) {
         KdPrint2((PRINT_PREFIX "BaseClass != PCI_DEV_CLASS_STORAGE => SP_RETURN_NOT_FOUND\n"));
         return(SP_RETURN_NOT_FOUND);
@@ -683,6 +736,7 @@ AtapiFindBusMasterController(
     ConfigInfo->AlignmentMask = 0x00000003;
 
     found = AtapiChipDetect(HwDeviceExtension, &pciData, i, ConfigInfo, &simplexOnly);
+    KdPrint2((PRINT_PREFIX "ForceSimplex = %d", simplexOnly));
     switch(dev_id) {
     /* additional checks for some supported chipsets */
     case 0xc6931080:
@@ -725,6 +779,7 @@ AtapiFindBusMasterController(
 
     if(MasterDev) {
         KdPrint2((PRINT_PREFIX "MasterDev\n"));
+        deviceExtension->MasterDev = TRUE;
     }
 
     if(MasterDev) {
@@ -755,7 +810,7 @@ AtapiFindBusMasterController(
             KdPrint2((PRINT_PREFIX "IsBusMaster == TRUE && !MasterDev\n"));
             statusByte = AtapiReadPort1(NULL, (PUCHAR)&(deviceExtension->BaseIoAddressBM_0->Status));
             if(statusByte & BM_STATUS_SIMPLEX_ONLY) {
-                KdPrint2((PRINT_PREFIX "  simplexOnly\n"));
+                KdPrint2((PRINT_PREFIX "  BM_STATUS => simplexOnly\n"));
                 simplexOnly = TRUE;
             }
         }
@@ -778,12 +833,23 @@ AtapiFindBusMasterController(
     /* do extra chipset specific setups */
     AtapiChipInit(HwDeviceExtension, i, -1);
 
-    if(simplexOnly || !MasterDev || !WinVer_IsNT) {
+    simplexOnly |= deviceExtension->simplexOnly;
+    deviceExtension->simplexOnly |= simplexOnly;
+
+    KdPrint2((PRINT_PREFIX "simplexOnly = %d (2)", simplexOnly));
+
+    //TODO: fix hang with UseDpn=TRUE in Simplex mode
+    //deviceExtension->UseDpc = TRUE;
+    if(simplexOnly) {
+        KdPrint2((PRINT_PREFIX "simplexOnly => UseDpc = FALSE\n"));
+        deviceExtension->UseDpc = FALSE;
+    }
+
+    if(simplexOnly || !MasterDev || (WinVer_Id() > WinVer_NT)) {
         if(deviceExtension->NumberChannels < 2) {
             deviceExtension->NumberChannels = 2;
         }
     }
-    deviceExtension->simplexOnly = simplexOnly;
     if((channel > 0) &&
        (deviceExtension->NumberChannels > 1)) {
         KdPrint2((PRINT_PREFIX "Error: channel > 0 && NumberChannels > 1\n"));
@@ -800,12 +866,11 @@ AtapiFindBusMasterController(
     }
     // Indicate four devices can be attached to the adapter
     ConfigInfo->MaximumNumberOfTargets = (UCHAR)(/*deviceExtension->NumberChannels **/ 2);
-    ConfigInfo->MaximumTransferLength = DEV_BSIZE*256;
 
     if (MasterDev) {
         KdPrint2((PRINT_PREFIX "MasterDev\n"));
         if(simplexOnly ||
-           !WinVer_IsNT ||
+           (WinVer_Id() > WinVer_NT) ||
            (deviceExtension->NumberChannels > 1)) {
 
             KdPrint2((PRINT_PREFIX "2 channels & 2 irq for 1 controller\n"));
@@ -845,11 +910,24 @@ AtapiFindBusMasterController(
         }
     }
     ConfigInfo->MultipleRequestPerLu = TRUE;
-    ConfigInfo->AutoRequestSense = TRUE;
-    ConfigInfo->TaggedQueuing = TRUE;
+    ConfigInfo->AutoRequestSense     = TRUE;
+    ConfigInfo->TaggedQueuing        = TRUE;
+
+    if(WinVer_Id() >= WinVer_NT) {
+        _ConfigInfo->nt4.DeviceExtensionSize         = sizeof(HW_DEVICE_EXTENSION);
+        _ConfigInfo->nt4.SpecificLuExtensionSize     = sizeof(HW_LU_EXTENSION);    
+        _ConfigInfo->nt4.SrbExtensionSize            = sizeof(ATA_REQ);            
+    }
+    if(WinVer_Id() > WinVer_NT) {
+        _ConfigInfo->w2k.Dma64BitAddresses           = 0;
+        _ConfigInfo->w2k.ResetTargetSupported        = TRUE;
+        _ConfigInfo->w2k.MaximumNumberOfLogicalUnits = 2;
+    }
+
     // Save the Interrupe Mode for later use
     deviceExtension->InterruptMode = ConfigInfo->InterruptMode;
     deviceExtension->BusInterruptLevel = ConfigInfo->BusInterruptLevel;
+    deviceExtension->BusInterruptVector = ConfigInfo->BusInterruptVector;
     deviceExtension->Channel = channel;
     deviceExtension->DevIndex = i;
     deviceExtension->OrigAdapterInterfaceType = ConfigInfo->AdapterInterfaceType;
@@ -873,15 +951,16 @@ AtapiFindBusMasterController(
         // thanks to Vitaliy Vorobyov aka deathsoft@yandex.ru for
         // better solution:
 
-        if(ConfigInfo->AdapterInterfaceType == PCIBus) {
+        if(ConfigInfo->AdapterInterfaceType == PCIBus &&
+           InDriverEntry) {
             KdPrint2((PRINT_PREFIX "AdapterInterfaceType == PCIBus\n"));
             ConfigInfo->SlotNumber = slotNumber;
             ConfigInfo->SystemIoBusNumber = SystemIoBusNumber;
         }
 
-        ConfigInfo->Master = TRUE;
-        ConfigInfo->DmaWidth = Width16Bits;
-        ConfigInfo->CachesData = TRUE;
+        ConfigInfo->Master        = TRUE;
+        ConfigInfo->DmaWidth      = Width16Bits;
+        ConfigInfo->CachesData    = TRUE;
         ConfigInfo->ScatterGather = TRUE;
     }
 
@@ -894,7 +973,9 @@ AtapiFindBusMasterController(
         KdPrint2((PRINT_PREFIX "Channel %#x\n",channel));
         chan = &deviceExtension->chan[c];
 
+        KdPrint2((PRINT_PREFIX "chan = %#x\n", chan));
         chan->DeviceExtension = deviceExtension;
+        chan->lChannel        = c;
         chan->lun[0] = &(deviceExtension->lun[c*2+0]);
         chan->lun[1] = &(deviceExtension->lun[c*2+1]);
         chan->MemIo  = deviceExtension->MemIo;
@@ -1098,62 +1179,13 @@ exit_findbm:
         KdPrint2((PRINT_PREFIX "MasterDev=%#x, NumberChannels=%#x, Isr2DevObj=%#x\n",
             MasterDev, deviceExtension->NumberChannels, BMList[i].Isr2DevObj));
 
-        if(!MasterDev && (deviceExtension->NumberChannels > 1) &&   // do not touch MasterDev
-           !BMList[i].Isr2DevObj) {                       // handle re-init under w2k+
+        // !!! move this to HwInitialize()
+        status = AtapiConnectIntr2(HwDeviceExtension);
 
-            KdPrint2((PRINT_PREFIX "Init ISR:\n"));
-
-            PISR2_DEVICE_EXTENSION Isr2DevExt;
-
-//            __asm int 3;
-
-            KdPrint2((PRINT_PREFIX "Create DO\n"));
-            status = IoCreateDevice(SavedDriverObject, sizeof(ISR2_DEVICE_EXTENSION),
-                                    NULL/*devname*/, FILE_DEVICE_UNKNOWN,
-                                    0, FALSE, &(BMList[i].Isr2DevObj));
-
-            if(!NT_SUCCESS(status)) {
-                KdPrint2((PRINT_PREFIX "failed\n"));
-                found = FALSE;
-                goto exit_findbm;
-            }
-
-            KdPrint2((PRINT_PREFIX "HalGetInterruptVector\n"));
-            BMList[i].Isr2Vector = HalGetInterruptVector(
-                ConfigInfo->AdapterInterfaceType,
-                ConfigInfo->SystemIoBusNumber,
-                ConfigInfo->BusInterruptLevel,
-                ConfigInfo->BusInterruptVector,
-                &(BMList[i].Isr2Irql),
-                &(BMList[i].Isr2Affinity));
-
-            Isr2DevExt = (PISR2_DEVICE_EXTENSION)(BMList[i].Isr2DevObj->DeviceExtension);
-            Isr2DevExt->HwDeviceExtension = deviceExtension;
-            Isr2DevExt->DevIndex = i;
-
-//            deviceExtension->QueueNewIrql = BMList[i].Isr2Irql;
-            
-            KdPrint2((PRINT_PREFIX "IoConnectInterrupt\n"));
-            status = IoConnectInterrupt(
-                &(BMList[i].Isr2InterruptObject),
-                AtapiInterrupt2,
-                Isr2DevExt,
-                NULL,
-                BMList[i].Isr2Vector,
-                BMList[i].Isr2Irql,
-                BMList[i].Isr2Irql,
-                ConfigInfo->InterruptMode,
-                TRUE,
-                BMList[i].Isr2Affinity,
-                FALSE);
-
-            if(!NT_SUCCESS(status)) {
-                KdPrint2((PRINT_PREFIX "failed\n"));
-                IoDeleteDevice(BMList[i].Isr2DevObj);
-                found = FALSE;
-                goto exit_findbm;
-            }
-
+        if(!NT_SUCCESS(status)) {
+            KdPrint2((PRINT_PREFIX "failed\n"));
+            found = FALSE;
+            goto exit_findbm;
         }
     }
 
@@ -1162,7 +1194,139 @@ exit_findbm:
 
 } // end AtapiFindBusMasterController()
 
+/*++
 
+Routine Description:
+
+    This function is called to initialize 2nd device object for
+    multichannel controllers.
+
+Arguments:
+
+    HwDeviceExtension - HBA miniport driver's adapter data storage
+
+Return Value:
+
+    ULONG
+
+--*/
+NTSTATUS
+AtapiConnectIntr2(
+    IN PVOID HwDeviceExtension
+    )
+{
+    PHW_DEVICE_EXTENSION  deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
+    ULONG i = deviceExtension->DevIndex;
+    NTSTATUS status;
+    PISR2_DEVICE_EXTENSION Isr2DevExt;
+    WCHAR devname_str[32];
+    UNICODE_STRING devname;
+
+    KdPrint2((PRINT_PREFIX "Init ISR:\n"));
+
+//            __asm int 3;
+    if(BMList[i].Isr2DevObj) {
+        KdPrint2((PRINT_PREFIX "Already initialized %#x\n", BMList[i].Isr2DevObj));
+        return STATUS_SUCCESS;
+    }
+
+    if(!deviceExtension->MasterDev && (deviceExtension->NumberChannels > 1) &&   // do not touch MasterDev
+       !deviceExtension->simplexOnly && /*                        // this is unnecessary on simplex controllers
+       !BMList[i].Isr2DevObj*/                                    // handle re-init under w2k+
+       /*!ForceSimplex*/
+       TRUE) {
+        // Ok, continue...
+    } else {
+        KdPrint2((PRINT_PREFIX "Unnecessary\n"));
+        return STATUS_SUCCESS;
+    }
+
+    KdPrint2((PRINT_PREFIX "Create DO\n"));
+
+    devname.Length = 
+        _snwprintf(devname_str, sizeof(devname_str)/sizeof(WCHAR),
+              L"\\Device\\uniata%d_2ch", i);
+    devname.Length *= sizeof(WCHAR);
+    devname.MaximumLength = devname.Length;
+    devname.Buffer = devname_str;
+
+    KdPrint2((PRINT_PREFIX "DO name:  %d, %d, %S\n", devname.Length, devname.MaximumLength, devname.Buffer));
+
+    status = IoCreateDevice(SavedDriverObject, sizeof(ISR2_DEVICE_EXTENSION),
+                            /*NULL*/ &devname, FILE_DEVICE_UNKNOWN,
+                            0, FALSE, &(BMList[i].Isr2DevObj));
+
+    if(!NT_SUCCESS(status)) {
+        KdPrint2((PRINT_PREFIX "failed %#x\n"));
+        return status;
+    }
+
+    KdPrint2((PRINT_PREFIX "HalGetInterruptVector\n"));
+    BMList[i].Isr2Vector = HalGetInterruptVector(
+        deviceExtension->OrigAdapterInterfaceType,
+        deviceExtension->SystemIoBusNumber,
+        deviceExtension->BusInterruptLevel,
+        deviceExtension->BusInterruptVector,
+        &(BMList[i].Isr2Irql),
+        &(BMList[i].Isr2Affinity));
+
+    Isr2DevExt = (PISR2_DEVICE_EXTENSION)(BMList[i].Isr2DevObj->DeviceExtension);
+    Isr2DevExt->HwDeviceExtension = deviceExtension;
+    Isr2DevExt->DevIndex = i;
+
+//            deviceExtension->QueueNewIrql = BMList[i].Isr2Irql;
+    
+    KdPrint2((PRINT_PREFIX "IoConnectInterrupt\n"));
+    status = IoConnectInterrupt(
+        &(BMList[i].Isr2InterruptObject),
+        AtapiInterrupt2,
+        Isr2DevExt,
+        NULL,
+        BMList[i].Isr2Vector,
+        BMList[i].Isr2Irql,
+        BMList[i].Isr2Irql,
+        (KINTERRUPT_MODE)(deviceExtension->InterruptMode),
+        TRUE,
+        BMList[i].Isr2Affinity,
+        FALSE);
+
+    if(!NT_SUCCESS(status)) {
+        KdPrint2((PRINT_PREFIX "failed\n"));
+        IoDeleteDevice(BMList[i].Isr2DevObj);
+        BMList[i].Isr2DevObj          = NULL;
+        BMList[i].Isr2InterruptObject = NULL;
+        return status;
+    }
+    return status;
+} // end AtapiConnectIntr2()
+
+NTSTATUS
+AtapiDisconnectIntr2(
+    IN PVOID HwDeviceExtension
+    )
+{
+    PHW_DEVICE_EXTENSION  deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
+    ULONG i = deviceExtension->DevIndex;
+//    NTSTATUS status;
+
+    KdPrint2((PRINT_PREFIX "Deinit ISR:\n"));
+
+//            __asm int 3;
+    if(!BMList[i].Isr2DevObj) {
+        KdPrint2((PRINT_PREFIX "Already uninitialized %#x\n"));
+        return STATUS_SUCCESS;
+    }
+
+    IoDisconnectInterrupt(BMList[i].Isr2InterruptObject);
+
+    BMList[i].Isr2InterruptObject = NULL;
+
+    IoDeleteDevice(BMList[i].Isr2DevObj);
+
+    BMList[i].Isr2DevObj          = NULL;
+
+    return STATUS_SUCCESS;
+} // end AtapiDisconnectIntr2()
 
 /*++
 
@@ -1413,6 +1577,7 @@ retryIdentifier:
 
         // Indicate maximum transfer length is 64k.
         ConfigInfo->MaximumTransferLength = 0x10000;
+        deviceExtension->MaximumDmaTransferLength = ConfigInfo->MaximumTransferLength;
 
         KdPrint2((PRINT_PREFIX 
                    "AtapiFindController: Found IDE at %#x\n",

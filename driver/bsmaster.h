@@ -42,6 +42,22 @@ Revision History:
 #define __IDE_BUSMASTER_H__
 
 #include "tools.h"
+
+//
+//
+//
+#define         ATA_IDLE                0x0
+#define         ATA_IMMEDIATE           0x1
+#define         ATA_WAIT_INTR           0x2
+#define         ATA_WAIT_READY          0x3
+#define         ATA_ACTIVE              0x4
+#define         ATA_ACTIVE_ATA          0x5
+#define         ATA_ACTIVE_ATAPI        0x6
+#define         ATA_REINITING           0x7
+#define         ATA_WAIT_BASE_READY     0x8
+#define         ATA_WAIT_IDLE           0x9
+
+
 #include "bm_devs.h"
 
 #define USE_OWN_DMA
@@ -229,6 +245,7 @@ typedef struct _HW_CHANNEL {
 /*    PATA_REQ            first_req;
     PATA_REQ            last_req;*/
     ULONG               queue_depth;
+    ULONG               ChannelSelectWaitCount;
 
     BOOLEAN             ExpectingInterrupt;    // Indicates expecting an interrupt
     BOOLEAN             RDP;    // Indicate last tape command was DSC Restrictive.
@@ -256,6 +273,8 @@ typedef struct _HW_CHANNEL {
     ULONG               ResetInProgress; // flag
     LONG                DisableIntr;
     LONG                CheckIntr;
+
+    ULONG               lChannel;
 
 #define CHECK_INTR_ACTIVE               0x03
 #define CHECK_INTR_DETECTED             0x02
@@ -331,6 +350,8 @@ typedef struct _HW_LU_EXTENSION {
     ULONG          queue_depth;
     ULONG          last_write;
 
+    ULONG          LunSelectWaitCount;
+
 #ifdef IO_STATISTICS
 
     LONGLONG ModeErrorCount[MAX_RETRIES];
@@ -346,10 +367,12 @@ typedef struct _HW_LU_EXTENSION {
 
 // Device extension
 typedef struct _HW_DEVICE_EXTENSION {
+    CHAR Signature[32];
     PIDE_REGISTERS_1 BaseIoAddress1[IDE_MAX_CHAN];    // Base register locations
     PIDE_REGISTERS_2 BaseIoAddress2[IDE_MAX_CHAN];
     ULONG BusInterruptLevel;    // Interrupt level
-    ULONG InterruptMode;    // Interrupt Mode (Level or Edge)
+    ULONG InterruptMode;        // Interrupt Mode (Level or Edge)
+    ULONG BusInterruptVector;
     // Number of channels being supported by one instantiation
     // of the device extension. Normally (and correctly) one, but
     // with so many broken PCI IDE controllers being sold, we have
@@ -376,6 +399,8 @@ typedef struct _HW_DEVICE_EXTENSION {
     LONGLONG    DpcTime1;
     LONGLONG    DpcTime2;
 
+    ULONG          queue_depth;
+
     PDEVICE_OBJECT Isr2DevObj;
 
     PIDE_BUSMASTER_REGISTERS  BaseIoAddressBM_0;
@@ -396,12 +421,13 @@ typedef struct _HW_DEVICE_EXTENSION {
     BOOLEAN simplexOnly;
     BOOLEAN MemIo;
     BOOLEAN UnknownDev;
-    UCHAR Padding0[1];
+    BOOLEAN MasterDev;
     LONG  ReCheckIntr;
 
     ULONG MaxTransferMode;
     ULONG HwFlags;
     INTERFACE_TYPE OrigAdapterInterfaceType;
+    ULONG MaximumDmaTransferLength;
 
     ULONG BaseMemAddress;
 
@@ -413,57 +439,6 @@ typedef struct _ISR2_DEVICE_EXTENSION {
 } ISR2_DEVICE_EXTENSION, *PISR2_DEVICE_EXTENSION;
 
 #define HBAFLAGS_DMA_DISABLED           0x01
-
-//
-// values for TransferMode
-//
-#define         ATA_PIO                 0x00
-#define 	ATA_PIO_NRDY            0x01
-
-#define         ATA_PIO0                0x08
-#define         ATA_PIO1                0x09
-#define         ATA_PIO2                0x0a
-#define         ATA_PIO3                0x0b
-#define         ATA_PIO4                0x0c
-#define         ATA_PIO5                0x0d
-
-#define         ATA_DMA                 0x10
-#define         ATA_SDMA                0x10
-#define         ATA_SDMA0               0x10
-#define         ATA_SDMA1               0x11
-#define         ATA_SDMA2               0x12
-
-#define         ATA_WDMA                0x20
-#define         ATA_WDMA0               0x20
-#define         ATA_WDMA1               0x21
-#define         ATA_WDMA2               0x22
-
-#define         ATA_UDMA                0x40
-#define         ATA_UDMA0               0x40 // ATA-16
-#define         ATA_UDMA1               0x41 // ATA-25                     
-#define         ATA_UDMA2               0x42 // ATA-33                     
-#define         ATA_UDMA3               0x43 // ATA-44
-#define         ATA_UDMA4               0x44 // ATA-66                     
-#define         ATA_UDMA5               0x45 // ATA-100                    
-#define         ATA_UDMA6               0x46 // ATA-133                    
-#define         ATA_UDMA7               0x47 // ATA-166
-
-#define         ATA_SA150               0x80
-
-//
-//
-//
-#define         ATA_IDLE                0x0
-#define         ATA_IMMEDIATE           0x1
-#define         ATA_WAIT_INTR           0x2
-#define         ATA_WAIT_READY          0x3
-#define         ATA_ACTIVE              0x4
-#define         ATA_ACTIVE_ATA          0x5
-#define         ATA_ACTIVE_ATAPI        0x6
-#define         ATA_REINITING           0x7
-#define         ATA_WAIT_BASE_READY     0x8
-#define         ATA_WAIT_IDLE           0x9
-
 
 extern UCHAR         pciBuffer[256];
 extern PBUSMASTER_CONTROLLER_INFORMATION BMList;
@@ -486,6 +461,16 @@ AtapiFindBusMasterController(
     IN PCHAR ArgumentString,
     IN OUT PPORT_CONFIGURATION_INFORMATION ConfigInfo,
     OUT PBOOLEAN Again
+    );
+
+extern NTSTATUS
+AtapiConnectIntr2(
+    IN PVOID HwDeviceExtension
+    );
+
+extern NTSTATUS
+AtapiDisconnectIntr2(
+    IN PVOID HwDeviceExtension
     );
 
 extern ULONG 
@@ -642,9 +627,9 @@ AtapiGetIoRange(
 }
 
 #define ChangePciConfig1(offs, _op) {                            \
-    UCHAR a = 0;                                                \
+    UCHAR a = 0;                                                 \
     GetPciConfig1(offs, a);                                      \
-    a = _op;                                                     \
+    a = (UCHAR)(_op);                                            \
     SetPciConfig1(offs, a);                                      \
 }
 
@@ -673,7 +658,7 @@ AtapiGetIoRange(
 #define ChangePciConfig2(offs, _op) {                            \
     USHORT a = 0;                                                \
     GetPciConfig2(offs, a);                                      \
-    a = _op;                                                     \
+    a = (USHORT)(_op);                                           \
     SetPciConfig2(offs, a);                                      \
 }
 
@@ -803,7 +788,11 @@ AtapiReadBuffer2(
 #define GET_CHANNEL(Srb)  (Srb->PathId)
 #define GET_LDEV(Srb)  (Srb->TargetId | (Srb->PathId << 1))
 #define GET_LDEV2(P, T, L)  (T | (P<<1))
+#define GET_CDEV(Srb)  (Srb->TargetId)
 
 extern ULONG SkipRaids;
+extern ULONG ForceSimplex;
+
+extern BOOLEAN InDriverEntry;
 
 #endif //__IDE_BUSMASTER_H__

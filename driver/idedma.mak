@@ -90,11 +90,13 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 
 "Dist\uata2k.inf" : "build_inf.exe" "Dist\uata2k.in_"
 	build_inf.exe Dist\uata2k.in_ > Dist\uata2k.inf
+        srchrep -src "%%COMMENT%%" -dest "" Dist\uata2k.inf
 
 "Dist\uata2kh.inf" : "Dist\uata2k.inf"
-        copy Dist\uata2k.inf Dist\uata2kh.inf
+	build_inf.exe Dist\uata2k.in_ > Dist\uata2kh.inf
         srchrep -src "Class=SCSIAdapter" -dest "Class=hdc" Dist\uata2kh.inf
         srchrep -src "ClassGuid={4D36E97B-E325-11CE-BFC1-08002BE10318}" -dest "ClassGuid={4D36E96A-E325-11CE-BFC1-08002BE10318}" Dist\uata2kh.inf
+        srchrep -src "%%COMMENT%%" -dest " (SCSI)" Dist\uata2kh.inf
 
 #ALL :
 #	nmake CFG="UniATA - Win32 Release"

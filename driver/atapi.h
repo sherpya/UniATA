@@ -428,8 +428,8 @@ typedef struct _IDENTIFY_DATA {
     USHORT NumberOfCylinders;               // 02  1
     USHORT Reserved1;                       // 04  2
     USHORT NumberOfHeads;                   // 06  3
-    USHORT UnformattedBytesPerTrack;        // 08  4
-    USHORT UnformattedBytesPerSector;       // 0A  5
+    USHORT UnformattedBytesPerTrack;        // 08  4  // Now obsolete
+    USHORT UnformattedBytesPerSector;       // 0A  5  // Now obsolete
     USHORT SectorsPerTrack;                 // 0C  6
 
     USHORT VendorUnique1[3];                // 0E  7-9
@@ -522,7 +522,21 @@ typedef struct _IDENTIFY_DATA {
     USHORT QueueLength : 5;                 //     75
     USHORT Reserved75_6 : 11;
 
-    USHORT Reserved76_79[4];                //     76-79
+    USHORT SataCapabilities;                //     76
+#define ATA_SATA_GEN1			0x0002
+#define ATA_SATA_GEN2			0x0004
+#define ATA_SUPPORT_NCQ			0x0100
+#define ATA_SUPPORT_IFPWRMNGTRCV	0x0200
+
+    USHORT Reserved77;                      //     77
+
+    USHORT SataSupport;                     //     78
+#define ATA_SUPPORT_NONZERO		0x0002
+#define ATA_SUPPORT_AUTOACTIVATE	0x0004
+#define ATA_SUPPORT_IFPWRMNGT		0x0008
+#define ATA_SUPPORT_INORDERDATA		0x0010
+
+    USHORT SataEnable;                      //     79
     USHORT MajorRevision;                   //     80
     USHORT MinorRevision;                   //     81
 

@@ -31,6 +31,43 @@ Revision History:
 
 --*/
 
+//
+// values for TransferMode
+//
+#define         ATA_PIO                 0x00
+#define 	ATA_PIO_NRDY            0x01
+
+#define         ATA_PIO0                0x08
+#define         ATA_PIO1                0x09
+#define         ATA_PIO2                0x0a
+#define         ATA_PIO3                0x0b
+#define         ATA_PIO4                0x0c
+#define         ATA_PIO5                0x0d
+
+#define         ATA_DMA                 0x10
+#define         ATA_SDMA                0x10
+#define         ATA_SDMA0               0x10
+#define         ATA_SDMA1               0x11
+#define         ATA_SDMA2               0x12
+
+#define         ATA_WDMA                0x20
+#define         ATA_WDMA0               0x20
+#define         ATA_WDMA1               0x21
+#define         ATA_WDMA2               0x22
+
+#define         ATA_UDMA                0x40
+#define         ATA_UDMA0               0x40 // ATA-16
+#define         ATA_UDMA1               0x41 // ATA-25                     
+#define         ATA_UDMA2               0x42 // ATA-33                     
+#define         ATA_UDMA3               0x43 // ATA-44
+#define         ATA_UDMA4               0x44 // ATA-66                     
+#define         ATA_UDMA5               0x45 // ATA-100                    
+#define         ATA_UDMA6               0x46 // ATA-133                    
+//#define         ATA_UDMA7               0x47 // ATA-166
+
+#define         ATA_SA150               0x47 /*0x80*/
+
+
 #ifndef __IDE_BUSMASTER_DEVICES_H__
 #define __IDE_BUSMASTER_DEVICES_H__
 
@@ -91,6 +128,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_CYPRESS_82C693	0xc6931080
 
 #define ATA_DEC_21150		0x00221011
+#define ATA_DEC_21150_1		0x00231011
 
 #define ATA_HIGHPOINT_ID	0x1103
 #define ATA_HPT366		0x00041103
@@ -117,10 +155,18 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_I82801DB_1		0x24ca8086
 #define ATA_I82801EB		0x24db8086
 #define ATA_I82801EB_1		0x24d18086
+#define ATA_I82801EB_2		0x24df8086
+#define ATA_I6300ESB		0x25a28086
+#define ATA_I6300ESB_1		0x25a38086
+#define ATA_I6300ESB_2		0x25b08086
+
+#define ATA_NATIONAL_ID		0x100b
+#define ATA_SC1100		0x0502100b
 
 #define ATA_NVIDIA_ID		0x10de
 #define ATA_NFORCE1		0x01bc10de
 #define ATA_NFORCE2		0x006510de
+#define ATA_NFORCE3		0x00d510de
 
 #define ATA_PROMISE_ID		0x105a
 #define ATA_PDC20246		0x4d33105a
@@ -148,14 +194,20 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_PDC20619		0x6629105a
 #define ATA_PDC20620		0x6620105a
 #define ATA_PDC20621		0x6621105a
+#define ATA_PDC20622		0x6622105a
 
 #define ATA_SERVERWORKS_ID	0x1166
+#define ATA_ROSB4_ISA		0x02001166
 #define ATA_ROSB4		0x02111166
 #define ATA_CSB5		0x02121166
 #define ATA_CSB6		0x02131166
 #define ATA_CSB6_1		0x02171166
 
 #define ATA_SILICON_IMAGE_ID	0x1095
+#define ATA_SII3114		0x31141095
+#define ATA_SII3512		0x35121095
+#define ATA_SII3112		0x31121095
+#define ATA_SII3112_1		0x02401095
 #define ATA_SII0680		0x06801095
 #define ATA_CMD646		0x06461095
 #define ATA_CMD648		0x06481095
@@ -165,6 +217,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_SISSOUTH		0x00081039
 #define ATA_SIS5511		0x55111039
 #define ATA_SIS5513		0x55131039
+#define ATA_SIS5517		0x55171039
 #define ATA_SIS5518		0x55181039
 #define ATA_SIS5571		0x55711039
 #define ATA_SIS5591		0x55911039
@@ -188,6 +241,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_SIS652		0x06521039
 #define ATA_SIS655		0x06551039
 #define ATA_SIS658		0x06581039
+#define ATA_SIS661		0x06611039
 #define ATA_SIS730		0x07301039
 #define ATA_SIS733		0x07331039
 #define ATA_SIS735		0x07351039
@@ -202,6 +256,8 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_SIS961		0x09611039
 #define ATA_SIS962		0x09621039
 #define ATA_SIS963		0x09631039
+#define ATA_SIS964		0x09641039
+#define ATA_SIS964_1		0x01801039
 
 #define ATA_VIA_ID		0x1106
 #define ATA_VIA82C571		0x05711106
@@ -213,10 +269,13 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_VIA8233A		0x31471106
 #define ATA_VIA8233C		0x31091106
 #define ATA_VIA8235		0x31771106
+#define ATA_VIA8237		0x32271106
 #define ATA_VIA8361		0x31121106
 #define ATA_VIA8363		0x03051106
 #define ATA_VIA8371		0x03911106
 #define ATA_VIA8662		0x31021106
+#define ATA_VIA6410		0x31641106
+#define ATA_VIA6420		0x31491106
 
 #define ATA_ITE_ID		0x1283
 #define ATA_IT8172G		0x81721283
@@ -233,6 +292,8 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 
 #define UNIATA_RAID_CONTROLLER  0x80000000
 #define UNIATA_SIMPLEX_ONLY     0x40000000
+#define UNIATA_NO_SLAVE         0x20000000
+#define UNIATA_SATA             0x10000000
 
 #define ATPOLD		0x0100
 
@@ -260,18 +321,25 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define SWKS66		1
 #define SWKS100		2
 
-#define SII_INTR	0x0100
-#define SII_SETCLK	0x0200
-#define SII_ENINTR	0x0400
-#define SII_CMD         0x0800
+#define SIIOLD          0
+#define SIICMD          1
+#define SIIMIO          2
 
-#define SIS_SOUTH	1
-#define SIS133NEW	2
-#define SIS133OLD	3
-#define SIS100NEW	4
-#define SIS100OLD	5
-#define SIS66		6
-#define SIS33		7
+#define SIIINTR	        0x0100
+#define SIIENINTR       0x0200
+#define SII4CH          0x0400
+#define SIISETCLK       0x0800
+
+//#define SIS_SOUTH	1
+#define SISSATA		2
+#define SIS133NEW	3
+#define SIS133OLD	4
+#define SIS100NEW	5
+#define SIS100OLD	6
+#define SIS66		7
+#define SIS33		8
+
+#define SIS_BASE        0x0100
 
 #define VIA33		0
 #define VIA66		1
@@ -296,45 +364,167 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #endif
 
 BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
-    PCI_DEV_HW_SPEC_BM( 24db, 8086, 0, 0, "Intel ICH5",                              0),
-    PCI_DEV_HW_SPEC_BM( 24cb, 8086, 0, 0, "Intel ICH4",                              0),
-    PCI_DEV_HW_SPEC_BM( 248a, 8086, 0, 0, "Intel ICH3 mobile ATA-100 controller",    0),
-    PCI_DEV_HW_SPEC_BM( 248b, 8086, 0, 0, "Intel ICH3 ATA-100 controller",           0),
-    PCI_DEV_HW_SPEC_BM( 244a, 8086, 0, 0, "Intel ICH2 mobile ATA-100 controller",    0),
-    PCI_DEV_HW_SPEC_BM( 244b, 8086, 0, 0, "Intel ICH2 ATA-100 controller",           0),
-    PCI_DEV_HW_SPEC_BM( 2411, 8086, 0, 0, "Intel ICH (2411) ATA-66 controller",      0),
-    PCI_DEV_HW_SPEC_BM( 7601, 8086, 0, 0, "Intel ICH (7601) ATA-66 controller",      0),
-    PCI_DEV_HW_SPEC_BM( 7111, 8086, 0, 0, "Intel PIIX4 (7111) ATA-33 controller",    0),
-    PCI_DEV_HW_SPEC_BM( 84ca, 8086, 0, 0, "Intel PIIX4 (84ca) ATA-33 controller",    0),
-    PCI_DEV_HW_SPEC_BM( 7199, 8086, 0, 0, "Intel PIIX4e ATA-33 controller",          0),
-    PCI_DEV_HW_SPEC_BM( 2421, 8086, 0, 0, "Intel ICH0 ATA-33 controller",            0),
-    PCI_DEV_HW_SPEC_BM( 7010, 8086, 0, 0, "Intel PIIX3 ATA controller",              0),
-    PCI_DEV_HW_SPEC_BM( 1230, 8086, 0, 0, "Intel PIIX ATA controller",               0),
-                                                                                        
-    PCI_DEV_HW_SPEC_BM( 5229, 10b9, 0, 0, "AcerLabs Aladdin ATA/ATA-33 controller",  0),
-                                                                                        
-    PCI_DEV_HW_SPEC_BM( 01bc, 10de, 0, 0, "nVIDIA nForce",                           0),
-    PCI_DEV_HW_SPEC_BM( 0065, 10de, 0, 0, "nVIDIA nForce 2",                         0),
-    PCI_DEV_HW_SPEC_BM( 7441, 1022, 0, 0, "AMD 768",                                 0),
-    PCI_DEV_HW_SPEC_BM( 7411, 1022, 0, 0, "AMD 766",                                 0),
-    PCI_DEV_HW_SPEC_BM( 7409, 1022, 0, 0, "AMD 756",                                 0),
-    PCI_DEV_HW_SPEC_BM( 0571, 1106, 0, 0, "VIA ATA-XXX controller",                  0),
+
+    PCI_DEV_HW_SPEC_BM( 0005, 1191, 0x00, ATA_UDMA2, "Acard ATP850"     , ATPOLD | UNIATA_SIMPLEX_ONLY            ),
+    PCI_DEV_HW_SPEC_BM( 0006, 1191, 0x00, ATA_UDMA4, "Acard ATP860A"    , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 0007, 1191, 0x00, ATA_UDMA4, "Acard ATP860R"    , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 0008, 1191, 0x00, ATA_UDMA6, "Acard ATP865A"    , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 0009, 1191, 0x00, ATA_UDMA6, "Acard ATP865R"    , 0                                       ),
                                           
-    PCI_DEV_HW_SPEC_BM( 5513, 1039, 0, 0, "SiS ATA-XXX controller",                  0),
-                                                                                        
-    PCI_DEV_HW_SPEC_BM( 0680, 1095, 0, 0, "Sil 0680 ATA-133 controller",             0),
+    PCI_DEV_HW_SPEC_BM( 5229, 10b9, 0xc4, ATA_UDMA5, "AcerLabs Aladdin" , ALINEW                                  ),
+    PCI_DEV_HW_SPEC_BM( 5229, 10b9, 0xc2, ATA_UDMA4, "AcerLabs Aladdin" , ALINEW                                  ),
+    PCI_DEV_HW_SPEC_BM( 5229, 10b9, 0x20, ATA_UDMA2, "AcerLabs Aladdin" , ALIOLD                                  ),
+    PCI_DEV_HW_SPEC_BM( 5229, 10b9, 0x00, ATA_WDMA2, "AcerLabs Aladdin" , ALIOLD                                  ),
+
+    PCI_DEV_HW_SPEC_BM( 7409, 1022, 0x00, ATA_UDMA4, "AMD 756"          , AMDNVIDIA | 0x00                        ),
+    PCI_DEV_HW_SPEC_BM( 7411, 1022, 0x00, ATA_UDMA5, "AMD 766"          , AMDNVIDIA | AMDCABLE|AMDBUG             ),
+    PCI_DEV_HW_SPEC_BM( 7441, 1022, 0x00, ATA_UDMA5, "AMD 768"          , AMDNVIDIA | AMDCABLE                    ),
+    PCI_DEV_HW_SPEC_BM( 7469, 1022, 0x00, ATA_UDMA6, "AMD 8111"         , AMDNVIDIA | AMDCABLE                    ),
+
+    PCI_DEV_HW_SPEC_BM( 0004, 1103, 0x05, ATA_UDMA6, "HighPoint HPT372" , HPT372 | 0x00   | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 0004, 1103, 0x03, ATA_UDMA5, "HighPoint HPT370" , HPT370 | 0x00   | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 0004, 1103, 0x02, ATA_UDMA4, "HighPoint HPT368" , HPT366 | 0x00   | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 0004, 1103, 0x00, ATA_UDMA4, "HighPoint HPT366" , HPT366 | HPTOLD | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 0005, 1103, 0x01, ATA_UDMA6, "HighPoint HPT372" , HPT372 | 0x00   | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 0005, 1103, 0x00, ATA_UDMA4, "HighPoint HPT372" , HPT372 | HPTOLD | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 0006, 1103, 0x01, ATA_UDMA6, "HighPoint HPT302" , HPT372 | 0x00   | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 0007, 1103, 0x01, ATA_UDMA6, "HighPoint HPT371" , HPT372 | 0x00   | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 0008, 1103, 0x07, ATA_UDMA6, "HighPoint HPT374" , HPT374 | 0x00   | UNIATA_RAID_CONTROLLER),
+
+    PCI_DEV_HW_SPEC_BM( 1230, 8086, 0x00, ATA_WDMA2, "Intel PIIX"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 7010, 8086, 0x00, ATA_WDMA2, "Intel PIIX3"      , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 7111, 8086, 0x00, ATA_UDMA2, "Intel PIIX4"      , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 7199, 8086, 0x00, ATA_UDMA2, "Intel PIIX4"      , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 84ca, 8086, 0x00, ATA_UDMA2, "Intel PIIX4"      , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 7601, 8086, 0x00, ATA_UDMA2, "Intel ICH0"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 2421, 8086, 0x00, ATA_UDMA4, "Intel ICH"        , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 2411, 8086, 0x00, ATA_UDMA4, "Intel ICH"        , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 244a, 8086, 0x00, ATA_UDMA5, "Intel ICH2"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 244b, 8086, 0x00, ATA_UDMA5, "Intel ICH2"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 248a, 8086, 0x00, ATA_UDMA5, "Intel ICH3"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 248b, 8086, 0x00, ATA_UDMA5, "Intel ICH3"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 24cb, 8086, 0x00, ATA_UDMA5, "Intel ICH4"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 24ca, 8086, 0x00, ATA_UDMA5, "Intel ICH4"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 24db, 8086, 0x00, ATA_UDMA5, "Intel ICH5 EB"    , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 24d1, 8086, 0x00, ATA_SA150, "Intel ICH5 EB1"   , UNIATA_SATA                             ),
+    PCI_DEV_HW_SPEC_BM( 24df, 8086, 0x00, ATA_SA150, "Intel ICH5 EB2"   , UNIATA_SATA                             ),
+    PCI_DEV_HW_SPEC_BM( 25a2, 8086, 0x00, ATA_UDMA5, "Intel ICH5 ESB"   , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 25a3, 8086, 0x00, ATA_SA150, "Intel ICH5 ESB1"  , UNIATA_SATA                             ),
+    PCI_DEV_HW_SPEC_BM( 25b0, 8086, 0x00, ATA_SA150, "Intel ICH5 ESB2"  , UNIATA_SATA                             ),
+
+    PCI_DEV_HW_SPEC_BM( 01bc, 10de, 0x00, ATA_UDMA5, "nVidia nForce"    , AMDNVIDIA | AMDBUG                      ),
+    PCI_DEV_HW_SPEC_BM( 0065, 10de, 0x00, ATA_UDMA6, "nVidia nForce2"   , AMDNVIDIA | AMDBUG                      ),
+    PCI_DEV_HW_SPEC_BM( 00d5, 10de, 0x00, ATA_UDMA6, "nVidia nForce3"   , AMDNVIDIA                               ),
+
+    PCI_DEV_HW_SPEC_BM( 0502, 100b, 0x00, ATA_UDMA2, "National Geode SC1100", 0                                   ),
+
+    PCI_DEV_HW_SPEC_BM( 4d33, 105a, 0x00, ATA_UDMA2, "Promise PDC20246" , PROLD | 0x00                            ),
+    PCI_DEV_HW_SPEC_BM( 4d38, 105a, 0x00, ATA_UDMA4, "Promise PDC20262" , PRNEW | 0x00                            ),
+    PCI_DEV_HW_SPEC_BM( 0d38, 105a, 0x00, ATA_UDMA4, "Promise PDC20263" , PRNEW | 0x00    | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 0d30, 105a, 0x00, ATA_UDMA5, "Promise PDC20265" , PRNEW | 0x00    | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 4d30, 105a, 0x00, ATA_UDMA5, "Promise PDC20267" , PRNEW | 0x00    | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 4d68, 105a, 0x00, ATA_UDMA5, "Promise PDC20268" , PRTX  | PRTX4   | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 4d69, 105a, 0x00, ATA_UDMA6, "Promise PDC20269" , PRTX  | 0x00    | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 6268, 105a, 0x00, ATA_UDMA5, "Promise PDC20270" , PRTX  | PRTX4   | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 6269, 105a, 0x00, ATA_UDMA6, "Promise PDC20271" , PRTX  | 0x00    | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 1275, 105a, 0x00, ATA_UDMA6, "Promise PDC20275" , PRTX  | 0x00    | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 5275, 105a, 0x00, ATA_UDMA6, "Promise PDC20276" , PRTX  | PRSX6K  | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 7275, 105a, 0x00, ATA_UDMA6, "Promise PDC20277" , PRTX  | 0x00    | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 3318, 105a, 0x00, ATA_SA150, "Promise PDC20318" , PRMIO | PRSATA  | UNIATA_RAID_CONTROLLER | UNIATA_SATA),
+    PCI_DEV_HW_SPEC_BM( 3319, 105a, 0x00, ATA_SA150, "Promise PDC20319" , PRMIO | PRSATA  | UNIATA_RAID_CONTROLLER | UNIATA_SATA),
+    PCI_DEV_HW_SPEC_BM( 3371, 105a, 0x00, ATA_SA150, "Promise PDC20371" , PRMIO | PRSATA  | UNIATA_RAID_CONTROLLER | UNIATA_SATA),
+    PCI_DEV_HW_SPEC_BM( 3375, 105a, 0x00, ATA_SA150, "Promise PDC20375" , PRMIO | PRSATA  | UNIATA_RAID_CONTROLLER | UNIATA_SATA),
+    PCI_DEV_HW_SPEC_BM( 3376, 105a, 0x00, ATA_SA150, "Promise PDC20376" , PRMIO | PRSATA  | UNIATA_RAID_CONTROLLER | UNIATA_SATA),
+    PCI_DEV_HW_SPEC_BM( 3377, 105a, 0x00, ATA_SA150, "Promise PDC20377" , PRMIO | PRSATA  | UNIATA_RAID_CONTROLLER | UNIATA_SATA),
+    PCI_DEV_HW_SPEC_BM( 3373, 105a, 0x00, ATA_SA150, "Promise PDC20378" , PRMIO | PRSATA  | UNIATA_RAID_CONTROLLER | UNIATA_SATA),
+    PCI_DEV_HW_SPEC_BM( 3372, 105a, 0x00, ATA_SA150, "Promise PDC20379" , PRMIO | PRSATA  | UNIATA_RAID_CONTROLLER | UNIATA_SATA),
+    PCI_DEV_HW_SPEC_BM( 6617, 105a, 0x00, ATA_UDMA6, "Promise PDC20617" , PRMIO | PRDUAL  | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 6626, 105a, 0x00, ATA_UDMA6, "Promise PDC20618" , PRMIO | PRDUAL  | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 6629, 105a, 0x00, ATA_UDMA6, "Promise PDC20619" , PRMIO | PRDUAL  | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 6620, 105a, 0x00, ATA_UDMA6, "Promise PDC20620" , PRMIO | PRDUAL  | UNIATA_RAID_CONTROLLER),
+/*    PCI_DEV_HW_SPEC_BM( 6621, 105a, 0x00, ATA_UDMA6, "Promise PDC20621" , PRMIO | PRSX4X  | UNIATA_RAID_CONTROLLER),
+    PCI_DEV_HW_SPEC_BM( 6622, 105a, 0x00, ATA_UDMA6, "Promise PDC20622" , PRMIO | PRSX4X  | UNIATA_RAID_CONTROLLER),*/
+
+    PCI_DEV_HW_SPEC_BM( 0211, 1166, 0x00, ATA_UDMA2, "ServerWorks ROSB4", SWKS33                                  ),
+    PCI_DEV_HW_SPEC_BM( 0212, 1166, 0x92, ATA_UDMA5, "ServerWorks CSB5" , SWKS100                                 ),
+    PCI_DEV_HW_SPEC_BM( 0212, 1166, 0x00, ATA_UDMA4, "ServerWorks CSB5" , SWKS66                                  ),
+    PCI_DEV_HW_SPEC_BM( 0213, 1166, 0x00, ATA_UDMA5, "ServerWorks CSB6" , SWKS100                                 ),
+    PCI_DEV_HW_SPEC_BM( 0213, 1166, 0x00, ATA_UDMA4, "ServerWorks CSB6" , SWKS66                                  ),
+ 
+    PCI_DEV_HW_SPEC_BM( 3114, 1095, 0x00, ATA_SA150, "SiI 3114"         , SIIMIO | SII4CH | UNIATA_SATA           ),
+    PCI_DEV_HW_SPEC_BM( 3512, 1095, 0x02, ATA_SA150, "SiI 3512"         , SIIMIO |          UNIATA_SATA           ),
+    PCI_DEV_HW_SPEC_BM( 3112, 1095, 0x02, ATA_SA150, "SiI 3112"         , SIIMIO |          UNIATA_SATA           ),
+    PCI_DEV_HW_SPEC_BM( 0240, 1095, 0x02, ATA_SA150, "SiI 3112"         , SIIMIO |          UNIATA_SATA           ),
+    PCI_DEV_HW_SPEC_BM( 3512, 1095, 0x00, ATA_SA150, "SiI 3512"         , SIIMIO |          UNIATA_SATA           ),
+    PCI_DEV_HW_SPEC_BM( 3112, 1095, 0x00, ATA_SA150, "SiI 3112"         , SIIMIO |          UNIATA_SATA           ),
+    PCI_DEV_HW_SPEC_BM( 0240, 1095, 0x00, ATA_SA150, "SiI 3112"         , SIIMIO |          UNIATA_SATA           ),
+    PCI_DEV_HW_SPEC_BM( 0680, 1095, 0x00, ATA_UDMA6, "SiI 0680"         , SIIMIO | SIISETCLK                      ),
+    PCI_DEV_HW_SPEC_BM( 0649, 1095, 0x00, ATA_UDMA5, "CMD 649"          , SIICMD | SIIINTR                        ),
+    PCI_DEV_HW_SPEC_BM( 0648, 1095, 0x00, ATA_UDMA4, "CMD 648"          , SIICMD | SIIINTR                        ),
+    PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x07, ATA_UDMA2, "CMD 646U2"        , SIICMD | 0                              ),
+    PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x00, ATA_WDMA2, "CMD 646"          , SIICMD | 0                              ),
+    PCI_DEV_HW_SPEC_BM( 0640, 1095, 0x00, ATA_PIO4 , "CMD 640"          , SIIOLD | SIIENINTR | UNIATA_SIMPLEX_ONLY),
+
+/**    PCI_DEV_HW_SPEC_BM( 0963, 1039, 0x00, ATA_UDMA6, "SiS 963"          , SIS133NEW                               ),
+    PCI_DEV_HW_SPEC_BM( 0962, 1039, 0x00, ATA_UDMA6, "SiS 962"          , SIS133NEW                               ),
+
+    PCI_DEV_HW_SPEC_BM( 0755, 1039, 0x00, ATA_UDMA6, "SiS 755"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0752, 1039, 0x00, ATA_UDMA6, "SiS 752"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0751, 1039, 0x00, ATA_UDMA6, "SiS 751"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0750, 1039, 0x00, ATA_UDMA6, "SiS 750"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0748, 1039, 0x00, ATA_UDMA6, "SiS 748"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0746, 1039, 0x00, ATA_UDMA6, "SiS 746"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0745, 1039, 0x00, ATA_UDMA5, "SiS 745"          , SIS100NEW                               ),
+    PCI_DEV_HW_SPEC_BM( 0740, 1039, 0x00, ATA_UDMA5, "SiS 740"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0735, 1039, 0x00, ATA_UDMA5, "SiS 735"          , SIS100NEW                               ),
+    PCI_DEV_HW_SPEC_BM( 0733, 1039, 0x00, ATA_UDMA5, "SiS 733"          , SIS100NEW                               ),
+    PCI_DEV_HW_SPEC_BM( 0730, 1039, 0x00, ATA_UDMA5, "SiS 730"          , SIS100OLD                               ),
+
+    PCI_DEV_HW_SPEC_BM( 0658, 1039, 0x00, ATA_UDMA6, "SiS 658"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0655, 1039, 0x00, ATA_UDMA6, "SiS 655"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0652, 1039, 0x00, ATA_UDMA6, "SiS 652"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0651, 1039, 0x00, ATA_UDMA6, "SiS 651"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0650, 1039, 0x00, ATA_UDMA6, "SiS 650"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0648, 1039, 0x00, ATA_UDMA6, "SiS 648"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0646, 1039, 0x00, ATA_UDMA6, "SiS 645DX"        , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0645, 1039, 0x00, ATA_UDMA6, "SiS 645"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0640, 1039, 0x00, ATA_UDMA4, "SiS 640"          , SIS_SOUTH                               ),
+    PCI_DEV_HW_SPEC_BM( 0635, 1039, 0x00, ATA_UDMA5, "SiS 635"          , SIS100NEW                               ),
+    PCI_DEV_HW_SPEC_BM( 0633, 1039, 0x00, ATA_UDMA5, "SiS 633"          , SIS100NEW                               ),
+    PCI_DEV_HW_SPEC_BM( 0630, 1039, 0x00, ATA_UDMA5, "SiS 630S"         , SIS100OLD                               ),
+    PCI_DEV_HW_SPEC_BM( 0630, 1039, 0x00, ATA_UDMA4, "SiS 630"          , SIS66,                                  ),
+    PCI_DEV_HW_SPEC_BM( 0620, 1039, 0x00, ATA_UDMA4, "SiS 620"          , SIS66,                                  ),
+                            
+    PCI_DEV_HW_SPEC_BM( 0550, 1039, 0x00, ATA_UDMA5, "SiS 550"          , SIS66,                                  ),
+    PCI_DEV_HW_SPEC_BM( 0540, 1039, 0x00, ATA_UDMA4, "SiS 540"          , SIS66,                                  ),
+    PCI_DEV_HW_SPEC_BM( 0530, 1039, 0x00, ATA_UDMA4, "SiS 530"          , SIS66,                                  ),
+*/
+    PCI_DEV_HW_SPEC_BM( 5513, 1039, 0xc2, ATA_UDMA2, "SiS ATA-xxx"      , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 5513, 1039, 0x00, ATA_WDMA2, "SiS ATA-xxx"      , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 0601, 1039, 0x00, ATA_WDMA2, "SiS ATA-xxx"      , 0                                       ),
+
+/*    PCI_DEV_HW_SPEC_BM( 0586, 1106, 0x41, ATA_UDMA2, "VIA 82C586B"      , VIA33  | 0x00                           ),
+    PCI_DEV_HW_SPEC_BM( 0586, 1106, 0x40, ATA_UDMA2, "VIA 82C586B"      , VIA33  | VIAPRQ                         ),
+    PCI_DEV_HW_SPEC_BM( 0586, 1106, 0x02, ATA_UDMA2, "VIA 82C586B"      , VIA33  | 0x00                           ),
+    PCI_DEV_HW_SPEC_BM( 0586, 1106, 0x00, ATA_WDMA2, "VIA 82C586"       , VIA33  | 0x00                           ),
+    PCI_DEV_HW_SPEC_BM( 0596, 1106, 0x12, ATA_UDMA4, "VIA 82C596B"      , VIA66  | VIACLK                         ),
+    PCI_DEV_HW_SPEC_BM( 0596, 1106, 0x00, ATA_UDMA2, "VIA 82C596"       , VIA33  | 0x00                           ),
+    PCI_DEV_HW_SPEC_BM( 0686, 1106, 0x40, ATA_UDMA5, "VIA 82C686B"      , VIA100 | VIABUG                         ),
+    PCI_DEV_HW_SPEC_BM( 0686, 1106, 0x10, ATA_UDMA4, "VIA 82C686A"      , VIA66  | VIACLK                         ),
+    PCI_DEV_HW_SPEC_BM( 0686, 1106, 0x00, ATA_UDMA2, "VIA 82C686"       , VIA33  | 0x00                           ),
+    PCI_DEV_HW_SPEC_BM( 8231, 1106, 0x00, ATA_UDMA5, "VIA 8231"         , VIA100 | VIABUG                         ),
+    PCI_DEV_HW_SPEC_BM( 3074, 1106, 0x00, ATA_UDMA5, "VIA 8233"         , VIA100 | 0x00                           ),
+    PCI_DEV_HW_SPEC_BM( 3109, 1106, 0x00, ATA_UDMA5, "VIA 8233C"        , VIA100 | 0x00                           ),
+    PCI_DEV_HW_SPEC_BM( 3147, 1106, 0x00, ATA_UDMA6, "VIA 8233A"        , VIA133 | VIAAST                         ),
+    PCI_DEV_HW_SPEC_BM( 3177, 1106, 0x00, ATA_UDMA6, "VIA 8235"         , VIA133 | VIAAST                         ),
+*/
+    PCI_DEV_HW_SPEC_BM( 0571, 1106, 0x00, ATA_UDMA2, "VIA ATA-xxx"      , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 3164, 1106, 0x00, ATA_UDMA6, "VIA 6410"         , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 3149, 1106, 0x00, ATA_SA150, "VIA 6420"         , 0 | UNIATA_SATA                         ),
+    
+    PCI_DEV_HW_SPEC_BM( c693, 1080, 0x00, ATA_WDMA2, "Cypress 82C693"   ,0                                        ),
                                           
-    PCI_DEV_HW_SPEC_BM( 0649, 1095, 0, 0, "CMD 649 ATA100 controller",               0),
-    PCI_DEV_HW_SPEC_BM( 0648, 1095, 0, 0, "CMD 648 ATA66 controller",                0),
-    PCI_DEV_HW_SPEC_BM( 0646, 1095, 0, 0, "CMD 646 ATA controller",                  0),
-                                          
-    PCI_DEV_HW_SPEC_BM( c693, 1080, 0, 0, "Cypress 82C693 ATA controller",           0),
-                                          
-    PCI_DEV_HW_SPEC_BM( 0102, 1078, 0, 0, "Cyrix 5530 ATA33 controller",             0),
-                                                                                        
-    PCI_DEV_HW_SPEC_BM( 0211, 1166, 0, 0, "ServerWorks ROSB4 ATA33 controller",      0),
-    PCI_DEV_HW_SPEC_BM( 0212, 1166, 0, 0, "ServerWorks CSB5 ATA66/100 controller",   0),
-                                                                                     
+/*                                                                                     
     PCI_DEV_HW_SPEC_BM( 4d68, 105a, 0, 0, "Promise TX2 ATA-100 controller",          UNIATA_RAID_CONTROLLER),
     PCI_DEV_HW_SPEC_BM( 6268, 105a, 0, 0, "Promise TX2 ATA-100 controller",          UNIATA_RAID_CONTROLLER),
                                           
@@ -354,14 +544,17 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
     PCI_DEV_HW_SPEC_BM( 0004, 1103, 0, 0, "HighPoint HPT366/368/370/372 controller", UNIATA_RAID_CONTROLLER),
     PCI_DEV_HW_SPEC_BM( 0005, 1103, 0, 0, "HighPoint HPT372 controller",             UNIATA_RAID_CONTROLLER),
     PCI_DEV_HW_SPEC_BM( 0008, 1103, 0, 0, "HighPoint HPT374 controller",             UNIATA_RAID_CONTROLLER),
-                                          
-    PCI_DEV_HW_SPEC_BM( 0007, 1191, 0, 0, "Acard ATP860R controller",                0),
-    PCI_DEV_HW_SPEC_BM( 0006, 1191, 0, 0, "Acard ATP860 controller",                 0),
-    PCI_DEV_HW_SPEC_BM( 0009, 1191, 0, 0, "Acard ATP865R controller",                0),
-    PCI_DEV_HW_SPEC_BM( 0008, 1191, 0, 0, "Acard ATP865 controller",                 0),
-    PCI_DEV_HW_SPEC_BM( 0005, 1191, 0, 0, "Acard ATP850UF controller",               0),
-                                          
-    PCI_DEV_HW_SPEC_BM( 0001, 16ca, 0, 0, "Cenatek Rocket Drive controller",         0)
+*/
+    PCI_DEV_HW_SPEC_BM( 0001, 16ca, 0x00, ATA_WDMA2, "Cenatek Rocket Drive",0                                     ),
+
+    PCI_DEV_HW_SPEC_BM( 0102, 1078, 0x00, ATA_UDMA2, "Cyrix 5530"       , 0                                       ),
+                                                                                        
+    PCI_DEV_HW_SPEC_BM( 0102, 1042, 0x00, ATA_PIO4,  "RZ 100x"          , 0                                       ),
+
+    PCI_DEV_HW_SPEC_BM( 8172, 1283, 0x00, ATA_UDMA2, "IT8172"           , 0                                       ),
+
+    // Terminator
+    PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1, NULL      , -1 )
 };
 
 #define NUM_BUSMASTER_ADAPTERS (sizeof(BusMasterAdapters) / sizeof(BUSMASTER_CONTROLLER_INFORMATION))
@@ -385,10 +578,12 @@ Ata_is_dev_listed(
         if(BusMasterAdapters[k].nVendorId == 0xffff &&
            BusMasterAdapters[k].nDeviceId == 0xffff &&
            BusMasterAdapters[k].nRevId    == 0xff) {
+            if(lim != -1)
+                continue;
             return -1;
         }
         if(BusMasterAdapters[k].nVendorId == VendorId &&
-           BusMasterAdapters[k].nDeviceId == DeviceId &&
+           (BusMasterAdapters[k].nDeviceId == DeviceId || DeviceId == 0xffff) &&
            (!RevId || BusMasterAdapters[k].nRevId <= RevId) )
             return k;
     }

@@ -396,4 +396,11 @@ extern UNICODE_STRING SavedSPString;
 #define WinVer_IsXP   (MajorVersion==0x05 && MinorVersion==0x01)
 #define WinVer_IsdNET (MajorVersion==0x05 && MinorVersion==0x02)
 
+#define WinVer_Id()   ((MajorVersion << 8) | MinorVersion)
+
+#define WinVer_NT     (0x0400)
+#define WinVer_2k     (0x0500)
+#define WinVer_XP     (0x0501)
+#define WinVer_dNET   (0x0502)
+
 #endif // __UNIATA_TOOLS_H__

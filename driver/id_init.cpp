@@ -71,12 +71,30 @@ AtapiChipDetect(
     BUSMASTER_CONTROLLER_INFORMATION* DevTypeInfo;
     PHW_CHANNEL chan;
     ULONG ChipType;
+    ULONG ChipFlags;
     ULONG tmp32;
+    UCHAR tmp8;
 
     KdPrint2((PRINT_PREFIX "AtapiChipDetect:\n" ));
     KdPrint2((PRINT_PREFIX "HwFlags: %#x\n", deviceExtension->HwFlags));
 
-    static BUSMASTER_CONTROLLER_INFORMATION const AcardAdapters[] = {
+    i = Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[0], VendorID, 0xffff, 0, NUM_BUSMASTER_ADAPTERS);
+
+    c = AtapiRegCheckDevValue(deviceExtension, L"ForceSimplex", 0);
+    if(c) {
+        *simplexOnly = TRUE; 
+    }
+
+    KdPrint2((PRINT_PREFIX "i: %#x\n", i));
+    if(i != -1) {
+        DevTypeInfo = (PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[i];
+    } else {
+        DevTypeInfo = NULL;
+        deviceExtension->MaxTransferMode = deviceExtension->BaseIoAddressBM_0 ? ATA_DMA : ATA_PIO4;
+        return FALSE;
+    }
+
+/*    static BUSMASTER_CONTROLLER_INFORMATION const AcardAdapters[] = {
         PCI_DEV_HW_SPEC_BM( 0005, 1191, 0x00, ATA_UDMA2, "Acard ATP850" , ATPOLD | UNIATA_SIMPLEX_ONLY),
         PCI_DEV_HW_SPEC_BM( 0006, 1191, 0x00, ATA_UDMA4, "Acard ATP860A", 0     ),
         PCI_DEV_HW_SPEC_BM( 0007, 1191, 0x00, ATA_UDMA4, "Acard ATP860R", 0     ),
@@ -97,7 +115,7 @@ AtapiChipDetect(
         PCI_DEV_HW_SPEC_BM( 7409, 1022, 0x00, ATA_UDMA4, "AMD 756" , AMDNVIDIA | 0x00            ),
         PCI_DEV_HW_SPEC_BM( 7411, 1022, 0x00, ATA_UDMA5, "AMD 766" , AMDNVIDIA | AMDCABLE|AMDBUG ),
         PCI_DEV_HW_SPEC_BM( 7441, 1022, 0x00, ATA_UDMA5, "AMD 768" , AMDNVIDIA | AMDCABLE        ),
-        PCI_DEV_HW_SPEC_BM( 7469, 1022, 0x00, ATA_UDMA6, "AMD 8111", AMDNVIDIA | 0x00            ),
+        PCI_DEV_HW_SPEC_BM( 7469, 1022, 0x00, ATA_UDMA6, "AMD 8111", AMDNVIDIA | AMDCABLE        ),
         PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL      , -1 )
         };
 
@@ -108,34 +126,41 @@ AtapiChipDetect(
         PCI_DEV_HW_SPEC_BM( 0004, 1103, 0x00, ATA_UDMA4, "HighPoint HPT366", HPT366 | HPTOLD     ),
         PCI_DEV_HW_SPEC_BM( 0005, 1103, 0x01, ATA_UDMA6, "HighPoint HPT372", HPT372 | 0x00       ),
         PCI_DEV_HW_SPEC_BM( 0005, 1103, 0x00, ATA_UDMA4, "HighPoint HPT372", HPT372 | HPTOLD     ),
+        PCI_DEV_HW_SPEC_BM( 0006, 1103, 0x01, ATA_UDMA6, "HighPoint HPT302", HPT372 | 0x00       ),
         PCI_DEV_HW_SPEC_BM( 0008, 1103, 0x07, ATA_UDMA6, "HighPoint HPT374", HPT374 | 0x00       ),
         PCI_DEV_HW_SPEC_BM( 0008, 1103, 0x07, ATA_UDMA4, "HighPoint HPT374", HPT374 | HPTOLD     ),
+        PCI_DEV_HW_SPEC_BM( 0008, 1103, 0x01, ATA_UDMA6, "HighPoint HPT371", HPT372 | 0x00       ),
         PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL              , -1 )
         };
 
     static BUSMASTER_CONTROLLER_INFORMATION const IntelAdapters[] = {
-        PCI_DEV_HW_SPEC_BM( 1230, 8086, 0x00, ATA_WDMA2, "Intel PIIX" , 0 ),
-        PCI_DEV_HW_SPEC_BM( 7010, 8086, 0x00, ATA_WDMA2, "Intel PIIX3", 0 ),
-        PCI_DEV_HW_SPEC_BM( 7111, 8086, 0x00, ATA_UDMA2, "Intel PIIX4", 0 ),
-        PCI_DEV_HW_SPEC_BM( 7199, 8086, 0x00, ATA_UDMA2, "Intel PIIX4", 0 ),
-        PCI_DEV_HW_SPEC_BM( 84ca, 8086, 0x00, ATA_UDMA2, "Intel PIIX4", 0 ),
-        PCI_DEV_HW_SPEC_BM( 7601, 8086, 0x00, ATA_UDMA2, "Intel ICH0" , 0 ),
-        PCI_DEV_HW_SPEC_BM( 2421, 8086, 0x00, ATA_UDMA4, "Intel ICH"  , 0 ),
-        PCI_DEV_HW_SPEC_BM( 2411, 8086, 0x00, ATA_UDMA4, "Intel ICH"  , 0 ),
-        PCI_DEV_HW_SPEC_BM( 244a, 8086, 0x00, ATA_UDMA5, "Intel ICH2" , 0 ),
-        PCI_DEV_HW_SPEC_BM( 244b, 8086, 0x00, ATA_UDMA5, "Intel ICH2" , 0 ),
-        PCI_DEV_HW_SPEC_BM( 248a, 8086, 0x00, ATA_UDMA5, "Intel ICH3" , 0 ),
-        PCI_DEV_HW_SPEC_BM( 248b, 8086, 0x00, ATA_UDMA5, "Intel ICH3" , 0 ),
-        PCI_DEV_HW_SPEC_BM( 24cb, 8086, 0x00, ATA_UDMA5, "Intel ICH4" , 0 ),
-        PCI_DEV_HW_SPEC_BM( 24ca, 8086, 0x00, ATA_UDMA5, "Intel ICH4" , 0 ),
-        PCI_DEV_HW_SPEC_BM( 24db, 8086, 0x00, ATA_UDMA5, "Intel ICH5" , 0 ),
-        PCI_DEV_HW_SPEC_BM( 24d1, 8086, 0x00, ATA_SA150, "Intel ICH5" , 0 ),
+        PCI_DEV_HW_SPEC_BM( 1230, 8086, 0x00, ATA_WDMA2, "Intel PIIX"      , 0 ),
+        PCI_DEV_HW_SPEC_BM( 7010, 8086, 0x00, ATA_WDMA2, "Intel PIIX3"     , 0 ),
+        PCI_DEV_HW_SPEC_BM( 7111, 8086, 0x00, ATA_UDMA2, "Intel PIIX4"     , 0 ),
+        PCI_DEV_HW_SPEC_BM( 7199, 8086, 0x00, ATA_UDMA2, "Intel PIIX4"     , 0 ),
+        PCI_DEV_HW_SPEC_BM( 84ca, 8086, 0x00, ATA_UDMA2, "Intel PIIX4"     , 0 ),
+        PCI_DEV_HW_SPEC_BM( 7601, 8086, 0x00, ATA_UDMA2, "Intel ICH0"      , 0 ),
+        PCI_DEV_HW_SPEC_BM( 2421, 8086, 0x00, ATA_UDMA4, "Intel ICH"       , 0 ),
+        PCI_DEV_HW_SPEC_BM( 2411, 8086, 0x00, ATA_UDMA4, "Intel ICH"       , 0 ),
+        PCI_DEV_HW_SPEC_BM( 244a, 8086, 0x00, ATA_UDMA5, "Intel ICH2"      , 0 ),
+        PCI_DEV_HW_SPEC_BM( 244b, 8086, 0x00, ATA_UDMA5, "Intel ICH2"      , 0 ),
+        PCI_DEV_HW_SPEC_BM( 248a, 8086, 0x00, ATA_UDMA5, "Intel ICH3"      , 0 ),
+        PCI_DEV_HW_SPEC_BM( 248b, 8086, 0x00, ATA_UDMA5, "Intel ICH3"      , 0 ),
+        PCI_DEV_HW_SPEC_BM( 24cb, 8086, 0x00, ATA_UDMA5, "Intel ICH4"      , 0 ),
+        PCI_DEV_HW_SPEC_BM( 24ca, 8086, 0x00, ATA_UDMA5, "Intel ICH4"      , 0 ),
+        PCI_DEV_HW_SPEC_BM( 24db, 8086, 0x00, ATA_UDMA5, "Intel ICH5 EB"   , 0 ),
+        PCI_DEV_HW_SPEC_BM( 24d1, 8086, 0x00, ATA_SA150, "Intel ICH5 EB1"  , 0 ),
+        PCI_DEV_HW_SPEC_BM( 24df, 8086, 0x00, ATA_SA150, "Intel ICH5 EB2"  , 0 ),
+        PCI_DEV_HW_SPEC_BM( 25a2, 8086, 0x00, ATA_UDMA5, "Intel ICH5 ESB"  , 0 ),
+        PCI_DEV_HW_SPEC_BM( 25a3, 8086, 0x00, ATA_SA150, "Intel ICH5 ESB1" , 0 ),
+        PCI_DEV_HW_SPEC_BM( 25b0, 8086, 0x00, ATA_SA150, "Intel ICH5 ESB2" , 0 ),
         PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL         , -1 )
         };
 
     static BUSMASTER_CONTROLLER_INFORMATION const nVidiaAdapters[] = {
         PCI_DEV_HW_SPEC_BM( 01bc, 10de, 0x00, ATA_UDMA5, "nVidia nForce"  , AMDNVIDIA | AMDBUG ),
         PCI_DEV_HW_SPEC_BM( 0065, 10de, 0x00, ATA_UDMA6, "nVidia nForce2" , AMDNVIDIA | AMDBUG ),
+        PCI_DEV_HW_SPEC_BM( 00d5, 10de, 0x00, ATA_UDMA6, "nVidia nForce3" , AMDNVIDIA          ),
         PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL             , -1 )
         };
 
@@ -177,52 +202,59 @@ AtapiChipDetect(
         };
 
     static BUSMASTER_CONTROLLER_INFORMATION const SiliconImageAdapters[] = {
-        PCI_DEV_HW_SPEC_BM( 0680, 1095, 0x00, ATA_UDMA6, "SiI 0680" , SII_SETCLK           ),
-        PCI_DEV_HW_SPEC_BM( 0649, 1095, 0x00, ATA_UDMA5, "CMD 649"  , SII_INTR   | SII_CMD ),
-        PCI_DEV_HW_SPEC_BM( 0648, 1095, 0x00, ATA_UDMA4, "CMD 648"  , SII_INTR   | SII_CMD ),
-        PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x07, ATA_UDMA2, "CMD 646U2", SII_ENINTR | SII_CMD ),
-        PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x00, ATA_WDMA2, "CMD 646"  , SII_ENINTR | SII_CMD ),
-        PCI_DEV_HW_SPEC_BM( 0640, 1095, 0x00, ATA_PIO4 , "CMD 640"  , SII_ENINTR           ),
-        PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL       , -1 )
+        PCI_DEV_HW_SPEC_BM( 0240, 1095, 0x00, ATA_SA150, "SiI 1210SA", SIINEW | SII_SATA   ),
+        PCI_DEV_HW_SPEC_BM( 3512, 1095, 0x00, ATA_SA150, "SiI 3512"  , SIINEW | SII_SATA   ),
+        PCI_DEV_HW_SPEC_BM( 3114, 1095, 0x00, ATA_SA150, "SiI 3114"  , SIINEW | SII_SATA   ),
+        PCI_DEV_HW_SPEC_BM( 3112, 1095, 0x00, ATA_SA150, "SiI 3112"  , SIINEW | SII_SATA   ),
+        PCI_DEV_HW_SPEC_BM( 0680, 1095, 0x00, ATA_UDMA6, "SiI 0680"  , SIINEW | 0x00       ),
+        PCI_DEV_HW_SPEC_BM( 0649, 1095, 0x00, ATA_UDMA5, "CMD 649"   , SIICMD | SII_INTR   ),
+        PCI_DEV_HW_SPEC_BM( 0648, 1095, 0x00, ATA_UDMA4, "CMD 648"   , SIICMD | SII_INTR   ),
+        PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x07, ATA_UDMA2, "CMD 646U2" , SIICMD | SII_ENINTR ),
+        PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x00, ATA_WDMA2, "CMD 646"   , SIICMD | SII_ENINTR ),
+        PCI_DEV_HW_SPEC_BM( 0640, 1095, 0x00, ATA_PIO4 , "CMD 640"   , SIIOLD | SII_ENINTR ),
+        PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL        , -1 )
         };
-
+*/
     static BUSMASTER_CONTROLLER_INFORMATION const SiSAdapters[] = {
-        PCI_DEV_HW_SPEC_BM( 0963, 1039, 0x00, ATA_UDMA6, "SiS 963"  , SIS133NEW ),
-        PCI_DEV_HW_SPEC_BM( 0962, 1039, 0x00, ATA_UDMA6, "SiS 962"  , SIS133NEW ),
+        PCI_DEV_HW_SPEC_BM( 0180, 1039, 0x00, ATA_SA150, "SiS 964"  , SISSATA   | UNIATA_SATA),
+        PCI_DEV_HW_SPEC_BM( 0964, 1039, 0x00, ATA_UDMA6, "SiS 964"  , SIS133NEW        ),
+        PCI_DEV_HW_SPEC_BM( 0963, 1039, 0x00, ATA_UDMA6, "SiS 963"  , SIS133NEW        ),
+        PCI_DEV_HW_SPEC_BM( 0962, 1039, 0x00, ATA_UDMA6, "SiS 962"  , SIS133NEW        ),
 
-        PCI_DEV_HW_SPEC_BM( 0755, 1039, 0x00, ATA_UDMA6, "SiS 755"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0752, 1039, 0x00, ATA_UDMA6, "SiS 752"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0751, 1039, 0x00, ATA_UDMA6, "SiS 751"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0750, 1039, 0x00, ATA_UDMA6, "SiS 750"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0748, 1039, 0x00, ATA_UDMA6, "SiS 748"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0746, 1039, 0x00, ATA_UDMA6, "SiS 746"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0745, 1039, 0x00, ATA_UDMA5, "SiS 745"  , SIS100NEW ),
-        PCI_DEV_HW_SPEC_BM( 0740, 1039, 0x00, ATA_UDMA5, "SiS 740"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0735, 1039, 0x00, ATA_UDMA5, "SiS 735"  , SIS100NEW ),
-        PCI_DEV_HW_SPEC_BM( 0733, 1039, 0x00, ATA_UDMA5, "SiS 733"  , SIS100NEW ),
-        PCI_DEV_HW_SPEC_BM( 0730, 1039, 0x00, ATA_UDMA5, "SiS 730"  , SIS100OLD ),
+/*        PCI_DEV_HW_SPEC_BM( 0755, 1039, 0x00, ATA_UDMA6, "SiS 755"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0752, 1039, 0x00, ATA_UDMA6, "SiS 752"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0751, 1039, 0x00, ATA_UDMA6, "SiS 751"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0750, 1039, 0x00, ATA_UDMA6, "SiS 750"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0748, 1039, 0x00, ATA_UDMA6, "SiS 748"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0746, 1039, 0x00, ATA_UDMA6, "SiS 746"  , SIS_SOUTH        ),*/
+        PCI_DEV_HW_SPEC_BM( 0745, 1039, 0x00, ATA_UDMA5, "SiS 745"  , SIS100NEW        ),
+//        PCI_DEV_HW_SPEC_BM( 0740, 1039, 0x00, ATA_UDMA5, "SiS 740"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0735, 1039, 0x00, ATA_UDMA5, "SiS 735"  , SIS100NEW        ),
+        PCI_DEV_HW_SPEC_BM( 0733, 1039, 0x00, ATA_UDMA5, "SiS 733"  , SIS100NEW        ),
+        PCI_DEV_HW_SPEC_BM( 0730, 1039, 0x00, ATA_UDMA5, "SiS 730"  , SIS100OLD        ),
 
-        PCI_DEV_HW_SPEC_BM( 0658, 1039, 0x00, ATA_UDMA6, "SiS 658"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0655, 1039, 0x00, ATA_UDMA6, "SiS 655"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0652, 1039, 0x00, ATA_UDMA6, "SiS 652"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0651, 1039, 0x00, ATA_UDMA6, "SiS 651"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0650, 1039, 0x00, ATA_UDMA6, "SiS 650"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0648, 1039, 0x00, ATA_UDMA6, "SiS 648"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0646, 1039, 0x00, ATA_UDMA6, "SiS 645DX", SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0645, 1039, 0x00, ATA_UDMA6, "SiS 645"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0640, 1039, 0x00, ATA_UDMA4, "SiS 640"  , SIS_SOUTH ),
-        PCI_DEV_HW_SPEC_BM( 0635, 1039, 0x00, ATA_UDMA5, "SiS 635"  , SIS100NEW ),
-        PCI_DEV_HW_SPEC_BM( 0633, 1039, 0x00, ATA_UDMA5, "SiS 633"  , SIS100NEW ),
-        PCI_DEV_HW_SPEC_BM( 0630, 1039, 0x00, ATA_UDMA5, "SiS 630S" , SIS100OLD ),
-        PCI_DEV_HW_SPEC_BM( 0630, 1039, 0x00, ATA_UDMA4, "SiS 630"  , SIS66,    ),
-        PCI_DEV_HW_SPEC_BM( 0620, 1039, 0x00, ATA_UDMA4, "SiS 620"  , SIS66,    ),
+/*        PCI_DEV_HW_SPEC_BM( 0658, 1039, 0x00, ATA_UDMA6, "SiS 658"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0655, 1039, 0x00, ATA_UDMA6, "SiS 655"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0652, 1039, 0x00, ATA_UDMA6, "SiS 652"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0651, 1039, 0x00, ATA_UDMA6, "SiS 651"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0650, 1039, 0x00, ATA_UDMA6, "SiS 650"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0648, 1039, 0x00, ATA_UDMA6, "SiS 648"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0646, 1039, 0x00, ATA_UDMA6, "SiS 645DX", SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0645, 1039, 0x00, ATA_UDMA6, "SiS 645"  , SIS_SOUTH        ),
+        PCI_DEV_HW_SPEC_BM( 0640, 1039, 0x00, ATA_UDMA4, "SiS 640"  , SIS_SOUTH        ),*/
+        PCI_DEV_HW_SPEC_BM( 0635, 1039, 0x00, ATA_UDMA5, "SiS 635"  , SIS100NEW        ),
+        PCI_DEV_HW_SPEC_BM( 0633, 1039, 0x00, ATA_UDMA5, "SiS 633"  , SIS100NEW        ),
+        PCI_DEV_HW_SPEC_BM( 0630, 1039, 0x00, ATA_UDMA5, "SiS 630S" , SIS100OLD        ),
+        PCI_DEV_HW_SPEC_BM( 0630, 1039, 0x00, ATA_UDMA4, "SiS 630"  , SIS66            ),
+        PCI_DEV_HW_SPEC_BM( 0620, 1039, 0x00, ATA_UDMA4, "SiS 620"  , SIS66            ),
                                 
-        PCI_DEV_HW_SPEC_BM( 0550, 1039, 0x00, ATA_UDMA5, "SiS 550"  , SIS66,    ),
-        PCI_DEV_HW_SPEC_BM( 0540, 1039, 0x00, ATA_UDMA4, "SiS 540"  , SIS66,    ),
-        PCI_DEV_HW_SPEC_BM( 0530, 1039, 0x00, ATA_UDMA4, "SiS 530"  , SIS66,    ),
+        PCI_DEV_HW_SPEC_BM( 0550, 1039, 0x00, ATA_UDMA5, "SiS 550"  , SIS66            ),
+        PCI_DEV_HW_SPEC_BM( 0540, 1039, 0x00, ATA_UDMA4, "SiS 540"  , SIS66            ),
+        PCI_DEV_HW_SPEC_BM( 0530, 1039, 0x00, ATA_UDMA4, "SiS 530"  , SIS66            ),
 
-        PCI_DEV_HW_SPEC_BM( 5513, 1039, 0xc2, ATA_UDMA2, "SiS 5513" , SIS33,    ),
-        PCI_DEV_HW_SPEC_BM( 5513, 1039, 0x00, ATA_WDMA2, "SiS 5513" , SIS33,    ),
+        PCI_DEV_HW_SPEC_BM( 5513, 1039, 0xc2, ATA_UDMA2, "SiS 5513" , SIS33 | SIS_BASE ),
+        PCI_DEV_HW_SPEC_BM( 5513, 1039, 0x00, ATA_WDMA2, "SiS 5513" , SIS33 | SIS_BASE ),
+        PCI_DEV_HW_SPEC_BM( 0601, 1039, 0x00, ATA_UDMA2, "SiS 5513" , SIS33 | SIS_BASE ),
         PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL       , -1 )
         };
 
@@ -241,6 +273,7 @@ AtapiChipDetect(
         PCI_DEV_HW_SPEC_BM( 3109, 1106, 0x00, ATA_UDMA5, "VIA 8233C"  , VIA100 | 0x00   ),
         PCI_DEV_HW_SPEC_BM( 3147, 1106, 0x00, ATA_UDMA6, "VIA 8233A"  , VIA133 | VIAAST ),
         PCI_DEV_HW_SPEC_BM( 3177, 1106, 0x00, ATA_UDMA6, "VIA 8235"   , VIA133 | VIAAST ),
+        PCI_DEV_HW_SPEC_BM( 3227, 1106, 0x00, ATA_UDMA6, "VIA 8237"   , VIA133 | VIAAST ),
         PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL         , -1 )
         };
 
@@ -253,9 +286,9 @@ AtapiChipDetect(
         };
 
     KdPrint2((PRINT_PREFIX "VendorID/DeviceID/Rev %#x/%#x/%#x\n", VendorID, DeviceID, RevID));
-                                  
+
     switch(VendorID) {
-    case ATA_ACARD_ID: 
+/*    case ATA_ACARD_ID: 
         DevTypeInfo = (BUSMASTER_CONTROLLER_INFORMATION*)&AcardAdapters[0];
         break;
     case ATA_ACER_LABS_ID:
@@ -283,6 +316,7 @@ AtapiChipDetect(
         KdPrint2((PRINT_PREFIX "ATA_SILICON_IMAGE_ID\n"));
         DevTypeInfo = (BUSMASTER_CONTROLLER_INFORMATION*)&SiliconImageAdapters[0];
         break;
+*/
     case ATA_SIS_ID:
         KdPrint2((PRINT_PREFIX "ATA_SIS_ID\n"));
         DevTypeInfo = (BUSMASTER_CONTROLLER_INFORMATION*)&SiSAdapters[0];
@@ -290,6 +324,11 @@ AtapiChipDetect(
         goto for_ugly_chips;
     case ATA_VIA_ID: 
         KdPrint2((PRINT_PREFIX "ATA_VIA_ID\n"));
+        // New chips have own DeviceId
+        if(deviceExtension->DevID != ATA_VIA82C571)
+            break;
+        // Old chips hav same DeviceId, we can distinguish between them
+        // only by SouthBridge DeviceId
         DevTypeInfo = (BUSMASTER_CONTROLLER_INFORMATION*)&ViaSouthAdapters[0];
         i = AtapiFindListedDev(DevTypeInfo, -1, HwDeviceExtension, SystemIoBusNumber, slotNumber, NULL);
         if(i != -1) {
@@ -300,6 +339,11 @@ AtapiChipDetect(
         i = AtapiFindListedDev(DevTypeInfo, -1, HwDeviceExtension, SystemIoBusNumber, slotNumber, NULL);
         goto for_ugly_chips;
     default:
+
+        // do nothing
+        break;
+
+#if 0
         KdPrint2((PRINT_PREFIX "Default\n"));
 
         deviceExtension->MaxTransferMode = deviceExtension->BaseIoAddressBM_0 ? ATA_DMA : ATA_PIO4;
@@ -320,7 +364,6 @@ AtapiChipDetect(
             break;*/
         case 0x01021078:        /* Cyrix 5530 ATA33 controller */
             deviceExtension->MaxTransferMode = ATA_UDMA2;
-            ConfigInfo->AlignmentMask = 0x0f;
             break;
 
         case 0x06401095:        /* CMD 640 known bad, no DMA */
@@ -350,6 +393,7 @@ AtapiChipDetect(
             return FALSE;
         }
         return TRUE;
+#endif
     }
 
     i = Ata_is_dev_listed(DevTypeInfo, VendorID, DeviceID, RevID, -1);
@@ -367,7 +411,15 @@ for_ugly_chips:
         *simplexOnly = TRUE; 
     }
 
+    if(deviceExtension->MaxTransferMode >= ATA_SA150) {
+        deviceExtension->HwFlags |= UNIATA_SATA;
+    }
+
+    ConfigInfo->MaximumTransferLength = DEV_BSIZE*256;
+    deviceExtension->MaximumDmaTransferLength = ConfigInfo->MaximumTransferLength;
+
     ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
+    ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
 
     switch(VendorID) {
     case ATA_PROMISE_ID:
@@ -382,48 +434,120 @@ for_ugly_chips:
                                 4, 0, 0x400);
         deviceExtension->BaseIoAddressBM_0 = (PIDE_BUSMASTER_REGISTERS)(0xffff0000 + sizeof(IDE_REGISTERS_1) + sizeof(IDE_REGISTERS_2));
         for(c=0; c<4; c++) {
+            ULONG offs12, offs7;
             chan = &deviceExtension->chan[c];
             chan->BaseMemAddress = deviceExtension->BaseMemAddress;
-            chan->BaseMemAddressOffset = 0xffff0000 + (c << 12);
-            deviceExtension->BaseIoAddress1[c] = (PIDE_REGISTERS_1)(0xffff0000 + (c << 12));
+            offs12 = c << 12;
+            offs7  = c << 7;
+            chan->BaseMemAddressOffset = 0xffff0000 + offs12;
+            deviceExtension->BaseIoAddress1[c] = (PIDE_REGISTERS_1)(0xffff0000 + offs12);
             for (i=0; i<=sizeof(IDE_REGISTERS_1); i++) {
-                chan->RegTranslation[i] = 0x200 + (i << 2) + (c << 7);
+                chan->RegTranslation[i] = 0x200 + (i << 2) + offs12;
             }
-            deviceExtension->BaseIoAddress2[c] = (PIDE_REGISTERS_2)(0xffff0000 + (c << 12) + sizeof(IDE_REGISTERS_1));
-            chan->RegTranslation[i] = 0x238 + (c << 7);
+            deviceExtension->BaseIoAddress2[c] = (PIDE_REGISTERS_2)(0xffff0000 + offs12 + sizeof(IDE_REGISTERS_1));
+            chan->RegTranslation[i] = 0x238 + offs7;
             i++;
-            deviceExtension->BaseIoAddressBM[c] = (PIDE_BUSMASTER_REGISTERS)(0xffff0000 + (c << 12) + sizeof(IDE_REGISTERS_1) + sizeof(IDE_REGISTERS_2));
-            chan->RegTranslation[(ULONG)(&((PIDE_BUSMASTER_REGISTERS)i)->Command)] = 0x260 + (c << 7);
-            chan->RegTranslation[(ULONG)(&((PIDE_BUSMASTER_REGISTERS)i)->PRD_Table)] = 0x244 + (c << 7);
+            deviceExtension->BaseIoAddressBM[c] = (PIDE_BUSMASTER_REGISTERS)(0xffff0000 + offs12 + sizeof(IDE_REGISTERS_1) + sizeof(IDE_REGISTERS_2));
+            chan->RegTranslation[(ULONG)(&((PIDE_BUSMASTER_REGISTERS)i)->Command)] = 0x260 + offs7;
+            chan->RegTranslation[(ULONG)(&((PIDE_BUSMASTER_REGISTERS)i)->PRD_Table)] = 0x244 + offs7;
             chan->RegTranslation[(ULONG)(&((PIDE_BUSMASTER_REGISTERS)i)->DeviceSpecific0)] = (c << 2);
         }
         break;
+
+    case ATA_SILICON_IMAGE_ID: {
+
+        if(ChipType != SIIMIO) {
+            break;
+        }
+        if(!pciData) {
+            break;
+        }
+
+        KdPrint2((PRINT_PREFIX "New SII\n"));
+
+/*        GetPciConfig1(0x8a, tmp8);
+        if (tmp8 & 0x01) {
+            deviceExtension->BaseMemAddress = AtapiGetIoRange(HwDeviceExtension, ConfigInfo, pciData, SystemIoBusNumber,
+                                5, 0, 0x400);
+            if(!deviceExtension->BaseMemAddress) {
+                break;
+            }
+        }*/
+        if(deviceExtension->HwFlags & SII4CH)
+            deviceExtension->NumberChannels = 4;
+
+        deviceExtension->BaseIoAddressBM_0 = (PIDE_BUSMASTER_REGISTERS)(0xffff0000 + sizeof(IDE_REGISTERS_1) + sizeof(IDE_REGISTERS_2));
+        for(c=0; c<deviceExtension->NumberChannels; c++) {
+            ULONG offs = 0;
+            ULONG unit01 = (c & 1);
+            ULONG unit10 = (c & 2);
+
+            chan = &deviceExtension->chan[c];
+            chan->BaseMemAddress = deviceExtension->BaseMemAddress;
+//            offs = ((c & 0x01) << 6) | ((c & 0x02;) << 8);
+            chan->BaseMemAddressOffset = 0xffff0000 + offs;
+            deviceExtension->BaseIoAddress1[c] = (PIDE_REGISTERS_1)(0xffff0000 + offs);
+            for (i=0; i<=sizeof(IDE_REGISTERS_1); i++) {
+                chan->RegTranslation[i] = 0x80 + i + offs + (unit01 << 6) | (unit10 << 8);
+            }
+            deviceExtension->BaseIoAddress2[c] = (PIDE_REGISTERS_2)(0xffff0000 + offs + sizeof(IDE_REGISTERS_1));
+            chan->RegTranslation[i] = 0x8a + offs + (unit01 << 6) | (unit10 << 8);
+            i++;
+            deviceExtension->BaseIoAddressBM[c] = (PIDE_BUSMASTER_REGISTERS)(0xffff0000 + offs + sizeof(IDE_REGISTERS_1) + sizeof(IDE_REGISTERS_2));
+//            offs = 0x10 + c * 0x08;
+            chan->RegTranslation[(ULONG)(&((PIDE_BUSMASTER_REGISTERS)i)->Command)]         = offs + 0x00 + (unit01 << 3) + (unit10 << 8);
+            chan->RegTranslation[(ULONG)(&((PIDE_BUSMASTER_REGISTERS)i)->Status)]          = offs + 0x02 + (unit01 << 3) + (unit10 << 8);
+            chan->RegTranslation[(ULONG)(&((PIDE_BUSMASTER_REGISTERS)i)->PRD_Table)]       = offs + 0x04 + (unit01 << 3) + (unit10 << 8);
+            chan->RegTranslation[(ULONG)(&((PIDE_BUSMASTER_REGISTERS)i)->DeviceSpecific0)] = offs + 0xa1 + (unit01 << 6) + (unit10 << 8);
+            chan->RegTranslation[(ULONG)(&((PIDE_BUSMASTER_REGISTERS)i)->DeviceSpecific1)] = offs + 0x100+ (unit01 << 7) + (unit10 << 8);
+        }
+        break; }
+
     case ATA_SIS_ID:
-        if(ChipType != SIS_SOUTH) {
+        //if(ChipType != SIS_SOUTH) {
+        if(ChipFlags & SIS_BASE) {
             KdPrint2((PRINT_PREFIX "ChipType != SIS_SOUTH\n"));
             break;
         }
         ChangePciConfig1(0x57, (a & 0x7f));
-        GetPciConfig1(0x00, tmp32);
+        GetPciConfig4(0x00, tmp32);
         if(tmp32 == ATA_SIS5518) {
             ChipType = SIS133NEW;
             deviceExtension->HwFlags = (deviceExtension->HwFlags & ~CHIPTYPE_MASK) | SIS133NEW;
+            deviceExtension->MaxTransferMode = ATA_UDMA6;
             KdPrint2((PRINT_PREFIX "AtapiChipInit: SiS 96X DMA %#x controller\n", deviceExtension->MaxTransferMode));
         } else {
             static BUSMASTER_CONTROLLER_INFORMATION const SiSSouthAdapters[] = {
                 PCI_DEV_HW_SPEC_BM( 0008, 1039, 0x10, -1, "SiS 961", 0 ),
                 PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1, NULL     , -1 )
                 };
-            if(AtapiFindListedDev((BUSMASTER_CONTROLLER_INFORMATION*)&SiSSouthAdapters[0],
-                 -1, HwDeviceExtension, SystemIoBusNumber, -1, NULL)) {
-                deviceExtension->HwFlags = (deviceExtension->HwFlags & ~CHIPTYPE_MASK) | SIS133OLD;
-            } else {
-                deviceExtension->HwFlags = (deviceExtension->HwFlags & ~CHIPTYPE_MASK) | SIS133OLD;
-                deviceExtension->MaxTransferMode = ATA_UDMA5;
+            // Save settings
+            GetPciConfig1(0x4a, tmp8);
+            ChangePciConfig1(0x4a, (a | 0x10));
+            if(tmp32 == ATA_SIS5517) {
+                if(AtapiFindListedDev((BUSMASTER_CONTROLLER_INFORMATION*)&SiSSouthAdapters[0],
+                     -1, HwDeviceExtension, SystemIoBusNumber, -1, NULL)) {
+                    deviceExtension->HwFlags = (deviceExtension->HwFlags & ~CHIPTYPE_MASK) | SIS133OLD;
+                    deviceExtension->MaxTransferMode = ATA_UDMA6;
+                } else {
+                    deviceExtension->HwFlags = (deviceExtension->HwFlags & ~CHIPTYPE_MASK) | SIS100NEW;
+                    deviceExtension->MaxTransferMode = ATA_UDMA5;
+                }
             }
+            // Restore settings
+            SetPciConfig1(0x4a, tmp8);
             KdPrint2((PRINT_PREFIX "AtapiChipInit: SiS 961 DMA %#x controller\n", deviceExtension->MaxTransferMode));
         }
-        ChangePciConfig1(0x57, (a | 0x80));
+        //ChangePciConfig1(0x57, (a | 0x80));
+        break;
+
+    case 0x1078:
+        /* Cyrix 5530 ATA33 controller */
+        if(deviceExtension->DevID == 0x01021078) { 
+            ConfigInfo->AlignmentMask = 0x0f;
+            deviceExtension->MaximumDmaTransferLength = 63*1024;
+        }
+        break;
     }
 
     return TRUE;
@@ -495,6 +619,56 @@ AtapiViaSouthBridgeFixup(
     }
 } // end AtapiViaSouthBridgeFixup()
 
+/*
+    Do some 'magic staff' for VIA SouthBridge
+    This will prevent data losses
+*/
+VOID
+AtapiRosbSouthBridgeFixup(
+    IN PVOID  HwDeviceExtension,
+    IN BUS_DATA_TYPE  BusDataType,
+    IN ULONG  SystemIoBusNumber,
+    IN ULONG  slotNumber
+    )
+{
+    PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
+    PCI_COMMON_CONFIG     pciData;
+    ULONG                 funcNumber;
+    ULONG                 busDataRead;
+
+    ULONG   VendorID;
+    ULONG   DeviceID;
+    PCI_SLOT_NUMBER       slotData;
+    ULONG dev_id;
+//    BOOLEAN found = FALSE;
+
+    /* locate the ISA part in the southbridge and enable UDMA33 */
+    slotData.u.AsULONG = slotNumber;
+    for(funcNumber = 0; funcNumber < PCI_MAX_FUNCTION; funcNumber++) {
+        
+        slotData.u.bits.FunctionNumber = funcNumber;
+
+        busDataRead = ScsiPortGetBusData(HwDeviceExtension,
+                                         PCIConfiguration,
+                                         SystemIoBusNumber,
+                                         slotData.u.AsULONG,
+                                         &pciData,
+                                         PCI_COMMON_HDR_LENGTH);
+
+        if (busDataRead < PCI_COMMON_HDR_LENGTH) {
+            continue;
+        }
+
+        VendorID  = pciData.VendorID;
+        DeviceID  = pciData.DeviceID;
+        dev_id = (VendorID | (DeviceID << 16));
+
+        if (dev_id == ATA_ROSB4_ISA) {         /* VIA VT8361 */
+            ChangePciConfig4(0x64, ((a & ~0x00002000) | 0x00004000));
+            break;
+        }
+    }
+} // end AtapiRosbSouthBridgeFixup()
 
 ULONG
 hpt_cable80(
@@ -545,6 +719,7 @@ via_cable80(
     ULONG reg50;
     ULONG a;
     ULONG i, j;
+    BOOLEAN res;
 
     GetPciConfig1(0x50, reg50);
 
@@ -562,18 +737,17 @@ via_cable80(
         return false;
     }
 
+    res = FALSE;
     for (j=0; j>=2; i -= 8) {
         i = (3-(channel*2+j))*8;
         if (((reg50 >> (i & 16)) & 8) &&
             ((reg50 >> i) & 0x20) &&
              (((reg50 >> i) & 7) < a)) {
 
-//            res |= TRUE; //(1 << (1 - (i >> 4)));
-        } else {
-            return FALSE;
+            res |= TRUE; //(1 << (1 - (i >> 4)));
         }
     }
-    return TRUE;
+    return res;
 
 } // end via_cable80()
 
@@ -599,6 +773,10 @@ AtapiChipInit(
     UCHAR tmp8;
 
     KdPrint2((PRINT_PREFIX "AtapiChipInit:\n" ));
+
+    if(AtapiRegCheckDevValue(deviceExtension, L"ForceSimplex", 0)) {
+        deviceExtension->simplexOnly = TRUE; 
+    }
 
     if(deviceExtension->UnknownDev) {
         KdPrint2((PRINT_PREFIX "  Unknown chip, exiting\n" ));
@@ -664,6 +842,7 @@ AtapiChipInit(
         }
         if(deviceExtension->MaxTransferMode < ATA_UDMA2)
             break;
+        // check 80-pin cable
         if(ChipFlags & AMDCABLE) {
             if(c == -1) {
                 for(c=0; c<deviceExtension->NumberChannels; c++) {
@@ -699,6 +878,7 @@ AtapiChipInit(
                 ChangePciConfig1(0x5b, ((a & 0x01) | 0x20));
             }
         }
+        // check 80-pin cable
         if(c == -1) {
             for(c=0; c<deviceExtension->NumberChannels; c++) {
                 chan = &deviceExtension->chan[c];
@@ -826,32 +1006,67 @@ AtapiChipInit(
         }
         break; }
     case ATA_SERVERWORKS_ID: 
-        if(ChipType > SWKS33) {
-            ChangePciConfig1(0x5a, ((a & ~0x40) | ((ChipType == SWKS100) ? 0x03 : 0x02)));
+        if(ChipType == SWKS33) {
+            AtapiRosbSouthBridgeFixup(HwDeviceExtension, PCIConfiguration,
+                                     SystemIoBusNumber, slotNumber);
         } else {
-            ChangePciConfig4(0x64, ((a & ~0x00002000) | 0x00004000));
+            ChangePciConfig1(0x5a, ((a & ~0x40) | ((ChipType == SWKS100) ? 0x03 : 0x02)));
         }
         break;
     case ATA_SILICON_IMAGE_ID:
-        if(ChipFlags & SII_ENINTR) {
+  /*      if(ChipFlags & SIIENINTR) {
             SetPciConfig1(0x71, 0x01);
-        }
-        if(ChipFlags & SII_SETCLK) {
-            GetPciConfig1(0x8a, tmp8);
-            if ((tmp8 & 0x30) != 0x10)
-                ChangePciConfig1(0x8a, (a & 0x0F) | 0x10);
-            GetPciConfig1(0x8a, tmp8);
-            if ((tmp8 & 0x30) != 0x10) {
-                KdPrint2((PRINT_PREFIX "Sil 0680 could not set ATA133 clock\n"));
-                deviceExtension->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA5);
+        }*/
+        switch(ChipType) {
+        case SIIMIO: {
+
+            KdPrint2((PRINT_PREFIX "SII\n"));
+            UCHAR Reg79;
+
+            if(ChipFlags & SIISETCLK)  {
+                GetPciConfig1(0x8a, tmp8);
+                if ((tmp8 & 0x30) != 0x10)
+                    ChangePciConfig1(0x8a, (a & 0xcf | 0x10));
+                GetPciConfig1(0x8a, tmp8);
+                if ((tmp8 & 0x30) != 0x10) {
+                    KdPrint2((PRINT_PREFIX "Sil 0680 could not set ATA133 clock\n"));
+                    deviceExtension->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA5);
+                }
             }
-        }
-        if(ChipFlags & SII_CMD) {
+            if(deviceExtension->MaxTransferMode < ATA_SA150) {
+                if(c == -1) {
+                    for(c=0; c<2; c++) {
+                        chan = &deviceExtension->chan[c];
+                        GetPciConfig2(0x79, Reg79);
+                        if(Reg79 & (c ? 0x02 : 0x01)) {
+                            chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
+                        }
+                    }
+                } else {
+                    chan = &deviceExtension->chan[c];
+                    GetPciConfig2(0x79, Reg79);
+                    if(Reg79 & (c ? 0x02 : 0x01)) {
+                        chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
+                    }
+                }
+            }
+            /* enable interrupt as BIOS might not */
+            ChangePciConfig1(0x8a, (a & 0x3f));
+            // Enable 3rd and 4th channels
+            if (ChipFlags & SII4CH) {
+                AtapiWritePort4(NULL, (PULONG)((PUCHAR)(deviceExtension->BaseMemAddress) + 0x0200), 0x00000002);
+            }
+            break; }
+
+        case SIICMD: {
+
             KdPrint2((PRINT_PREFIX "SII_CMD\n"));
             /* Setup interrupts. */
-            GetPciConfig1(0x8a, tmp8);
+            SetPciConfig1(0x71, 0x01);
+
+/*            GetPciConfig1(0x8a, tmp8);
             tmp8 &= ~(0x30);
-            SetPciConfig1(0x71, tmp8);
+            SetPciConfig1(0x71, tmp8);*/
 
             /* Use MEMORY READ LINE for reads.
              * NOTE: Although not mentioned in the PCI0646U specs,
@@ -859,23 +1074,18 @@ AtapiChipInit(
              *       back as set or not.  The PCI0646U2 specs clarify
              *       this point.
              */
-            tmp8 |= 0x02;
+/*            tmp8 |= 0x02;
             SetPciConfig1(0x71, tmp8);
-
+*/
             /* Set reasonable active/recovery/address-setup values. */
-            tmp8 = 0x40;
-            SetPciConfig1(0x53, tmp8);
-            tmp8 = 0x3f;
-            SetPciConfig1(0x54, tmp8);
-            tmp8 = 0x40;
-            SetPciConfig1(0x55, tmp8);
-            tmp8 = 0x3f;
-            SetPciConfig1(0x56, tmp8);
-            tmp8 = 0x1c;
-            SetPciConfig1(0x57, tmp8);
-            tmp8 = 0x3f;
-            SetPciConfig1(0x58, tmp8);
-            SetPciConfig1(0x5b, tmp8);
+            SetPciConfig1(0x53, 0x40);
+            SetPciConfig1(0x54, 0x3f);
+            SetPciConfig1(0x55, 0x40);
+            SetPciConfig1(0x56, 0x3f);
+            SetPciConfig1(0x57, 0x1c);
+            SetPciConfig1(0x58, 0x3f);
+            SetPciConfig1(0x5b, 0x3f);
+            break; }
         }
         break;
     case ATA_SIS_ID:
@@ -884,16 +1094,18 @@ AtapiChipInit(
             break;
         case SIS66:
         case SIS100OLD:
-            ChangePciConfig1(0x52, (a | 0x04));
+            ChangePciConfig1(0x52, (a & ~0x04));
             break;
         case SIS100NEW:
         case SIS133OLD:
-            ChangePciConfig1(0x49, (a | 0x01));
+            ChangePciConfig1(0x49, (a & ~0x01));
             break;
         case SIS133NEW:
-            ChangePciConfig2(0x50, (a & 0xfff7));
-            ChangePciConfig2(0x52, (a & 0xfff7));
+            ChangePciConfig2(0x50, (a | 0x0008));
+            ChangePciConfig2(0x52, (a | 0x0008));
             break;
+        case SISSATA:
+            ChangePciConfig2(0x04, (a & ~0x0400));
         }
         if(ChipType == SIS133NEW) {
             USHORT tmp16;
@@ -934,6 +1146,10 @@ AtapiChipInit(
         /* prepare for ATA-66 on the 82C686a and 82C596b */
         if(ChipFlags & VIACLK) {
             ChangePciConfig4(0x50, (a | 0x030b030b));
+        }
+        // no init for SATA
+        if(ChipFlags & UNIATA_SATA) {
+            break;
         }
         // check 80-pin cable
         if(c == -1) {
@@ -976,4 +1192,4 @@ AtapiChipInit(
     }
 
     return TRUE;
-}
+} // end AtapiChipInit()

@@ -187,6 +187,55 @@ BuildDevList()
     }
 }
 
+char*
+GetAtaTypeStr(
+    int k
+    )
+{
+    switch(BusMasterAdapters[k].nVendorId) {
+    case ATA_SIS_ID:
+    case ATA_VIA_ID:
+        return "";
+    }
+    switch(BusMasterAdapters[k].MaxTransferMode) {
+        case ATA_PIO:
+        case ATA_PIO_NRDY:
+        case ATA_PIO0:
+        case ATA_PIO1:
+        case ATA_PIO2:
+        case ATA_PIO3:
+        case ATA_PIO4:
+        case ATA_PIO5:
+            return "IDE";
+        case ATA_DMA:
+        case ATA_SDMA1:
+        case ATA_SDMA2:
+        case ATA_WDMA:
+        case ATA_WDMA1:
+        case ATA_WDMA2:
+            return "IDE DMA";
+        case ATA_UDMA0:
+            return "ATA-16";
+        case ATA_UDMA1:
+            return "ATA-25";
+        case ATA_UDMA2:
+            return "ATA-33";
+        case ATA_UDMA3:
+            return "ATA-44";
+        case ATA_UDMA4:
+            return "ATA-66";
+        case ATA_UDMA5:
+            return "ATA-100";
+        case ATA_UDMA6:
+            return "ATA-133";
+/*        case ATA_UDMA7:
+            return "ATA-166";*/
+        case ATA_SA150:
+            return "Serial ATA";
+    }
+    return "IDE";
+}
+
 void main (int argc, char* argv[]) {
     HANDLE h;
     LONG l=0;
@@ -257,12 +306,23 @@ void main (int argc, char* argv[]) {
     for(k=0; k<NUM_BUSMASTER_ADAPTERS; k++) {
         if(BusMasterAdapters[k].RaidFlags & UNIATA_RAID_CONTROLLER)
             printf(";");
-        printf("%%PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc%%=uniata_Inst, PCI\\VEN_%4.4x&DEV_%4.4x\n", 
-               BusMasterAdapters[k].nVendorId,
-               BusMasterAdapters[k].nDeviceId,
-               BusMasterAdapters[k].nVendorId,
-               BusMasterAdapters[k].nDeviceId
-               );
+        if(!BusMasterAdapters[k].nRevId) {
+            printf("%%PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc%%=uniata_Inst, PCI\\VEN_%4.4x&DEV_%4.4x\n", 
+                   BusMasterAdapters[k].nVendorId,
+                   BusMasterAdapters[k].nDeviceId,
+                   BusMasterAdapters[k].nVendorId,
+                   BusMasterAdapters[k].nDeviceId
+                   );
+        } else {
+            printf("%%PCI\\VEN_%4.4x&DEV_%4.4x&REV_%2.2x.DeviceDesc%%=uniata_Inst, PCI\\VEN_%4.4x&DEV_%4.4x&REV_%2.2x\n", 
+                   BusMasterAdapters[k].nVendorId,
+                   BusMasterAdapters[k].nDeviceId,
+                   BusMasterAdapters[k].nRevId,
+                   BusMasterAdapters[k].nVendorId,
+                   BusMasterAdapters[k].nDeviceId,
+                   BusMasterAdapters[k].nRevId
+                   );
+        }
     }
     printf(";Compatible adapters\n");
     for(k=0; k<NewBusmasterCount; k++) {
@@ -286,11 +346,22 @@ void main (int argc, char* argv[]) {
     for(k=0; k<NUM_BUSMASTER_ADAPTERS; k++) {
         if(BusMasterAdapters[k].RaidFlags & UNIATA_RAID_CONTROLLER)
             printf(";");
-        printf("PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc=\"%s\"\n", 
-               BusMasterAdapters[k].nVendorId,
-               BusMasterAdapters[k].nDeviceId,
-               BusMasterAdapters[k].FullDevName
-               );
+        if(!BusMasterAdapters[k].nRevId) {
+            printf("PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc=\"%s %s controller %%COMMENT%%\"\n", 
+                   BusMasterAdapters[k].nVendorId,
+                   BusMasterAdapters[k].nDeviceId,
+                   BusMasterAdapters[k].FullDevName,
+                   GetAtaTypeStr(k)
+                   );
+        } else {
+            printf("PCI\\VEN_%4.4x&DEV_%4.4x&REV_%2.2x.DeviceDesc=\"%s %s controller%%COMMENT%%\"\n", 
+                   BusMasterAdapters[k].nVendorId,
+                   BusMasterAdapters[k].nDeviceId,
+                   BusMasterAdapters[k].nRevId,
+                   BusMasterAdapters[k].FullDevName,
+                   GetAtaTypeStr(k)
+                   );
+        }
     }
     printf(";Compatible adapters\n");
     for(k=0; k<NewBusmasterCount; k++) {
@@ -298,7 +369,7 @@ void main (int argc, char* argv[]) {
                BusMasterAdapters[k].nVendorId,
                BusMasterAdapters[k].nDeviceId
                );
-        printf("PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc=\"%s\"\n", 
+        printf("PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc=\"%s%%COMMENT%%\"\n", 
                BusMasterAdapters[k].nVendorId,
                BusMasterAdapters[k].nDeviceId,
                &UnknownDevName
