@@ -1795,6 +1795,15 @@ AtapiResetController__(
     PSCSI_REQUEST_BLOCK CurSrb;
     ULONG ChannelCtrlFlags;
 
+    ULONG slotNumber = deviceExtension->slotNumber;
+    ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
+    ULONG VendorID =  deviceExtension->DevID        & 0xffff;
+    ULONG DeviceID = (deviceExtension->DevID >> 16) & 0xffff;
+    ULONG RevID    =  deviceExtension->RevID;
+    ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
+    UCHAR tmp8;
+    UCHAR tmp16;
+
     KdPrint2((PRINT_PREFIX "AtapiResetController: Reset IDE\n"));
 
     if(!deviceExtension->simplexOnly) {
@@ -1884,15 +1893,46 @@ AtapiResetController__(
         baseIoAddress2 = deviceExtension->BaseIoAddress2[j];
 
         // Reset controller
-        AtapiDisableInterrupts(deviceExtension, j);
-        AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_DISABLE_INTERRUPTS |
-                                                                IDE_DC_RESET_CONTROLLER );
+        switch(VendorID) {
+        case ATA_INTEL_ID: {
+            ULONG mask;
+            ULONG timeout;
+            if(!(ChipFlags & UNIATA_SATA))
+                goto default_reset;
+            GetPciConfig1(0x90, tmp8);
+            if(tmp8 & 0x04) {
+                mask = 0x0003;
+            } else {
+                mask = 0x0001 << j;
+            }
+            ChangePciConfig2(0x92, a & ~mask);
+            ScsiPortStallExecution(10);
+            ChangePciConfig2(0x92, a | mask);
+            timeout = 100;
+            while (timeout--) {
+                ScsiPortStallExecution(10000);
+                GetPciConfig2(0x92, tmp16);
+                if ((tmp16 & (mask << 4)) == (mask << 4)) {
+                    ScsiPortStallExecution(10000);
+                    break;
+                }
+            }
+            break; }
+        case ATA_PROMISE_ID: {
+            break; }
+        default:
+default_reset:
+            AtapiDisableInterrupts(deviceExtension, j);
+            AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_DISABLE_INTERRUPTS |
+                                                                    IDE_DC_RESET_CONTROLLER );
+            ScsiPortStallExecution(10000);
+            // Disable interrupts
+            AtapiEnableInterrupts(deviceExtension, j);
+            AtapiDisableInterrupts(deviceExtension, j);
+            ScsiPortStallExecution(100000);
 
-        ScsiPortStallExecution(10000);
-        // Disable interrupts
-        AtapiEnableInterrupts(deviceExtension, j);
-        AtapiDisableInterrupts(deviceExtension, j);
-        ScsiPortStallExecution(100000);
+            break;
+        }
 
         // Reset DMA engine if active
         if(ChannelCtrlFlags & CTRFLAGS_DMA_ACTIVE) {
@@ -3190,10 +3230,12 @@ AtapiCheckInterrupt__(
     PATAPI_REGISTERS_1 baseIoAddress1;
     PATAPI_REGISTERS_2 baseIoAddress2;
     ULONG status;
+    ULONG pr_status;
     UCHAR dma_status = 0;
     UCHAR statusByte;
     ULONG slotNumber = deviceExtension->slotNumber;
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
+    ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
     UCHAR Channel;
     UCHAR lChannel;
     BOOLEAN DmaTransfer = FALSE;
@@ -3217,6 +3259,16 @@ AtapiCheckInterrupt__(
         goto check_unknown;
 
     switch(VendorID) {
+    case ATA_INTEL_ID:
+        if (!DmaTransfer)
+            break;
+        if (deviceExtension->MasterDev)
+            break;
+        if (((dma_status = GetDmaStatus(deviceExtension, lChannel)) &
+            (BM_STATUS_ACTIVE | BM_STATUS_INTR)) != BM_STATUS_INTR)
+            return FALSE;
+        AtapiWritePort1(chan, &(deviceExtension->BaseIoAddressBM[lChannel]->Status), dma_status & ~BM_STATUS_ERR);
+        goto skip_dma_stat_check;
     case ATA_HIGHPOINT_ID:
         if (!DmaTransfer)
             break;
@@ -3248,7 +3300,15 @@ AtapiCheckInterrupt__(
             break;
         case PRMIO:
             status = AtapiReadPort4(chan, (PULONG)(deviceExtension->BaseMemAddress)+0x0040);
-            if(!(status & (1 << Channel))) {
+            if(ChipFlags & PRSATA) {
+                pr_status = AtapiReadPort4(chan, (PULONG)(deviceExtension->BaseMemAddress)+0x006c);
+                AtapiWritePort4(chan, (PULONG)(deviceExtension->BaseIoAddressBM)+0x006c, pr_status & 0x000000ff);
+            }
+            if(pr_status & (0x11 << Channel)) {
+                // TODO: reset channel
+                return FALSE;
+            }
+            if(!(status & (0x01 << Channel))) {
                 return FALSE;
             }
             AtapiWritePort4(chan, (PULONG)&(deviceExtension->BaseIoAddressBM[lChannel]->DeviceSpecific0), 0x00000001);

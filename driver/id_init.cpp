@@ -895,8 +895,12 @@ AtapiChipInit(
         break;
     case ATA_INTEL_ID: {
         USHORT reg54;
-        if(deviceExtension->MaxTransferMode >= ATA_SA150)
+        if(ChipFlags & UNIATA_SATA) {
+            if(c != -1)
+                break;
+            ChangePciConfig2(/*PCIR_COMMAND*/0x04, (a & ~0x0400));
             break;
+        }
         if(deviceExtension->MaxTransferMode < ATA_UDMA2)
             break;
         if(c == -1) {
@@ -979,7 +983,8 @@ AtapiChipInit(
         case PRMIO:
             deviceExtension->MemIo = TRUE;
             if(ChipFlags & PRSATA) {
-                AtapiWritePort4(NULL, (PULONG)((PUCHAR)(deviceExtension->BaseMemAddress) + 0x6c), 0x00ff0033);
+//                AtapiWritePort4(NULL, (PULONG)((PUCHAR)(deviceExtension->BaseMemAddress) + 0x6c), 0x00ff0033);
+                AtapiWritePort4(NULL, (PULONG)((PUCHAR)(deviceExtension->BaseMemAddress) + 0x6c), 0x000000ff);
             }
             if(c == -1) {
                 for(c=0; c<4; c++) {
@@ -1149,6 +1154,7 @@ AtapiChipInit(
         }
         // no init for SATA
         if(ChipFlags & UNIATA_SATA) {
+            ChangePciConfig2(/*PCIR_COMMAND*/0x04, (a & ~0x0400));
             break;
         }
         // check 80-pin cable
@@ -1172,7 +1178,9 @@ AtapiChipInit(
                                      SystemIoBusNumber, slotNumber);
         }
         /* set prefetch, postwrite */
-        ChangePciConfig1(0x41, (a | 0xf0));
+        if(ChipType != VIA133) {
+            ChangePciConfig1(0x41, (a | 0xf0));
+        }
 
         /* set fifo configuration half'n'half */
         ChangePciConfig1(0x43, ((a & ((ChipFlags & VIAPRQ) ? 0x80 : 0x90)) | 0x2a));

@@ -30,7 +30,7 @@ Notes:
 
 Revision History:
 
-    This module is a port from FreeBSD 4.3-5.1 ATA driver (ata-dma.c) by
+    This module is a port from FreeBSD 4.3-5.2 ATA driver (ata-dma.c) by
          Søren Schmidt, Copyright (c) 1998-2004
 
     Changed defaulting-to-generic-PIO/DMA policy
@@ -741,8 +741,9 @@ set_new_acard:
         statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                             IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                             ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-        if(apiomode >= 0)
+        if((apiomode >= 0) && (ChipType != VIA133)) {
             SetPciConfig1(reg-0x08, via_pio[apiomode]);
+        }
         via82c_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
         deviceExtension->lun[ldev].TransferMode = ATA_PIO0 + apiomode;
         return;
@@ -956,14 +957,14 @@ set_new_acard:
                 SetPciConfig2(0x4a, (reg4a & ~(0x3 << (dev<<2))) |
                                     (0x01 + !(i & 0x01))  );
                 if(i >= 2) {
-                    SetPciConfig4(0x54, reg54 | (0x1 << dev) );
+                    SetPciConfig2(0x54, reg54 | (0x1 << dev) );
                 } else {
-                    SetPciConfig4(0x54, reg54 & ~(0x1 << dev) );
+                    SetPciConfig2(0x54, reg54 & ~(0x1 << dev) );
                 }
                 if(i >= 5) {
-                    SetPciConfig4(0x54, reg54 | (0x10000 << dev) );
+                    SetPciConfig2(0x54, reg54 | (0x1000 << dev) );
                 } else {
-                    SetPciConfig4(0x54, reg54 & ~(0x10000 << dev) );
+                    SetPciConfig2(0x54, reg54 & ~(0x1000 << dev) );
                 }
                 
                 deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
@@ -973,21 +974,22 @@ set_new_acard:
             }
         }
 
-        for(i=wdmamode; i>=0 && !udma_ok; i--) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                (UCHAR)(ATA_WDMA0+i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
+        if(!udma_ok) {
+            SetPciConfig2(0x48, reg48 & ~(0x0001 << dev));
+            SetPciConfig2(0x4a, (reg4a & ~(0x3 << (dev << 2)))  );
+            for(i=wdmamode; i>=0; i--) {
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    (UCHAR)(ATA_WDMA0+i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                if (!(statusByte & IDE_STATUS_ERROR)) {
 
-                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA0+i);
-                udma_ok = TRUE;
-                idx = i+5;
-                break;
+                    deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA0+i);
+                    udma_ok = TRUE;
+                    idx = i+5;
+                    break;
+                }
             }
         }
-
-        SetPciConfig2(0x48, reg48 & ~(0x0001 << dev));
-        SetPciConfig2(0x4a, (reg4a & ~(0x3 << (dev << 2)))  );
 
         if(!udma_ok) {
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
