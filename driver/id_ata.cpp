@@ -2332,13 +2332,22 @@ AtapiInterrupt(
         if(InterlockedExchangeAdd(&(deviceExtension->chan[c].DisableIntr), 0)) {
             continue;
         }
-        // lock channel
+        // lock channel. Wait, while 2nd ISR checks interrupt on
+        // this channel
         do {
             KdPrint2((PRINT_PREFIX "AtapiInterrupt(base): try lock\n"));
+            // c_state = deviceExtension->chan[c].CheckIntr;
+            // if (deviceExtension->chan[c].CheckIntr == CHECK_INTR_DETECTED) {
+            //     deviceExtension->chan[c].CheckIntr = CHECK_INTR_ACTIVE;
+            // }
             c_state = (ULONG)InterlockedCompareExchange((PVOID*)&(deviceExtension->chan[c].CheckIntr),
                                           (PVOID)CHECK_INTR_ACTIVE,
                                           (PVOID)CHECK_INTR_DETECTED);
             if(c_state == CHECK_INTR_IDLE) {
+                // c_state = deviceExtension->chan[c].CheckIntr;
+                // if (deviceExtension->chan[c].CheckIntr == CHECK_INTR_IDLE) {
+                //     deviceExtension->chan[c].CheckIntr = CHECK_INTR_ACTIVE
+                // }
                 c_state = (ULONG)InterlockedCompareExchange((PVOID*)&(deviceExtension->chan[c].CheckIntr),
                                               (PVOID)CHECK_INTR_ACTIVE,
                                               (PVOID)CHECK_INTR_IDLE);
@@ -2591,9 +2600,10 @@ AtapiCheckInterrupt__(
     case 0x06491095:	/* CMD 649 */
         GetPciConfig1(0x71, dma_status);
         if (!(dma_status &
-	      ((Channel) ? 0x08 : 0x04)))
+	      (Channel ? 0x08 : 0x04)))
 	    return FALSE;
         ScsiPortStallExecution(1);
+        SetPciConfig1(0x71, (Channel ? 0x08 : 0x04));
 	break;
 
     case 0x4d33105a:	/* Promise Ultra/Fasttrak 33 */
@@ -2884,9 +2894,26 @@ CallTimerDpcDRQL:
         (dma_status & BM_STATUS_ERR)) {
 
         error = ScsiPortReadPortUchar(&baseIoAddress1->i.Error);
+        KdPrint2((PRINT_PREFIX "AtapiInterrupt: Error %x\n", error));
+        if(AtaReq) {
+            KdPrint2((PRINT_PREFIX "AtapiInterrupt: Bad Lba %I64x\n", AtaReq->lba));
+        } else {
+            KdPrint2((PRINT_PREFIX "AtapiInterrupt: Bad Lba unknown\n"));
+        }
 
         if (!(deviceExtension->lun[ldev].DeviceFlags & DFLAGS_ATAPI_DEVICE)) {
-    	/* if this is a UDMA CRC error, reinject request */
+            /* if this is a UDMA CRC error, reinject request */
+
+            ScsiPortStallExecution(100);
+            for (k = 0; k < 5000; k++) {
+                GetStatus(baseIoAddress2,statusByte);
+                if (!(statusByte & IDE_STATUS_DRQ)) {
+                    ScsiPortStallExecution(100);
+                } else {
+                    break;
+                }
+            }
+
             AtaReq->retry++;
             if(AtaReq->retry < MAX_RETRIES) {
 #ifdef IO_STATISTICS

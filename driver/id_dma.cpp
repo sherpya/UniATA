@@ -37,7 +37,7 @@ Revision History:
     Added PIO settings for VIA
     Optimized VIA/AMD/nVidia init part
     Optimized Promise TX2 init part
-         by Alex A. Telyatnikov (Alter), (c) 2002
+         by Alex A. Telyatnikov (Alter) (c) 2002-2003
 
 
 --*/

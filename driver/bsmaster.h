@@ -391,6 +391,8 @@ typedef struct _ISR2_DEVICE_EXTENSION {
 #define         ATA_UDMA5               0x45
 #define         ATA_UDMA6               0x46
 
+#define         ATA_SA150               0x80
+
 //
 //
 //
