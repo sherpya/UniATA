@@ -6442,7 +6442,7 @@ AtapiStartIo__(
 //        }
         if(GET_CDEV(Srb) >= 2 ||
            ldev >= deviceExtension->NumberChannels*2 ||
-           lChannel > deviceExtension->NumberChannels) {
+           lChannel >= deviceExtension->NumberChannels) {
 
 reject_srb:
             //if(!CheckDevice(HwDeviceExtension, lChannel, ldev & 1, FALSE)) {

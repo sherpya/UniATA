@@ -13,7 +13,7 @@
     b) SCSIOP_READ_CAPACITY                                            (8  )
 8.  use READ_NATIVE_SIZE command to determine actual drive capacity    (8a )
 9.  send FLUSH command to device                                       (9  )
-10. check (IO_WDx - 0x08) ports in AtapiFindBusMasterController()
+10. check (IO_WDx - 0x08) ports in AtapiFindBusMasterController()      (+++)
 11. use SelectDrive() instead of ScsiPortWritePortXXX()                (9a )
 12. remove obsolete AtapiFindPCIController()                           (9a )
 13. make a separate routine AtapiInitController() for HBA               ...
@@ -31,7 +31,7 @@
 21. add some new ChipSets support from FBSD 4.5                        (10a)
 22. set Controller PIO timigs                                           ...
     a) via                                                             (11 ) ??
-    b) intel
+    b) intel                                                           (+++)
     c) AcerLabs Aladdin IV/V                                           (23 )
 23. update Identify block                                              (11 )
 24. add LBA-48 support                                                 (11 )
@@ -78,10 +78,10 @@
     b) Promise TX2                                                     (13c)
     c) Promise Ultra                                                   (23 )
     d) ServerWorks                                                     (23 )
-    e) CMD 64x
-    f) SiS
-    g) AcerLabs Aladdin IV/V
-    h) Intel
+    e) CMD 64x                                                         (+++)
+    f) SiS                                                             (+++)
+    g) AcerLabs Aladdin IV/V                                           (+++)
+    h) Intel                                                           (+++)
     i) Sil                                                             (23 )
     j) HPT                                                             (23 )
 53. use LogicalUnitExtension instead of xxx[Srb->TargetId]             (14 )
@@ -230,14 +230,14 @@
 141.assign BusMaster io-range to 1st channel only.                     (26e)
 142.do not change bus type to PCI for legacy ISA-PCI controllers under  ...
     NT4                                                                (28 )
-143.implement Device/Vendor/Rev. filtering via registry keys
+143.implement Device/Vendor/Rev. filtering via registry keys           (30+)
 144.implement transfer mode control IOCTLs                             (28 )
 145.set max. transfer length > 64k.
 146.implement fix for miss-aligned user buffer
 147.set chip-specific init/operation flags only once during             ...
     initialization and use them in future. Do not perform multiple      ...
     bus scans and other detections.                                    (29a)
-148.fix bug with miss-functioning Enable/Disable interrupt for
+148.fix bug with miss-functioning Enable/Disable interrupt for         (+++)
     secondary channel                                                  (28 )
 149.add serial-ATA support                                             (29a)
 150.add support for new controllers (SiS, Promise)                     (29a)
@@ -248,4 +248,7 @@
     for load-balance                                                   (29a)
 154.add support for machines with >4G physical memory
 155.add FreeBSD software RAID support
-156.
+156.use http://www.winimage.com/readfi15.zip for performance checks
+157.use IOCTL_SCSI_MINIPORT_IDENTIFY in atactl.exe to determine         ...
+    PIO/DMA when no uniata.sys is installed
+158.
