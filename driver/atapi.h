@@ -106,8 +106,8 @@ DbgPrint(
 #define LOG_ON_RAISED_IRQL_W2K    TRUE
 //#define LOG_ON_RAISED_IRQL_W2K    FALSE
 
-#define KdPrint2(_x_) {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; }}
-#define KdPrint(_x_)  {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; }}
+#define KdPrint2(_x_) {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; if(g_LogToDisplay){ PrintNtConsole _x_ ;} }}
+#define KdPrint(_x_)  {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; if(g_LogToDisplay){ PrintNtConsole _x_ ;} }}
 /*
 #define PRINT_PREFIX_PTR ((PCHAR)&__tmp__kdprint__buff__)
 #define PRINT_UPREFIX_PTR ((PWCHAR)&__tmp__kdprint__ubuff__)
@@ -1092,8 +1092,12 @@ AtapiRegCheckParameterValue(
     );
 
 #ifdef _DEBUG
+
+extern ULONG  g_LogToDisplay;
+
 extern "C"
 VOID
+_cdecl
 PrintNtConsole(
     PCHAR DebugMessage,
     ...

@@ -81,6 +81,10 @@ ULONG  SPVersion = 0;
 ULONG  SkipRaids = 1;
 ULONG  ForceSimplex = 0;
 
+#ifdef _DEBUG
+ULONG  g_LogToDisplay = 0;
+#endif //_DEBUG
+
 ULONG  g_WaitBusyInISR = 1;
 
 BOOLEAN InDriverEntry = TRUE;
@@ -7163,6 +7167,9 @@ DriverEntry(
 
     SkipRaids = AtapiRegCheckDevValue(NULL, -1, -1, L"SkipRaids", 1);
     ForceSimplex = AtapiRegCheckDevValue(NULL, -1, -1, L"ForceSimplex", 0);
+#ifdef _DEBUG
+    g_LogToDisplay = AtapiRegCheckDevValue(NULL, -1, -1, L"LogToDisplay", 0);
+#endif //_DEBUG
 
     statusToReturn = 0xffffffff;
 
@@ -7211,6 +7218,9 @@ DriverEntry(
             KdPrint2((PRINT_PREFIX "!BMList[i].MasterDev\n"));
             break;
         }
+        if(AtapiRegCheckDevValue(NULL, -1, -1, L"IgnoreIsaCompatiblePci", 0)) {
+            break;
+        }
         if(ReEnter) {
             KdPrint2((PRINT_PREFIX "ReEnter, skip it\n"));
             if(BMList[i].ChanInitOk & 0x03) {
@@ -7231,6 +7241,9 @@ DriverEntry(
 
             for(c=0; c<2; c++) {
 
+                if(AtapiRegCheckDevValue(NULL, c, -1, L"IgnoreIsaCompatiblePci", 0)) {
+                    break;
+                }
                 if(c==0) {
                     if(PrimaryClaimed) {
                         KdPrint2((PRINT_PREFIX "Primary already claimed\n"));
@@ -7303,6 +7316,9 @@ DriverEntry(
     KdPrint2((PRINT_PREFIX "\n\nATAPI IDE: i %d, BMListLen %d\n", i, BMListLen));
     for (; i <BMListLen; i++) {
 
+        if(AtapiRegCheckDevValue(NULL, -1, -1, L"IgnoreNativePci", 0)) {
+            break;
+        }
 /*        if(BMList[i].MasterDev)
             continue;*/
 
@@ -7347,31 +7363,33 @@ DriverEntry(
     hwInitializationData.comm.NumberOfAccessRanges = 2;
     hwInitializationData.comm.HwFindAdapter = AtapiFindController;
 
-    // Indicate ISA bustype.
-    hwInitializationData.comm.AdapterInterfaceType = Isa;
-    adapterCount = 0;
+    if(!AtapiRegCheckDevValue(NULL, -1, -1, L"IgnoreIsa", 0)) {
+        // Indicate ISA bustype.
+        hwInitializationData.comm.AdapterInterfaceType = Isa;
+        adapterCount = 0;
 
-    // Call initialization for ISA bustype.
-    KdPrint2((PRINT_PREFIX "\n\nATAPI IDE: Look for ISA Controllers\n"));
-    newStatus =  ScsiPortInitialize(DriverObject,
-                                    Argument2,
-                                    &hwInitializationData.comm,
-                                    &adapterCount);
-    if (newStatus < statusToReturn)
-        statusToReturn = newStatus;
+        // Call initialization for ISA bustype.
+        KdPrint2((PRINT_PREFIX "\n\nATAPI IDE: Look for ISA Controllers\n"));
+        newStatus =  ScsiPortInitialize(DriverObject,
+                                        Argument2,
+                                        &hwInitializationData.comm,
+                                        &adapterCount);
+        if (newStatus < statusToReturn)
+            statusToReturn = newStatus;
+    }
+    if(!AtapiRegCheckDevValue(NULL, -1, -1, L"IgnoreMca", 0)) {
+        // Set up for MCA
+        KdPrint2((PRINT_PREFIX "\n\nATAPI IDE: Look for MCA Controllers\n"));
+        hwInitializationData.comm.AdapterInterfaceType = MicroChannel;
+        adapterCount = 0;
 
-    // Set up for MCA
-    KdPrint2((PRINT_PREFIX "\n\nATAPI IDE: Look for MCA Controllers\n"));
-    hwInitializationData.comm.AdapterInterfaceType = MicroChannel;
-    adapterCount = 0;
-
-    newStatus =  ScsiPortInitialize(DriverObject,
-                                    Argument2,
-                                    &hwInitializationData.comm,
-                                    &adapterCount);
-    if (newStatus < statusToReturn)
-        statusToReturn = newStatus;
-
+        newStatus =  ScsiPortInitialize(DriverObject,
+                                        Argument2,
+                                        &hwInitializationData.comm,
+                                        &adapterCount);
+        if (newStatus < statusToReturn)
+            statusToReturn = newStatus;
+    }
     InDriverEntry = FALSE;
 
     return statusToReturn;
@@ -7730,13 +7748,14 @@ HalDisplayString (
 
 extern "C"
 VOID
+_cdecl
 PrintNtConsole(
     PCHAR DebugMessage,
     ...
     )
 {
     int len;
-    UCHAR dbg_print_tmp_buff[1024];
+    UCHAR dbg_print_tmp_buff[512];
 //    UNICODE_STRING msgBuff;
     va_list ap;
     va_start(ap, DebugMessage);

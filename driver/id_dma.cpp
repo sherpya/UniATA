@@ -1421,6 +1421,16 @@ setup_drive_ite:
 
         return;
         break; }
+    case 0x3388:
+        /* HiNT Corp. VXPro II EIDE */
+        if (wdmamode >= 0 &&
+            (AtapiReadPort1(chan, &deviceExtension->BaseIoAddressBM[lChannel]->Status) & 
+             (DeviceNumber ? BM_STATUS_DRIVE_1_DMA : BM_STATUS_DRIVE_0_DMA))) {
+            AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_DMA);
+        } else {
+            AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_PIO0 + apiomode);
+        }
+        return;
     }
 
 try_generic_dma:
@@ -1429,6 +1439,7 @@ try_generic_dma:
 
     /* better not try generic DMA on ATAPI devices it almost never works */
     if (ATAPI_DEVICE(deviceExtension, ldev)) {
+        KdPrint2((PRINT_PREFIX "ATAPI on unknown controller -> PIO\n"));
         udmamode =
         wdmamode = -1;
     }
@@ -1440,17 +1451,26 @@ try_generic_dma:
         (AtapiReadPort1(chan, &deviceExtension->BaseIoAddressBM[lChannel]->Status) &
          (!(ldev & 1) ? 
           BM_STATUS_DRIVE_0_DMA : BM_STATUS_DRIVE_1_DMA))) {
-        LunExt->TransferMode = ATA_DMA;
-        return;
-    }
-
-    /* well, we have no support for this, but try anyways */
-    if ((wdmamode >= 0 && apiomode >= 4) && deviceExtension->BaseIoAddressBM[lChannel]) {
-        if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_WDMA + wdmamode)) {
+//        LunExt->TransferMode = ATA_DMA;
+//        return;
+        KdPrint2((PRINT_PREFIX "try DMA on unknown controller\n"));
+        if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_DMA)) {
             return;
         }
     }
+
+#if 0
+    /* well, we have no support for this, but try anyways */
+    if ((wdmamode >= 0 && apiomode >= 4) && deviceExtension->BaseIoAddressBM[lChannel]) {
+        if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_DMA/* + wdmamode*/)) {
+            return;
+        }
+    }
+#endif
+
+    KdPrint2((PRINT_PREFIX "try PIO%d on unknown controller\n", apiomode));
     if(!AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_PIO0 + apiomode)) {
+        KdPrint2((PRINT_PREFIX "fall to PIO on unknown controller\n"));
         LunExt->TransferMode = ATA_PIO;
     }
     return;

@@ -131,6 +131,7 @@ ExcludeFromSelect = *
 %PCI\VEN_1042&DEV_0102.DeviceDesc%=uniata_Inst, PCI\VEN_1042&DEV_0102
 %PCI\VEN_1283&DEV_8172.DeviceDesc%=uniata_Inst, PCI\VEN_1283&DEV_8172
 %PCI\VEN_1283&DEV_8212.DeviceDesc%=uniata_Inst, PCI\VEN_1283&DEV_8212
+%PCI\VEN_3388&DEV_8013.DeviceDesc%=uniata_Inst, PCI\VEN_3388&DEV_8013
 ;%PCI\VEN_ffff&DEV_ffff&REV_ff.DeviceDesc%=uniata_Inst, PCI\VEN_ffff&DEV_ffff&REV_ff
 ;Compatible adapters
 ;DEVLIST
@@ -303,6 +304,7 @@ PCI\VEN_1078&DEV_0102.DeviceDesc="Cyrix 5530 ATA-33 controller  (SCSI)"
 PCI\VEN_1042&DEV_0102.DeviceDesc="RZ 100x IDE controller  (SCSI)"
 PCI\VEN_1283&DEV_8172.DeviceDesc="IT8172 ATA-33 controller  (SCSI)"
 PCI\VEN_1283&DEV_8212.DeviceDesc="IT8212F ATA-133 controller  (SCSI)"
+PCI\VEN_3388&DEV_8013.DeviceDesc="HiNT VXII EIDE IDE DMA controller  (SCSI)"
 ;PCI\VEN_ffff&DEV_ffff&REV_ff.DeviceDesc="(null) IDE controller (SCSI)"
 ;Compatible adapters
 ;DEVNAMELIST

@@ -120,6 +120,7 @@ PKG : "BusMaster_v$(VER).rar"
 	nmake /A CFG="UniATA - Win32 Debug"
 !ENDIF 
 	rar a -s -mdD -m5 BusMaster_v$(VER).rar @pkg_files.dist
+	rar a -s -mdD -m5 BusMaster_v$(VER)_Dbg.rar Debug_Dist
 	rar a -s -mdD -m5 BusMaster_v$(VER)_src.rar @pkg_files.src
 
 CLEAN :

@@ -305,6 +305,9 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_OPTI82C621          0xc6211045
 #define ATA_OPTI82C625          0xd5681045
 
+#define ATA_HINT_ID	        0x3388
+#define ATA_HINTEIDE_ID	        0x80133388
+
 /* chipset setup related defines          */
 /* Used in HW_DEVICE_EXTENSION.InitMethod */
 
@@ -589,6 +592,8 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
 
     PCI_DEV_HW_SPEC_BM( 8172, 1283, 0x00, ATA_UDMA2, "IT8172"           , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 8212, 1283, 0x00, ATA_UDMA6, "IT8212F"          , ITE_133                                 ),
+
+    PCI_DEV_HW_SPEC_BM( 8013, 3388, 0x00, ATA_DMA,   "HiNT VXII EIDE"   , 0                                       ),
 
     // Terminator
     PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1, NULL      , -1 )
