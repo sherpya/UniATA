@@ -496,12 +496,6 @@ AtapiDmaInit(
     ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
     ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
 
-    static const UCHAR via_modes[5][7] = {
-        { 0x00, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00 },        /* ATA33 */
-        { 0x00, 0x00, 0xea, 0x00, 0xe8, 0x00, 0x00 },        /* ATA66 */
-        { 0x00, 0x00, 0xf4, 0x00, 0xf1, 0xf0, 0x00 },        /* ATA100 */
-        { 0xfc, 0x00, 0xf6, 0x00, 0xf2, 0xf1, 0xf0 },        /* VIA ATA133 */
-        { 0x00, 0x00, 0xc0, 0x00, 0xc5, 0xc6, 0xc7 }};       /* AMD/nVIDIA */
     UCHAR *reg_val = NULL;
 
     /* set our most pessimistic default mode */
@@ -671,7 +665,8 @@ set_new_acard:
             { 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0, 0x00 },        /* ATA100 */
             { 0xf7, 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0 },        /* VIA ATA133 */
             { 0xc2, 0xc1, 0xc0, 0xc4, 0xc5, 0xc6, 0xc7 }};       /* AMD/nVIDIA */
-        static const via_pio[] = { 0xff, 0xff, 0xff, 0x55, 0x51, 0xff, 0x55 };
+        static const via_pio[] =
+            { 0xff, 0xff, 0xff, 0x55, 0x51, 0xff, 0x55 };
         const UCHAR *reg_val = NULL;
         UCHAR reg = 0x53-(UCHAR)dev;
 
@@ -1181,6 +1176,10 @@ set_new_acard:
         static const ULONG sis_modes_old[] =
                 { 0x0c0b, 0x0607, 0x0404, 0x0303, 0x0301, 0x0404, 0x0303, 0x0301,
                   0xf301, 0xd301, 0xb301, 0xa301, 0x9301, 0x8301 };
+	static const ULONG sis_modes_new100[] =
+		{ 0x00cb, 0x0067, 0x0044, 0x0033, 0x0031, 0x0044, 0x0033, 0x0031,
+		  0x8b31, 0x8731, 0x8531, 0x8431, 0x8231, 0x8131 };
+
         ULONG reg;
         UCHAR reg57;
         ULONG reg_size;
@@ -1193,18 +1192,22 @@ set_new_acard:
             GetPciConfig1(0x57, reg57);
             reg = (reg57 & 0x40 ? 0x70 : 0x40) + (dev * 4);
             break;
-        case SIS100NEW:
         case SIS133OLD:
             sis_modes = (PULONG)(&sis_modes_old133[0]);
             reg_size = 2;
-            reg = 0x40 + (dev * 4);
+            reg = 0x40 + (dev * 2);
             break;
+        case SIS100NEW:
+            sis_modes = (PULONG)(&sis_modes_new100[0]);
+            reg_size = 2;
+	    reg = 0x40 + (dev * 2);
+	    break;
         case SIS100OLD:
         case SIS66:
         case SIS33:
             sis_modes = (PULONG)(&sis_modes_old[0]);
             reg_size = 2;
-            reg = 0x40 + (dev * 4);
+            reg = 0x40 + (dev * 2);
             break;
         }
 
@@ -1587,10 +1590,13 @@ via82c_timing(
         recover = cycle - active;
     }
 
-    /* PIO address setup */
-    GetPciConfig1(0x4c, t);
-    t = (t & ~(3 << ((3 - dev) << 1))) | (FIT(setup - 1, 0, 3) << ((3 - dev) << 1));
-    SetPciConfig1(0x4c, t);
+    // Newer chips dislike this:
+    if(!(deviceExtension->HwFlags & VIAAST)) {
+        /* PIO address setup */
+        GetPciConfig1(0x4c, t);
+        t = (t & ~(3 << ((3 - dev) << 1))) | (FIT(setup - 1, 0, 3) << ((3 - dev) << 1));
+        SetPciConfig1(0x4c, t);
+    }
 
     /* PIO active & recover */
     SetPciConfig1(0x4b-dev, (FIT(active - 1, 0, 0xf) << 4) | FIT(recover - 1, 0, 0xf) );

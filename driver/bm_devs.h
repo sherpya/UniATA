@@ -276,6 +276,8 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define VIACLK		0x0800
 #define VIABUG		0x1000
 #define VIASOUTH	0x2000
+#define VIAAST		0x4000
+#define VIAPRQ		0x8000
 
 #ifdef USER_MODE
   #define PCI_DEV_HW_SPEC_BM(idhi, idlo, rev, mode, name, flags) \

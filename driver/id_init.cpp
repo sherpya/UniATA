@@ -222,6 +222,8 @@ AtapiChipDetect(
         };
 
     static BUSMASTER_CONTROLLER_INFORMATION const ViaAdapters[] = {
+        PCI_DEV_HW_SPEC_BM( 0586, 1106, 0x41, ATA_UDMA2, "VIA 82C586B", VIA33  | 0x00   ),
+        PCI_DEV_HW_SPEC_BM( 0586, 1106, 0x40, ATA_UDMA2, "VIA 82C586B", VIA33  | VIAPRQ ),
         PCI_DEV_HW_SPEC_BM( 0586, 1106, 0x02, ATA_UDMA2, "VIA 82C586B", VIA33  | 0x00   ),
         PCI_DEV_HW_SPEC_BM( 0586, 1106, 0x00, ATA_WDMA2, "VIA 82C586" , VIA33  | 0x00   ),
         PCI_DEV_HW_SPEC_BM( 0596, 1106, 0x12, ATA_UDMA4, "VIA 82C596B", VIA66  | VIACLK ),
@@ -232,8 +234,8 @@ AtapiChipDetect(
         PCI_DEV_HW_SPEC_BM( 8231, 1106, 0x00, ATA_UDMA5, "VIA 8231"   , VIA100 | VIABUG ),
         PCI_DEV_HW_SPEC_BM( 3074, 1106, 0x00, ATA_UDMA5, "VIA 8233"   , VIA100 | 0x00   ),
         PCI_DEV_HW_SPEC_BM( 3109, 1106, 0x00, ATA_UDMA5, "VIA 8233C"  , VIA100 | 0x00   ),
-        PCI_DEV_HW_SPEC_BM( 3147, 1106, 0x00, ATA_UDMA6, "VIA 8233A"  , VIA133 | 0x00   ),
-        PCI_DEV_HW_SPEC_BM( 3177, 1106, 0x00, ATA_UDMA6, "VIA 8235"   , VIA133 | 0x00   ),
+        PCI_DEV_HW_SPEC_BM( 3147, 1106, 0x00, ATA_UDMA6, "VIA 8233A"  , VIA133 | VIAAST ),
+        PCI_DEV_HW_SPEC_BM( 3177, 1106, 0x00, ATA_UDMA6, "VIA 8235"   , VIA133 | VIAAST ),
         PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL         , -1 )
         };
 
@@ -821,7 +823,7 @@ AtapiChipInit(
         ChangePciConfig1(0x41, (a | 0xf0));
 
         /* set fifo configuration half'n'half */
-        ChangePciConfig1(0x43, ((a & 0x90) | 0x2a));
+        ChangePciConfig1(0x43, ((a & ((ChipFlags & VIAPRQ) ? 0x80 : 0x90)) | 0x2a));
 
         /* set status register read retry */
         ChangePciConfig1(0x44, (a | 0x08));
