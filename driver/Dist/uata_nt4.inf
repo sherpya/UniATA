@@ -1,20 +1,24 @@
 ; Copyright (c) 2002-2004 UniATA group
 
-[version]
-Signature="$WINDOWS NT$"
-Class=SCSIAdapter
-ClassGuid={4D36E97B-E325-11CE-BFC1-08002BE10318}
+[Version]
+Signature="$Windows NT$"
 Provider=%ALTERWARE%
-DriverVer=07/04/2004
+ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
+Class=SCSIAdapter
 CatalogFile=uniata.cat
+DriverVer=18/12/2004,0.30.2.0
 
+;
+; Source file information
+;
 
 [SourceDisksNames]
-1 = "UniATA Installation disk",,,
+1 = %DiskId1%,,,""
 
 [SourceDisksFiles]
-uniata.sys = 1
-uniata2k.inf = 1
+; Files for disk Initio Installation Disk #1 (SCSIAdapter)
+uniata.sys = 1,,
+uata_nt4.inf = 1,,
 
 ;Class Install
 [ClassInstall32.NT]
@@ -26,20 +30,45 @@ HKR,,Icon,,"-9"
 HKR,,Installer32,,"SysSetup.Dll,HdcClassInstaller"
 
 [DestinationDirs]
-DefaultDestDir = 12 ; DIRID_DRIVERS
+DefaultDestDir = 11 ; DIRID_DRIVERS
+
+[ControlFlags]
+ExcludeFromSelect = *
+
+;
+; Driver information
+;
 
 [Manufacturer]
 %ALTERWARE%=UNIATA_HDC
 
 [UNIATA_HDC]
-%DeviceDesc%=uniata_Inst
+%DeviceDesc%
+%PCI\CC_0101.DeviceDesc% = uniata_Inst,,PCI\CC_0101                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
+%UniATA_Name% = uniata_Inst
+
+;
+; General installation section
+;
 
 [DISABLE_PCIIDE]
 HKLM, system\currentcontrolset\services\pciide, "Start", %REG_DWORD%, 0x00000004
 
 [uniata_Inst]
 AddReg = RegUninstall,DISABLE_PCIIDE
-CopyFiles = @uniata.sys
+CopyFiles = uniata_Inst.Miniport
+
+;
+; File sections
+;
+
+[uniata_Inst.Miniport]
+uniata.sys
+
+
+;
+; Service Installation
+;
 
 [uniata_Inst.Services]
 AddService = UniATA, %SPSVCINST_ASSOCSERVICE%, uniata_Service_Inst
@@ -48,24 +77,37 @@ AddService = UniATA, %SPSVCINST_ASSOCSERVICE%, uniata_Service_Inst
 ServiceType    = %SERVICE_KERNEL_DRIVER%
 StartType      = %SERVICE_BOOT_START%
 ErrorControl   = %SERVICE_ERROR_NORMAL%
-ServiceBinary  = %12%\uniata.sys
 LoadOrderGroup = System Bus Extender
+ServiceBinary  = %12%\uniata.sys
 
 [uniata_Inst.PosDup]            ;; BUGBUG: What does this do?
 *PNP0600
 
+;[uniata_PNP_Inst_AddReg]
+;HKR, "Parameters\PnpInterface", "1", 0x00010001, 0x00000001
+;HKR, "Parameters\PnpInterface", "5", 0x00010001, 0x00000001
+
+
+
 [Strings]
-HDCClassName            = "SCSI and RAID controllers"
-ALTERWARE="AlterWare"
-DeviceDesc="Universal ATA Driver"
+DeviceDesc
+UniATA_Name = "Universal ATA Driver (Win NT4)"
+;*PNP0600.PriDeviceDesc  = "Primary IDE Channel"
+;*PNP0600.SecDeviceDesc  = "Secondary IDE Channel"
+PCI\CC_0101.DeviceDesc  = "Standard Dual Channel PCI BusMaster IDE Controller"
+ALTERWARE = "AlterWare"
 
 ;*******************************************
-;Handy macro substitutions (non-localizable)
-SPSVCINST_ASSOCSERVICE = 0x00000002
-SERVICE_KERNEL_DRIVER  = 1
-SERVICE_BOOT_START     = 0
-SERVICE_ERROR_NORMAL   = 1
-REG_EXPAND_SZ          = 0x00020000
-REG_DWORD              = 0x00010001
-REG_MULTI_SZ           = 0x00010000
+;
+; Non-Localizable Strings
+;
+
+REG_SZ         = 0x00000000
+REG_MULTI_SZ   = 0x00010000
+REG_EXPAND_SZ  = 0x00020000
+REG_BINARY     = 0x00000001
+REG_DWORD      = 0x00010001
+SERVICEROOT    = "System\CurrentControlSet\Services"
+
+DiskId1 = "UniATA Installation disk"
 

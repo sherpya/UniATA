@@ -160,6 +160,9 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_I6300ESB		0x25a28086
 #define ATA_I6300ESB_1		0x25a38086
 #define ATA_I6300ESB_2		0x25b08086
+#define ATA_I82801FB		0x266f8086
+#define ATA_I82801FB_S1		0x26518086
+#define ATA_I82801FB_R1		0x26528086
 
 #define ATA_NATIONAL_ID		0x100b
 #define ATA_SC1100		0x0502100b
@@ -290,6 +293,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 
 #define ATA_ITE_ID		0x1283
 #define ATA_IT8172G		0x81721283
+#define ATA_IT8212F		0x82121283
 
 #define ATA_OPTI_ID             0x1045
 #define ATA_OPTI82C621          0xc6211045
@@ -306,6 +310,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define UNIATA_NO_SLAVE         0x20000000
 #define UNIATA_SATA             0x10000000
 #define UNIATA_NO_DPC           0x08000000
+#define UNIATA_NO_DPC_ATAPI     0x04000000
 
 #define ATPOLD		0x0100
 
@@ -370,6 +375,9 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define VIAAST		0x4000
 #define VIAPRQ		0x8000
 
+#define ITE_33          0
+#define ITE_133         1
+
 #ifdef USER_MODE
   #define PCI_DEV_HW_SPEC_BM(idhi, idlo, rev, mode, name, flags) \
     { #idlo, 4, 0x##idlo, #idhi, 4, 0x##idhi, rev, mode, name, flags}
@@ -426,7 +434,10 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
     PCI_DEV_HW_SPEC_BM( 25a2, 8086, 0x00, ATA_UDMA5, "Intel ICH5 ESB"   , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 25a3, 8086, 0x00, ATA_SA150, "Intel ICH5 ESB1"  , UNIATA_SATA                             ),
     PCI_DEV_HW_SPEC_BM( 25b0, 8086, 0x00, ATA_SA150, "Intel ICH5 ESB2"  , UNIATA_SATA                             ),
-
+    PCI_DEV_HW_SPEC_BM( 266f, 8086, 0x00, ATA_UDMA5, "Intel ICH6"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 2651, 8086, 0x00, ATA_SA150, "Intel ICH6"       , UNIATA_SATA                             ),
+    PCI_DEV_HW_SPEC_BM( 2652, 8086, 0x00, ATA_SA150, "Intel ICH6"       , UNIATA_SATA                             ),
+    
     PCI_DEV_HW_SPEC_BM( 01bc, 10de, 0x00, ATA_UDMA5, "nVidia nForce"    , AMDNVIDIA | AMDBUG                      ),
     PCI_DEV_HW_SPEC_BM( 0065, 10de, 0x00, ATA_UDMA6, "nVidia nForce2"   , AMDNVIDIA | AMDBUG                      ),
     PCI_DEV_HW_SPEC_BM( 0085, 10de, 0x00, ATA_UDMA6, "nVidia nForce2 MCP",AMDNVIDIA                               ),
@@ -478,7 +489,7 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
     PCI_DEV_HW_SPEC_BM( 3112, 1095, 0x00, ATA_SA150, "SiI 3112"         , SIIMIO |          UNIATA_SATA           ),
     PCI_DEV_HW_SPEC_BM( 0240, 1095, 0x00, ATA_SA150, "SiI 3112"         , SIIMIO |          UNIATA_SATA           ),
     PCI_DEV_HW_SPEC_BM( 0680, 1095, 0x00, ATA_UDMA6, "SiI 0680"         , SIIMIO | SIISETCLK                      ),
-    PCI_DEV_HW_SPEC_BM( 0649, 1095, 0x00, ATA_UDMA5, "CMD 649"          , SIICMD | SIIINTR                        ),
+    PCI_DEV_HW_SPEC_BM( 0649, 1095, 0x00, ATA_UDMA5, "CMD 649"          , SIICMD | SIIINTR | UNIATA_NO_DPC_ATAPI  ),
     PCI_DEV_HW_SPEC_BM( 0648, 1095, 0x00, ATA_UDMA4, "CMD 648"          , SIICMD | SIIINTR                        ),
     PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x07, ATA_UDMA2, "CMD 646U2"        , SIICMD | 0                              ),
     PCI_DEV_HW_SPEC_BM( 0646, 1095, 0x00, ATA_WDMA2, "CMD 646"          , SIICMD | 0                              ),
@@ -571,6 +582,7 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
     PCI_DEV_HW_SPEC_BM( 0102, 1042, 0x00, ATA_PIO4,  "RZ 100x"          , 0                                       ),
 
     PCI_DEV_HW_SPEC_BM( 8172, 1283, 0x00, ATA_UDMA2, "IT8172"           , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 8212, 1283, 0x00, ATA_UDMA6, "IT8212F"          , ITE_133                                 ),
 
     // Terminator
     PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1, NULL      , -1 )

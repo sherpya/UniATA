@@ -89,6 +89,7 @@ Revision History:
 #define ATA_ALTIOSIZE			0x01	/* alternate registers size */
 #define ATA_BMIOSIZE			0x20
 #define ATA_PC98_BANKIOSIZE             0x01
+#define ATA_MAX_LBA28                   (0x0fffffffUI64)
 
 #define DEV_BSIZE                       512
 
@@ -179,6 +180,7 @@ typedef struct _ATA_REQ {
 #define REQ_FLAG_RW_MASK                0x08
 #define     REQ_FLAG_READ                   0x08
 #define     REQ_FLAG_WRITE                  0x00
+#define REQ_FLAG_FORCE_DOWNRATE_LBA48   0x10
 
 // Request states
 #define REQ_STATE_NONE                  0x00
@@ -332,9 +334,9 @@ typedef struct _HW_LU_EXTENSION {
     ULONG          DiscsPresent;   // Indicates number of platters on changer-ish devices.
     BOOLEAN        DWordIO;        // Indicates use of 32-bit PIO
     UCHAR          ReturningMediaStatus;
-    UCHAR          TransferMode;
-    UCHAR          LimitedTransferMode;
-    UCHAR          OrigTransferMode;
+    UCHAR          TransferMode;          // current transfer mode
+    UCHAR          LimitedTransferMode;   // user-defined or IDE cable limitation
+    UCHAR          OrigTransferMode;      // transfer mode, returned by device IDENTIFY (can be changed via IOCTL)
     UCHAR          MaximumBlockXfer;
     UCHAR          Padding0[2];    // padding
     ULONG          ErrorCount;     // Count of errors. Used to turn off features.
@@ -425,7 +427,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     BOOLEAN MasterDev;
     LONG  ReCheckIntr;
 
-    ULONG MaxTransferMode;
+    ULONG MaxTransferMode;  // max transfer mode supported by controller
     ULONG HwFlags;
     INTERFACE_TYPE OrigAdapterInterfaceType;
     ULONG MaximumDmaTransferLength;
@@ -440,6 +442,7 @@ typedef struct _ISR2_DEVICE_EXTENSION {
 } ISR2_DEVICE_EXTENSION, *PISR2_DEVICE_EXTENSION;
 
 #define HBAFLAGS_DMA_DISABLED           0x01
+#define HBAFLAGS_DMA_DISABLED_LBA48     0x02
 
 extern UCHAR         pciBuffer[256];
 extern PBUSMASTER_CONTROLLER_INFORMATION BMList;

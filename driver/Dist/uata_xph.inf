@@ -6,28 +6,8 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=hdc
 CatalogFile=uniata.cat
-DriverVer=10/01/2004,0.30.0.0
+DriverVer=18/12/2004,0.30.2.0
 
-;
-; Source file information
-;
-
-[SourceDisksNames]
-1 = %DiskId1%,,,""
-
-[SourceDisksFiles]
-; Files for disk Initio Installation Disk #1 (SCSIAdapter)
-uniata.sys = 1,,
-uniata2k.inf = 1,,
-
-;Class Install
-[ClassInstall32.NT]
-AddReg=HDC_Class
-
-[HDC_Class]
-HKR,,,,%HDCClassName%
-HKR,,Icon,,"-9"
-HKR,,Installer32,,"SysSetup.Dll,HdcClassInstaller"
 
 [DestinationDirs]
 DefaultDestDir = 11 ; DIRID_DRIVERS
@@ -86,6 +66,9 @@ ExcludeFromSelect = *
 %PCI\VEN_8086&DEV_25a2.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_25a2
 %PCI\VEN_8086&DEV_25a3.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_25a3
 %PCI\VEN_8086&DEV_25b0.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_25b0
+%PCI\VEN_8086&DEV_266f.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_266f
+%PCI\VEN_8086&DEV_2651.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_2651
+%PCI\VEN_8086&DEV_2652.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_2652
 %PCI\VEN_10de&DEV_01bc.DeviceDesc%=uniata_Inst, PCI\VEN_10de&DEV_01bc
 %PCI\VEN_10de&DEV_0065.DeviceDesc%=uniata_Inst, PCI\VEN_10de&DEV_0065
 %PCI\VEN_10de&DEV_0085.DeviceDesc%=uniata_Inst, PCI\VEN_10de&DEV_0085
@@ -147,22 +130,22 @@ ExcludeFromSelect = *
 %PCI\VEN_1078&DEV_0102.DeviceDesc%=uniata_Inst, PCI\VEN_1078&DEV_0102
 %PCI\VEN_1042&DEV_0102.DeviceDesc%=uniata_Inst, PCI\VEN_1042&DEV_0102
 %PCI\VEN_1283&DEV_8172.DeviceDesc%=uniata_Inst, PCI\VEN_1283&DEV_8172
+%PCI\VEN_1283&DEV_8212.DeviceDesc%=uniata_Inst, PCI\VEN_1283&DEV_8212
 ;%PCI\VEN_ffff&DEV_ffff&REV_ff.DeviceDesc%=uniata_Inst, PCI\VEN_ffff&DEV_ffff&REV_ff
 ;Compatible adapters
 ;DEVLIST
-%PCI\CC_0101.DeviceDesc% = uniata_Inst,,PCI\CC_0101                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 %UniATA_Name% = uniata_Inst
 
 ;
 ; General installation section
 ;
 
-[DISABLE_PCIIDE]
-HKLM, system\currentcontrolset\services\pciide, "Start", %REG_DWORD%, 0x00000004
-
 [uniata_Inst]
-AddReg = RegUninstall,DISABLE_PCIIDE
+AddReg = uniata_Inst.AddReg
 CopyFiles = uniata_Inst.Miniport
+
+[uniata_Inst.AddReg]
+
 
 ;
 ; File sections
@@ -177,22 +160,38 @@ uniata.sys
 ;
 
 [uniata_Inst.Services]
-AddService = UniATA, %SPSVCINST_ASSOCSERVICE%, uniata_Service_Inst
+AddService = UniATA, 0x00000002, uniata_Service_Inst, DISABLE_PCIIDE
 
 [uniata_Service_Inst]
-ServiceType    = %SERVICE_KERNEL_DRIVER%
-StartType      = %SERVICE_BOOT_START%
-ErrorControl   = %SERVICE_ERROR_NORMAL%
+ServiceType    = 1
+StartType      = 0
+ErrorControl   = 0
 LoadOrderGroup = System Bus Extender
 ServiceBinary  = %12%\uniata.sys
+AddReg         = uniata_PNP_Inst_AddReg
 
-[uniata_Inst.PosDup]            ;; BUGBUG: What does this do?
-*PNP0600
-
-;[uniata_PNP_Inst_AddReg]
+[uniata_PNP_Inst_AddReg]
 ;HKR, "Parameters\PnpInterface", "1", 0x00010001, 0x00000001
 ;HKR, "Parameters\PnpInterface", "5", 0x00010001, 0x00000001
 
+
+[DISABLE_PCIIDE]
+AddReg         = DISABLE_PCIIDE_Reg
+
+[DISABLE_PCIIDE_Reg]
+HKLM, "system\currentcontrolset\services\pciide", "Start", 0x00010001, 0x00000004
+
+
+;
+; Source file information
+;
+
+[SourceDisksNames.x86]
+1 = %DiskId1%,,,""
+
+[SourceDisksFiles]
+; Files for disk UniATA Installation Disk #1 (SCSIAdapter)
+uniata.sys = 1,,
 
 
 [Strings]
@@ -239,6 +238,9 @@ PCI\VEN_8086&DEV_24df.DeviceDesc="Intel ICH5 EB2 Serial ATA controller  (SCSI)"
 PCI\VEN_8086&DEV_25a2.DeviceDesc="Intel ICH5 ESB ATA-100 controller  (SCSI)"
 PCI\VEN_8086&DEV_25a3.DeviceDesc="Intel ICH5 ESB1 Serial ATA controller  (SCSI)"
 PCI\VEN_8086&DEV_25b0.DeviceDesc="Intel ICH5 ESB2 Serial ATA controller  (SCSI)"
+PCI\VEN_8086&DEV_266f.DeviceDesc="Intel ICH6 ATA-100 controller  (SCSI)"
+PCI\VEN_8086&DEV_2651.DeviceDesc="Intel ICH6 Serial ATA controller  (SCSI)"
+PCI\VEN_8086&DEV_2652.DeviceDesc="Intel ICH6 Serial ATA controller  (SCSI)"
 PCI\VEN_10de&DEV_01bc.DeviceDesc="nVidia nForce ATA-100 controller  (SCSI)"
 PCI\VEN_10de&DEV_0065.DeviceDesc="nVidia nForce2 ATA-133 controller  (SCSI)"
 PCI\VEN_10de&DEV_0085.DeviceDesc="nVidia nForce2 MCP ATA-133 controller  (SCSI)"
@@ -300,13 +302,11 @@ PCI\VEN_16ca&DEV_0001.DeviceDesc="Cenatek Rocket Drive IDE DMA controller  (SCSI
 PCI\VEN_1078&DEV_0102.DeviceDesc="Cyrix 5530 ATA-33 controller  (SCSI)"
 PCI\VEN_1042&DEV_0102.DeviceDesc="RZ 100x IDE controller  (SCSI)"
 PCI\VEN_1283&DEV_8172.DeviceDesc="IT8172 ATA-33 controller  (SCSI)"
+PCI\VEN_1283&DEV_8212.DeviceDesc="IT8212F ATA-133 controller  (SCSI)"
 ;PCI\VEN_ffff&DEV_ffff&REV_ff.DeviceDesc="(null) IDE controller (SCSI)"
 ;Compatible adapters
 ;DEVNAMELIST
-UniATA_Name = "Universal ATA Driver"
-;*PNP0600.PriDeviceDesc  = "Primary IDE Channel"
-;*PNP0600.SecDeviceDesc  = "Secondary IDE Channel"
-PCI\CC_0101.DeviceDesc  = "Standard Dual Channel PCI BusMaster IDE Controller"
+UniATA_Name = "Universal ATA Driver (Win XP)"
 ALTERWARE = "AlterWare"
 
 ;*******************************************

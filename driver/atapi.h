@@ -267,6 +267,8 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
                                                  IDE_COMMAND_ENABLE_MEDIA_STATUS */
 #define IDE_COMMAND_READ_NATIVE_SIZE 0xF8
 #define IDE_COMMAND_SET_NATIVE_SIZE  0xF9
+#define IDE_COMMAND_READ_NATIVE_SIZE48 0x27
+#define IDE_COMMAND_SET_NATIVE_SIZE48  0x37
 
 //
 // IDE status definitions
@@ -296,6 +298,7 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_DRIVE_SELECT_2           (IDE_DRIVE_SELECT | IDE_DRIVE_2)
 
 #define IDE_USE_LBA                  0x40
+#define IDE_USE_HOB                  0x80 // use high-order byte(s)
 
 //
 // IDE drive control definitions

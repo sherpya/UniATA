@@ -576,7 +576,7 @@ AtaCommand48(
     // and not cleared after SELECT
 
     /* only use 48bit addressing if needed because of the overhead */
-    if ((lba > 0xfffffffI64 || count > 256) &&
+    if ((lba >= ATA_MAX_LBA28 || count > 256) &&
         deviceExtension->lun[ldev].IdentifyData.FeaturesSupport.Address48) {
 
         KdPrint2((PRINT_PREFIX "AtaCommand48: ldev %#x USE_LBA_48\n", ldev ));
@@ -600,6 +600,10 @@ AtaCommand48(
             command = IDE_COMMAND_WRITE_DMA_Q48; break;
         case IDE_COMMAND_FLUSH_CACHE:
             command = IDE_COMMAND_FLUSH_CACHE48; break;
+//        case IDE_COMMAND_READ_NATIVE_SIZE:
+//            command = IDE_COMMAND_READ_NATIVE_SIZE48; break;
+        case IDE_COMMAND_SET_NATIVE_SIZE:
+            command = IDE_COMMAND_SET_NATIVE_SIZE48; break;
         default:
             return -1;
         }
@@ -912,7 +916,7 @@ AtapiQueueRequest(
 #endif //QUEUE_STATISTICS
 
             // walk through comamnd queue and find the best
-            // place for insertion of ne command
+            // place for insertion of the command
             while (AtaReq1 = AtaReq2->prev_req) {
                 new_cost1 = AtapiGetCost(LunExt, AtaReq1, AtaReq);
                 new_cost2 = AtapiGetCost(LunExt, AtaReq, AtaReq2);
@@ -1586,29 +1590,72 @@ IssueIdentify(
                 NumOfSectors = NativeNumOfSectors;
             }
         }
+
+        // Check drive capacity report for LBA48-capable drives.
+        if(deviceExtension->FullIdentifyData.FeaturesSupport.Address48) {
+            ULONG hNativeNumOfSectors;
+            KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_READ_NATIVE_SIZE48\n"));
+
+            statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
+                         IDE_COMMAND_READ_NATIVE_SIZE48, 0, 0, 0, ATA_WAIT_READY);
+
+            if(!(statusByte & IDE_STATUS_ERROR)) {
+                NativeNumOfSectors = (ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber) |
+                                    ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow)  << 8) |
+                                    ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 16) ;
+
+                AtapiWritePort1(chan, &baseIoAddress1->o.DriveSelect,  (DeviceNumber ? IDE_DRIVE_SELECT_2 : IDE_DRIVE_SELECT_1) | IDE_USE_HOB);
+                if(AtapiReadPort1(chan, &baseIoAddress1->o.DriveSelect) & IDE_USE_HOB) {
+                    NativeNumOfSectors |=
+                                        ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber)  << 24 );
+                    hNativeNumOfSectors= 
+                                         (ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow) |
+                                        ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 8) ;
+                    ((PULONG)&NativeNumOfSectors)[1] = hNativeNumOfSectors;
+                }
+
+                KdPrint2((PRINT_PREFIX "NativeNumOfSectors %#I64x\n", NativeNumOfSectors));
+
+                if(NativeNumOfSectors > NumOfSectors) {
+
+                    KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_SET_NATIVE_SIZE48\n"));
+                    KdPrint2((PRINT_PREFIX "Update NumOfSectors to %#I64x\n", NativeNumOfSectors));
+
+                    statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
+                                 IDE_COMMAND_SET_NATIVE_SIZE, NativeNumOfSectors, 0, 0, ATA_WAIT_READY);
+                    if(!(statusByte & IDE_STATUS_ERROR)) {
+                        NumOfSectors = NativeNumOfSectors;
+                    }
+                }
+            }
+        }
+
         if(NumOfSectors < 0x2100000 /*&& NumOfSectors > 31*1000*1000*/) {
             // check for native LBA size
             // some drives report ~32Gb in Identify Block
             KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_READ_NATIVE_SIZE\n"));
 
-            AtaCommand(deviceExtension, DeviceNumber, lChannel, IDE_COMMAND_READ_NATIVE_SIZE,
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel, IDE_COMMAND_READ_NATIVE_SIZE,
                          0, IDE_USE_LBA, 0, 0, 0, ATA_WAIT_READY);
 
-            NativeNumOfSectors = (ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber) |
-                                ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow) << 8) |
-                                ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 16) |
-                               (((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.DriveSelect) & 0xf) << 24);
+            if(!(statusByte & IDE_STATUS_ERROR)) {
+                NativeNumOfSectors = (ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber) |
+                                    ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow) << 8) |
+                                    ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 16) |
+                                   (((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.DriveSelect) & 0xf) << 24);
 
-            KdPrint2((PRINT_PREFIX "NativeNumOfSectors %#I64x\n", NativeNumOfSectors));
+                KdPrint2((PRINT_PREFIX "NativeNumOfSectors %#I64x\n", NativeNumOfSectors));
 
-            if(NativeNumOfSectors > NumOfSectors) {
+                if(NativeNumOfSectors > NumOfSectors) {
 
-                KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_SET_NATIVE_SIZE\n"));
+                    KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_SET_NATIVE_SIZE\n"));
+                    KdPrint2((PRINT_PREFIX "Update NumOfSectors to %#I64x\n", NativeNumOfSectors));
 
-                statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
-                             IDE_COMMAND_SET_NATIVE_SIZE, NativeNumOfSectors, 0, 0, ATA_WAIT_READY);
-                if(!(statusByte & IDE_STATUS_ERROR)) {
-                    NumOfSectors = NativeNumOfSectors;
+                    statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
+                                 IDE_COMMAND_SET_NATIVE_SIZE, NativeNumOfSectors, 0, 0, ATA_WAIT_READY);
+                    if(!(statusByte & IDE_STATUS_ERROR)) {
+                        NumOfSectors = NativeNumOfSectors;
+                    }
                 }
             }
         }
@@ -3749,6 +3796,10 @@ continue_err:
             goto CompleteRequest;
         }
 #ifdef IO_STATISTICS
+    } else
+    if(AtaReq->Flags & REQ_FLAG_FORCE_DOWNRATE_LBA48) {
+        KdPrint2((PRINT_PREFIX "DMA doesn't work right with LBA48\n"));
+        deviceExtension->HbaCtrlFlags |= HBAFLAGS_DMA_DISABLED_LBA48;
     } else
     if(AtaReq->Flags & REQ_FLAG_FORCE_DOWNRATE) {
         KdPrint2((PRINT_PREFIX "Some higher mode doesn't work right :((\n"));

@@ -12,7 +12,8 @@
 ..\driver\idedma.def
 ..\driver\idedma.dep
 ..\driver\idedma.mak
-..\driver\idedma.RC
+..\driver\idedma.rc
+..\driver\idedma.rc_
 ..\driver\idedma.reg
 ..\driver\idedmb.reg
 ..\driver\*.BAT

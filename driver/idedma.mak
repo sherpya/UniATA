@@ -85,18 +85,6 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 	copy ..\build_inf\Release\build_inf.exe .\Dist\build_inf.exe
 !ENDIF 
 
-"Dist\uata2k.in_" :
-	@echo do nothing
-
-"Dist\uata2k.inf" : "build_inf.exe" "Dist\uata2k.in_"
-	build_inf.exe Dist\uata2k.in_ > Dist\uata2k.inf
-        srchrep -src "%%COMMENT%%" -dest "" Dist\uata2k.inf
-
-"Dist\uata2kh.inf" : "Dist\uata2k.inf"
-	build_inf.exe Dist\uata2k.in_ > Dist\uata2kh.inf
-        srchrep -src "Class=SCSIAdapter" -dest "Class=hdc" Dist\uata2kh.inf
-        srchrep -src "ClassGuid={4D36E97B-E325-11CE-BFC1-08002BE10318}" -dest "ClassGuid={4D36E96A-E325-11CE-BFC1-08002BE10318}" Dist\uata2kh.inf
-        srchrep -src "%%COMMENT%%" -dest " (SCSI)" Dist\uata2kh.inf
 
 #ALL :
 #	nmake CFG="UniATA - Win32 Release"
@@ -191,12 +179,15 @@ LINK32_FLAGS=$(BaseDir)\Lib\i386\Checked\ntoskrnl.lib $(BaseDir)\Lib\i386\Checke
   $(LINK32_FLAGS) $(LINK32_OBJS)
 <<
 
-".\copy.msg" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)" "$(DistDir)" "Dist\uata2k.inf" "Dist\uata2kh.inf"
+".\copy.msg" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)" "$(DistDir)" "build_inf.exe"
 	<<tempfile.bat 
 	@echo off 
 	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDma.sys 
 	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDmb.sys 
 	copy $(TargetPath) $(DistDir)\uniata.sys
+	cd Dist
+	call rebuild_inf.bat $(VER)
+	cd ..
 	copy Dist\* $(DistDir)
 	echo $(DistDir)
 	echo Driver copied > copy.msg 
@@ -228,8 +219,12 @@ SRC=id_probe
 
 SRC=idedma
 
+"$(SRC).rc" : "$(SRC).rc_"
+    copy "$(SRC).rc_" "$(SRC).rc"
+
 "$(INTDIR)\$(SRC).res" : "$(SRC).rc" "$(INTDIR)"
     -@erase ".\$(SRC).res"
+    srchrep.exe -src "%%VER%%" -dest "$(VER)" "$(SRC).rc"
     $(RSC) $(RSC_PROJ) "$(SRC).rc"
     -@erase "$(INTDIR)\$(SRC).res"
     -@move "$(SRC).res" "$(INTDIR)\$(SRC).res"

@@ -792,6 +792,7 @@ AtapiChipInit(
     ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
     PHW_CHANNEL chan;
     UCHAR tmp8;
+    USHORT tmp16;
 
     KdPrint2((PRINT_PREFIX "AtapiChipInit:\n" ));
 
@@ -1231,6 +1232,34 @@ AtapiChipInit(
 
         break;
 
+    case ATA_ITE_ID:
+        // Old chip
+        if(ChipType == ITE_33)
+            break;
+        /* set PCI mode and 66Mhz reference clock */
+        ChangePciConfig1(0x50, a & ~0x83);
+
+        /* set default active & recover timings */
+        SetPciConfig1(0x54, 0x31);
+        SetPciConfig1(0x56, 0x31);
+
+        GetPciConfig2(0x40, tmp16);
+        // check 80-pin cable
+        if(c == -1) {
+            for(c=0; c<2; c++) {
+                chan = &deviceExtension->chan[c];
+                if(!(tmp16 & (c ? 0x08 : 0x04))) {
+                    chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
+                }
+            }
+        } else {
+            chan = &deviceExtension->chan[c];
+            if(!(tmp16 & (c ? 0x08 : 0x04))) {
+                chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
+            }
+        }
+
+        break;
     }
 
     return TRUE;

@@ -737,7 +737,8 @@ AtapiFindBusMasterController(
     ConfigInfo->AlignmentMask = 0x00000003;
 
     found = AtapiChipDetect(HwDeviceExtension, &pciData, i, ConfigInfo, &simplexOnly);
-    KdPrint2((PRINT_PREFIX "ForceSimplex = %d", simplexOnly));
+    KdPrint2((PRINT_PREFIX "ForceSimplex = %d\n", simplexOnly));
+    KdPrint2((PRINT_PREFIX "HwFlags = %x\n (0)", deviceExtension->HwFlags));
     switch(dev_id) {
     /* additional checks for some supported chipsets */
     case 0xc6931080:
@@ -762,11 +763,13 @@ AtapiFindBusMasterController(
         break;
     }
 
+    KdPrint2((PRINT_PREFIX "HwFlags = %x\n (1)", deviceExtension->HwFlags));
     if(!found) {
         KdPrint2((PRINT_PREFIX "!found => SP_RETURN_NOT_FOUND\n"));
         return(SP_RETURN_NOT_FOUND);
     }
 
+    KdPrint2((PRINT_PREFIX "HwFlags = %x\n (2)", deviceExtension->HwFlags));
     KdPrint2((PRINT_PREFIX "found suitable device\n"));
 
     /***********************************************************/
@@ -774,6 +777,12 @@ AtapiFindBusMasterController(
     /***********************************************************/
 
     deviceExtension->UseDpc = TRUE;
+    KdPrint2((PRINT_PREFIX "HwFlags = %x\n (3)", deviceExtension->HwFlags));
+    if(deviceExtension->HwFlags & UNIATA_NO_DPC) {
+        /* CMD 649, ROSB SWK33, ICH4 */
+        KdPrint2((PRINT_PREFIX "CheckDevice: UNIATA_NO_DPC (0)\n"));
+        deviceExtension->UseDpc = FALSE;
+    }
 
     deviceExtension->NumberChannels = 1;
     MasterDev = IsMasterDev(&pciData);
@@ -1773,8 +1782,9 @@ CheckDevice(
 
                 // some ATAPI devices doesn't work with DPC on CMD-649
                 // and probably some other controllers
-                if(deviceExtension->HwFlags & UNIATA_NO_DPC) {
+                if(deviceExtension->HwFlags & UNIATA_NO_DPC_ATAPI) {
                     /* CMD 649, ROSB SWK33, ICH4 */
+                    KdPrint2((PRINT_PREFIX "CheckDevice: UNIATA_NO_DPC_ATAPI\n"));
                     deviceExtension->UseDpc = FALSE;
                 }
 
