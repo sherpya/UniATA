@@ -27,3 +27,6 @@
 ..\build_inf\build_inf.dsw
 ..\build_inf\build_inf.mak
 ..\build_inf\Makefile
+..\atactl\atactl.cpp
+..\atactl\atactl.dsp
+..\atactl\atactl.dsw

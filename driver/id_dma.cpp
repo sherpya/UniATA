@@ -312,6 +312,8 @@ AtapiDmaReinit(
     )
 {
     if(AtaReq->Flags & REQ_FLAG_FORCE_DOWNRATE) {
+        KdPrint2((PRINT_PREFIX 
+                    "AtapiDmaReinit: FORCE_DOWNRATE on Device %d\n", ldev & 1));
         AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
                      (CHAR)AtaPioMode(&(deviceExtension->lun[ldev].IdentifyData)), 
                      min( retry_Wdma[AtaReq->retry],
@@ -324,9 +326,11 @@ AtapiDmaReinit(
         (deviceExtension->lun[ldev].OrigTransferMode >
          deviceExtension->lun[ldev].TransferMode)) {
         // restore IO mode
+        KdPrint2((PRINT_PREFIX 
+                    "AtapiDmaReinit: restore IO mode on Device %d\n", ldev & 1));
         AtapiDmaInit__(deviceExtension, ldev);
     }
-}
+} // end AtapiDmaReinit()
 
 VOID
 AtapiDmaInit__(
@@ -349,7 +353,7 @@ AtapiDmaInit__(
         AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
                      (CHAR)AtaPioMode(&(lun->IdentifyData)), -1, -1);
     }
-}
+} // end AtapiDmaInit__()
 
 VOID
 AtapiDmaInit(
@@ -417,6 +421,10 @@ AtapiDmaInit(
         deviceExtension->lun[ldev].TransferMode = ATA_PIO;
         return;
     }*/
+/*    if (ATAPI_DEVICE(deviceExtension, ldev)) {
+        udmamode = -1;
+        wdmamode = -1;
+    }*/
 
     if (udmamode > 2 && !deviceExtension->lun[ldev].IdentifyData.HwResCableId) {
         KdPrint2((PRINT_PREFIX "AtapiDmaInit: DMA limited to UDMA33, non-ATA66 compliant cable"));
@@ -425,6 +433,7 @@ AtapiDmaInit(
 
     switch(deviceExtension->DevID) {
 
+    case 0x24db8086:	/* Intel ICH5 */
     case 0x24cb8086:	/* Intel ICH4 */
     case 0x248a8086:	/* Intel ICH3 mobile */
     case 0x248b8086:	/* Intel ICH3 */

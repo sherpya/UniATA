@@ -89,8 +89,8 @@ DbgPrint(
 
 #define PRINT_PREFIX
 
-#define KdPrint2(_x_) {if(KeGetCurrentIrql() <= 2){DbgPrint("%x: ", PsGetCurrentThread()) ; DbgPrint _x_ ; }}
-#define KdPrint(_x_)  {if(KeGetCurrentIrql() <= 2){DbgPrint("%x: ", PsGetCurrentThread()) ; DbgPrint _x_ ; }}
+#define KdPrint2(_x_) {if(MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){DbgPrint("%x: ", PsGetCurrentThread()) ; DbgPrint _x_ ; }}
+#define KdPrint(_x_)  {if(MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){DbgPrint("%x: ", PsGetCurrentThread()) ; DbgPrint _x_ ; }}
 /*
 #define PRINT_PREFIX_PTR ((PCHAR)&__tmp__kdprint__buff__)
 #define PRINT_UPREFIX_PTR ((PWCHAR)&__tmp__kdprint__ubuff__)
