@@ -1,0 +1,6 @@
+# Microsoft Developer Studio Generated Dependency File, included by build_inf.mak
+
+.\build_inf.cpp : \
+	"..\driver\bm_devs.h"\
+	"e:\program files\devstudio\vc98\include\basetsd.h"\
+	

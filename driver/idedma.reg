@@ -1,0 +1,36 @@
+REGEDIT4
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\idedma]
+"Type"=dword:00000001
+"Start"=dword:00000004
+"Group"="SCSI miniport"
+"ImagePath"=hex(2):53,79,73,74,65,6d,33,32,5c,44,52,49,56,45,52,53,5c,69,64,65,\
+  64,6d,61,2e,73,79,73,00
+"ErrorControl"=dword:00000001
+"Tag"=dword:00000019
+"PlugPlayServiceType"=dword:00000001
+"DisplayName"="UniATA"
+
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\Root\LEGACY_IDEDMA]
+"NextInstance"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\Root\LEGACY_IDEDMA\0000]
+"Service"="idedma"
+"FoundAtEnum"=dword:00000001
+"Class"="SCSIAdapter"
+"ClassGUID"="{4D36E97B-E325-11CE-BFC1-08002BE10318}"
+"Problem"=dword:00000000
+"StatusFlags"=dword:00000000
+"BaseDevicePath"="HTREE\\ROOT\\0"
+"DeviceDesc"="Universal ATA/ATAPI BusMaster Controller "
+"Driver"="{4D36E97B-E325-11CE-BFC1-08002BE10318}\\0000"
+"Mfg"="(Standard mass storage controllers)"
+"HardwareID"=hex(7):61,74,61,70,69,5f,73,63,73,69,00,00
+"ConfigFlags"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\Root\LEGACY_IDEDMA\0000\Control]
+"ActiveService"="idedma"
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\Root\LEGACY_IDEDMA\0000\LogConf]
+

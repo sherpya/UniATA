@@ -1,0 +1,34 @@
+# UniATA Dependency File, included by idedma.mak
+
+.\id_ata.cpp : \
+	".\tools.h"\
+	".\atapi.h"\
+	".\bm_devs.h"\
+	".\ntddscsi.h"\
+	".\scsi.h"\
+	".\srb.h"\
+	".\bsmaster.h"\
+	
+.\id_dma.cpp : \
+	".\tools.h"\
+	".\atapi.h"\
+	".\bm_devs.h"\
+	".\ntddscsi.h"\
+	".\scsi.h"\
+	".\srb.h"\
+	".\bsmaster.h"\
+	
+.\id_probe.cpp : \
+	".\tools.h"\
+	".\atapi.h"\
+	".\bm_devs.h"\
+	".\ntddscsi.h"\
+	".\scsi.h"\
+	".\srb.h"\
+	".\bsmaster.h"\
+	
+BusMaster_v$(VER).rar : \
+	".\Debug\idedma.sys"\
+	".\pkg_files.dist"\
+	".\pkg_files.src"\
+	".\Release\idedma.sys"\

@@ -1,0 +1,8 @@
+; cdrom.def
+
+NAME IDEDMA.SYS
+DESCRIPTION 'IDEDMA.SYS'
+
+EXPORTS
+
+

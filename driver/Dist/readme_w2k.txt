@@ -1,0 +1,80 @@
+Installation for Windows 2000
+=============================
+(for version 25f and higher)
+
+Note:
+
+  THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+  IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+  NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+  DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+  THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+  IMPORTANT !!!
+
+  Only controller(s) described in installation .INF file will be visible
+  through standard Device Manager.
+  ALL other IDE controllers may become invisible, or listed as unknown 
+  devices, or system will report resource conflicts, but WILL WORK.
+  UniATA setup also disables PciIde port driver to be able to operate with
+  onboard (Native Mode) controllers. This makes IDE Primary and Secondary 
+  channels to disappear from Device Manager.
+
+  In order to install UniATA for some newer controller, you may add
+  entries in device list in uniata2k.inf.
+  Add line before ';DEVLIST' and type there something like this:
+    %PCI\VEN_$VV$&DEV_$DD$.DeviceDesc%=uniata_Inst, PCI\VEN_$VV$&DEV_$DD$
+  where $VV$ is 4-digit hexedecimal VendorID of controller and
+  $DD$ is 4-digit hexedecimal DeviceID of controller.
+  Many BIOS'es shows this information at boot-up time, but is you have
+  some other BIOS, it is possible to use some PCI enumeration utility
+  (for ex. from http://alter.org.ua/soft/win/ntpcidump/index.php).
+  PS. this will be automated in future.
+
+  Another way is setup_w2k.bat
+
+Installation steps:
+
+1.  unpack archive (for ex. C:\temp\uniata)
+2.  My Computer -> Properties -> Hardware -> Device Manager
+3.  select device, chose it's
+       Properties -> Driver
+
+    Note:
+    IDE controllers may be listed no only in 'IDE controllers'
+    section, but in 'SCSI and RAID controllers' or 'Other devices'.
+
+4.  Update Driver -> Next
+5.  (*) Search for a suitable driver for my device (recommended)
+    ( ) ....
+6.  Next
+7.  [ ] Floppy disk drives
+    [ ] CD-ROM drives
+    [v] Specify a location
+    [ ] Microsift Windows Update
+8.  Next
+9.  enter path to .INF file for new driver (C:\temp\uniata\Release_Dist\uniata2k.inf)
+10. OK
+
+11. !!! IMPORTANT !!!
+    You MUST chose the following checkbox:
+
+    [v] Install one of the other drivers
+
+12. Next
+13. chose in the list of available drivers the following line:
+
+      SCSI and RAID controllers | AlterWare | .......
+
+    the keyword here is 'AlterWare' in Provider column
+
+14. say 'Yes' for the question about missing digital signature.
+    (YES, we want to continue the installation)
+   
+15. REBOOT your computer
+

@@ -1,0 +1,42 @@
+C: ~1Gb
+D: ~0.5Gb
+E: ~27Gb
+
+----------------
+c:->nul, e:->nul
+non-overlapped I/O
+
+reorder:           Disabled     Enabled
+scan:                5:00         4:30
+copy E:->nul(5%):    8:10         8:00
+
+----------------
+c:->nul, e:->nul
+overlapped I/O
+
+reorder:           Disabled     Enabled
+scan:              
+copy E:->nul(5%):       
+
+----------------
+c:->nul, e:->nul, c:->e:, e:->c:
+non-overlapped I/O
+
+reorder:           Disabled     Enabled
+scan:                6:50         5:00
+copy E:->nul(2%):    7:20         8:30
+copy E:->C:(2%):     7:20         8:30
+
+----------------
+c:->nul, e:->nul, c:->e:, e:->c:
+non-overlapped I/O
+
+reorder:           Disabled     Enabled
+scan:                             6:00
+copy E:->nul(3%):                13:30
+copy E:->C:(3%):                 13:30
+
+----------------
+
+Action 20
+Flags  10342
