@@ -44,6 +44,8 @@ Revision History:
 #include "tools.h"
 #include "bm_devs.h"
 
+#define USE_OWN_DMA
+
 //#define UNI_CPU_OPTIMIZATION
 
 #define QUEUE_STATISTICS
@@ -172,6 +174,7 @@ typedef struct _ATA_REQ {
 #define REQ_STATE_EXPECTING_INTR        0x40
 #define REQ_STATE_ATAPI_EXPECTING_CMD_INTR     0x41
 #define REQ_STATE_ATAPI_EXPECTING_DATA_INTR    0x42
+#define REQ_STATE_ATAPI_DO_NOTHING_INTR        0x43
 
 #define REQ_STATE_PROCESSING_INTR       0x50
 
@@ -230,6 +233,10 @@ typedef struct _HW_CHANNEL {
     // Placeholder for status register after a GET_MEDIA_STATUS command
     UCHAR               ReturningMediaStatus;
 
+    BOOLEAN             CopyDmaBuffer;
+
+    UCHAR               Padding0[2];
+
     MECHANICAL_STATUS_INFORMATION_HEADER MechStatusData;
     SENSE_DATA          MechStatusSense;
     ULONG               MechStatusRetryCount;
@@ -255,6 +262,8 @@ typedef struct _HW_CHANNEL {
 //    KIRQL               QueueOldIrql;
     struct _HW_DEVICE_EXTENSION* DeviceExtension;
     struct _HW_LU_EXTENSION* lun[2];
+
+    PUCHAR              DmaBuffer;
 
 #ifdef QUEUE_STATISTICS
     LONGLONG QueueStat[MAX_QUEUE_STAT];
@@ -290,6 +299,7 @@ typedef struct _HW_LU_EXTENSION {
     UCHAR          TransferMode;
     UCHAR          OrigTransferMode;
     UCHAR          MaximumBlockXfer;
+    UCHAR          Padding0[3];    // padding
     ULONG          ErrorCount;     // Count of errors. Used to turn off features.
  //   ATA_QUEUE      cmd_queue;
     LONGLONG       ReadCmdCost;
@@ -331,8 +341,9 @@ typedef struct _HW_DEVICE_EXTENSION {
     // Indicates the number of blocks transferred per int. according to the
     // identify data.
     BOOLEAN DriverMustPoll;    // Driver is being used by the crash dump utility or ntldr.
-//    BOOLEAN DWordIO;    // Indicates use of 32-bit PIO
+//    BOOLEAN DWordIO;         // Indicates use of 32-bit PIO
     BOOLEAN BusMaster;
+    BOOLEAN UseDpc;            // Indicates use of DPC on long waits
     IDENTIFY_DATA FullIdentifyData;    // Identify data for device
     // BusMaster specific data
 //    PBM_DMA_ENTRY dma_tab_0;
@@ -359,6 +370,7 @@ typedef struct _HW_DEVICE_EXTENSION {
 //    BOOLEAN ActiveDpc;
     LONG  ReCheckIntr;
 //    KIRQL QueueNewIrql;
+    INTERFACE_TYPE OrigAdapterInterfaceType;
 
 } HW_DEVICE_EXTENSION, *PHW_DEVICE_EXTENSION;
 
@@ -477,6 +489,14 @@ AtapiDmaSetup(
     IN PSCSI_REQUEST_BLOCK Srb,
     IN PUCHAR data,
     IN ULONG count
+    );
+
+extern BOOLEAN
+AtapiDmaPioSync(
+    PVOID  HwDeviceExtension,
+    PSCSI_REQUEST_BLOCK Srb,
+    PUCHAR data,
+    ULONG  count
     );
 
 extern VOID
@@ -617,9 +637,15 @@ extern PDRIVER_OBJECT SavedDriverObject;
 #define GetDmaStatus(de, c) \
     (((de)->BaseIoAddressBM[c]) ? ScsiPortReadPortUchar(&((de)->BaseIoAddressBM[c]->Status)) : 0)
 
-#define AtapiPhysToVirtAddr(hwde, srb, phaddr, plen) \
+#ifdef USE_OWN_DMA
+#define AtapiVirtToPhysAddr(hwde, srb, phaddr, plen) \
+    AtapiVirtToPhysAddr_(hwde, srb, phaddr, plen);
+#else
+#define AtapiVirtToPhysAddr(hwde, srb, phaddr, plen) \
     (ScsiPortConvertPhysicalAddressToUlong/*(ULONG)ScsiPortGetVirtualAddress*/(/*hwde,*/  \
                     ScsiPortGetPhysicalAddress(hwde, srb, phaddr, plen)))
+#endif //USE_OWN_DMA
+
 
 /*#define GET_CHANNEL(Srb)  (Srb->TargetId >> 1)
 #define GET_LDEV(Srb)  (Srb->TargetId)

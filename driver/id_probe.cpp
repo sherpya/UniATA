@@ -653,6 +653,8 @@ AtapiFindBusMasterController(
     /***********************************************************/
     /***********************************************************/
 
+    deviceExtension->UseDpc = TRUE;
+
     deviceExtension->NumberChannels = 1;
     MasterDev = IsMasterDev(&pciData);
 
@@ -666,14 +668,6 @@ AtapiFindBusMasterController(
             return(SP_RETURN_NOT_FOUND);
         }
     }
-
-/*    if(!MasterDev) {
-        IoBasePort1 = (*ConfigInfo->AccessRanges)[2].RangeStart;
-
-        if ( !MasterDev &&
-             ScsiPortConvertPhysicalAddressToUlong(IoBasePort1) )
-            deviceExtension->NumberChannels = 2;
-    }*/
 
     deviceExtension->BusMaster = FALSE;
     if(IsBusMaster(&pciData)) {
@@ -936,6 +930,7 @@ AtapiFindBusMasterController(
     deviceExtension->DevID = dev_id;
     deviceExtension->RevID = RevID;
     deviceExtension->DevIndex = i;
+    deviceExtension->OrigAdapterInterfaceType = ConfigInfo->AdapterInterfaceType;
 
     found = FALSE;
 
@@ -943,22 +938,20 @@ AtapiFindBusMasterController(
         
         KdPrint2((PRINT_PREFIX "Reconstruct ConfigInfo\n"));
         ConfigInfo->MapBuffers = TRUE;
+#ifdef USE_OWN_DMA
+        ConfigInfo->NeedPhysicalAddresses = FALSE;
+#else
         ConfigInfo->NeedPhysicalAddresses = TRUE;
+#endif //USE_OWN_DMA
         if(!MasterDev) {
             KdPrint2((PRINT_PREFIX "set Dma32BitAddresses\n"));
             ConfigInfo->Dma32BitAddresses = TRUE;
         }
 
-        // set AdapterInterfaceType = PCIBus to make HalGetAdapter() 
-        // understand Master, ScatterGather, etc. flags
-        // and work with 2-channel MasterDev adapters properly
-
-        // We also need this hack to work with PIO and DMA on a single channel
-        // under NT4+sp4 (and probably previous sp)
-
         // thanks to Vitaliy Vorobyov aka deathsoft@yandex.ru for
         // better solution:
-        if(!WinVer_IsNT || (SPVersion < 0x0600)) {
+
+        if(ConfigInfo->AdapterInterfaceType == PCIBus) {
             KdPrint2((PRINT_PREFIX "set AdapterInterfaceType = PCIBus\n"));
             ConfigInfo->AdapterInterfaceType = PCIBus;
             ConfigInfo->SlotNumber = slotNumber;
@@ -969,7 +962,6 @@ AtapiFindBusMasterController(
         ConfigInfo->DmaWidth = Width16Bits;
         ConfigInfo->CachesData = TRUE;
         ConfigInfo->ScatterGather = TRUE;
-
     }
 
     // Note: now we can support only 2 channels !!!
@@ -1081,11 +1073,6 @@ AtapiFindBusMasterController(
                 // No controller at this base address.
                 KdPrint2((PRINT_PREFIX "Empty channel\n"));
 free_iospace_1:
-                // Release all allocated resources
-/*                ScsiPortFreeDeviceBase(HwDeviceExtension,
-                                       ioSpace);
-                __asm int 3;
-                continue;*/
                 skip_find_dev = TRUE;
             }
         }
@@ -1657,6 +1644,13 @@ CheckDevice(
 
                 RetVal = DFLAGS_DEVICE_PRESENT | DFLAGS_ATAPI_DEVICE;
                 deviceExtension->lun[ldev].DeviceFlags |= (DFLAGS_DEVICE_PRESENT | DFLAGS_ATAPI_DEVICE);
+
+                // some devices doesn't work with DPC on CMD-649
+                switch(deviceExtension->DevID) {
+                case 0x06491095:    /* CMD 649 */
+                    deviceExtension->UseDpc = FALSE;
+                    break;
+                }
 
                 GetStatus(baseIoAddress2, statusByte);
                 if (statusByte & IDE_STATUS_ERROR) {
