@@ -2,7 +2,9 @@
 ..\driver\atapi.h
 ..\driver\atapix.reg
 ..\driver\atapix_extrn.reg
+..\driver\bm_devs.h
 ..\driver\bsmaster.h
+..\driver\build.mak
 ..\driver\id_ata.cpp
 ..\driver\id_dma.cpp
 ..\driver\id_probe.cpp
@@ -30,3 +32,4 @@
 ..\atactl\atactl.cpp
 ..\atactl\atactl.dsp
 ..\atactl\atactl.dsw
+..\readme.txt

@@ -72,7 +72,7 @@
 50. read 'PSS ID Number: Q133706' in NT DDK & implement Registry-       ...
     supplied params. Use a small hack instead: Argument2 is the         ...
     pointer to UNICODE_STRING we need                                  (18a)
-51. implement Reinitialize functionality
+51. implement Reinitialize functionality                               (+++)
 52. optimize DMA init (move similar parts of code to loops/functions    ...
     a) VIA/AMD/nVidia                                                  (13c)
     b) Promise TX2                                                     (13c)
@@ -184,7 +184,7 @@
 112.check SRB_STATUS_AUTOSENSE_VALID usage policy                      (+++)
 113.add support for hardware queueing/overlapped commands
 114.handle immediate commands properly: don't initiate bus reset        ...
-    while formatting CDRW
+    while formatting CDRW                                              (+++)
 115.add hardware IDE RAID support
 116.fix bug with data type missmatch in AtapiDmaInit(),                 ...
     some VIA branches. This bug caused array boundary cross, leading    ...
@@ -227,4 +227,10 @@
 138.add support for Acard controllers                                  (25 )
 139.use some additional code for HP/Promise Dma Star/Stop              (25 )
 140.assign queueing priority for each device
-141.
+141.assign BusMaster io-range to 1st channel only.                     (26e)
+142.do not change bus type to PCI for legacy ISA-PCI controllers under  ...
+    NT4
+143.implement Device/Vendor/Rev. filtering via registry keys
+144.implement transfer mode control IOCTLs
+145.set max. transfer length > 64k.
+146.

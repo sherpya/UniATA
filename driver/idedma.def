@@ -1,4 +1,4 @@
-; cdrom.def
+; IDEDMA.def
 
 NAME IDEDMA.SYS
 DESCRIPTION 'IDEDMA.SYS'

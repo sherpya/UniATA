@@ -1,5 +1,5 @@
 #////////////////////////////////////////////////////////////////////
-#// Alexander A. Telyatnikov (Alter) 2002-2003. Kiev, Ukraine
+#// Alexander A. Telyatnikov (Alter) 2002-2004. Kiev, Ukraine
 #// All rights reserved
 #////////////////////////////////////////////////////////////////////
 
@@ -76,11 +76,13 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 !ENDIF 
 
 "build_inf.exe" : "bm_devs.h"
+!IF "$(NO_BUILD_INF)" == ""
 	cd ..\build_inf
 	nmake CFG="build_inf - Win32 Release"
 	cd ..\driver
 	copy ..\build_inf\Release\build_inf.exe .\build_inf.exe
 	copy ..\build_inf\Release\build_inf.exe .\Dist\build_inf.exe
+!ENDIF 
 
 "Dist\uniata2k.in_" :
 	@echo do nothing

@@ -1,6 +1,6 @@
 Installation for Windows NT4
 ============================
-(for version 23b and higher)
+(for version 26e and higher)
 
 Note:
 
@@ -24,9 +24,9 @@ Installation steps:
     b) select Drivers property sheet
     c) click on Add button
     d) click on Have Disk button
-    e) enter path to OEMSETUP.INF from UniATA distribution
+    e) enter path to UNIATA_NT4.INF from UniATA distribution
        and click on OK button
-    f) select "Universal BusMaster ATA/ATAPI Driver v x.xxx (alpha)
+    f) select "Universal BusMaster ATA/ATAPI Driver"
        from list and click on OK button
     g) enter path to UniATA.sys from UniATA distribution
        and click on OK button

@@ -1,9 +1,9 @@
 [version]
 Signature="$WINDOWS NT$"
-Class=hdc
-ClassGuid={4D36E96A-E325-11CE-BFC1-08002BE10318}
+Class=SCSIAdapter
+ClassGuid={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Provider=%ALTERWARE%
-DriverVer=01/09/2003
+DriverVer=14/01/2004
 CatalogFile=uniata.cat
 
 
@@ -31,6 +31,7 @@ DefaultDestDir = 12 ; DIRID_DRIVERS
 
 [UNIATA_HDC]
 ;Well-known adapters
+%PCI\VEN_8086&DEV_24db.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_24db
 %PCI\VEN_8086&DEV_24cb.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_24cb
 %PCI\VEN_8086&DEV_248a.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_248a
 %PCI\VEN_8086&DEV_248b.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_248b
@@ -82,6 +83,7 @@ DefaultDestDir = 12 ; DIRID_DRIVERS
 %PCI\VEN_16ca&DEV_0001.DeviceDesc%=uniata_Inst, PCI\VEN_16ca&DEV_0001
 ;Compatible adapters
 ;DEVLIST
+uniata_Inst
 
 [DISABLE_PCIIDE]
 HKLM, system\currentcontrolset\services\pciide, "Start", %REG_DWORD%, 0x00000004
@@ -107,6 +109,7 @@ LoadOrderGroup = System Bus Extender
 HDCClassName            = "SCSI and RAID controllers"
 ALTERWARE="AlterWare"
 ;Well-known adapters
+PCI\VEN_8086&DEV_24db.DeviceDesc="Intel ICH5"
 PCI\VEN_8086&DEV_24cb.DeviceDesc="Intel ICH4"
 PCI\VEN_8086&DEV_248a.DeviceDesc="Intel ICH3 mobile ATA-100 controller"
 PCI\VEN_8086&DEV_248b.DeviceDesc="Intel ICH3 ATA-100 controller"
@@ -158,6 +161,7 @@ PCI\VEN_1191&DEV_0005.DeviceDesc="Acard ATP850UF controller"
 PCI\VEN_16ca&DEV_0001.DeviceDesc="Cenatek Rocket Drive controller"
 ;Compatible adapters
 ;DEVNAMELIST
+"Universal ATA Driver"
 
 ;*******************************************
 ;Handy macro substitutions (non-localizable)

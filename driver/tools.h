@@ -308,7 +308,7 @@ if((a)!=NULL) {                             \
 
 #define CHECK_OUT_MDL()                                                 \
 if(irpStack->Parameters.DeviceIoControl.OutputBufferLength < length) {  \
-    KdPrint(("Output buffer (MDL) too small (%x/%x)\n", length, \
+    KdPrint(("Output buffer (MDL) too small (%#x/%#x)\n", length, \
                     irpStack->Parameters.DeviceIoControl.OutputBufferLength));   \
     Irp->IoStatus.Information = 0;                                      \
     status = STATUS_BUFFER_TOO_SMALL;                                   \
@@ -324,7 +324,7 @@ if ( Irp->MdlAddress == NULL ){                                         \
 
 #define CHECK_IN_MDL()                                                  \
 if(irpStack->Parameters.DeviceIoControl.InputBufferLength < length) {   \
-    KdPrint(("Input buffer (MDL) too small (%x/%x)\n", length, \
+    KdPrint(("Input buffer (MDL) too small (%#x/%#x)\n", length, \
                     irpStack->Parameters.DeviceIoControl.InputBufferLength));   \
     Irp->IoStatus.Information = 0;                                      \
     status = STATUS_INFO_LENGTH_MISMATCH;                               \
@@ -340,7 +340,7 @@ if ( Irp->MdlAddress == NULL ){                                         \
 
 #define CHECK_OUT_BUFFER()                                              \
 if(irpStack->Parameters.DeviceIoControl.OutputBufferLength < length) {  \
-    KdPrint(("Output buffer too small (%x/%x)\n", length, \
+    KdPrint(("Output buffer too small (%#x/%#x)\n", length, \
                     irpStack->Parameters.DeviceIoControl.OutputBufferLength));   \
     Irp->IoStatus.Information = 0;                                      \
     status = STATUS_BUFFER_TOO_SMALL;                                   \
@@ -356,7 +356,7 @@ if ( Irp->AssociatedIrp.SystemBuffer == NULL ){                                 
 
 #define CHECK_IN_BUFFER()                                               \
 if(irpStack->Parameters.DeviceIoControl.InputBufferLength < length) {   \
-    KdPrint(("Input buffer too small (%x/%x)\n", length, \
+    KdPrint(("Input buffer too small (%#x/%#x)\n", length, \
                     irpStack->Parameters.DeviceIoControl.InputBufferLength));   \
     Irp->IoStatus.Information = 0;                                      \
     status = STATUS_INFO_LENGTH_MISMATCH;                               \
@@ -387,6 +387,9 @@ __inline ULONG CountOfSetBitsULong(ULONG _X)
 extern ULONG  MajorVersion;
 extern ULONG  MinorVersion;
 extern ULONG  BuildNumber;
+extern ULONG  SPVersion;
+extern UNICODE_STRING SavedSPString;
+
 
 #define WinVer_IsNT   (MajorVersion==0x04)
 #define WinVer_Is2k   (MajorVersion==0x05 && MinorVersion==0x00)

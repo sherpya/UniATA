@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2003 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2004 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     atapi.h
@@ -729,6 +729,20 @@ NATIVE_MODE_CONTROLLER_INFORMATION const NativeModeAdapters[] = {
 #define WaitOnBusy(BaseIoAddress, Status) \
 { \
     ULONG i; \
+    for (i=0; i<200; i++) { \
+        GetStatus(BaseIoAddress, Status); \
+        if (Status & IDE_STATUS_BUSY) { \
+            ScsiPortStallExecution(10); \
+            continue; \
+        } else { \
+            break; \
+        } \
+    } \
+}
+
+#define WaitOnBusyLong(BaseIoAddress, Status) \
+{ \
+    ULONG i; \
     for (i=0; i<20000; i++) { \
         GetStatus(BaseIoAddress, Status); \
         if (Status & IDE_STATUS_BUSY) { \
@@ -741,6 +755,20 @@ NATIVE_MODE_CONTROLLER_INFORMATION const NativeModeAdapters[] = {
 }
 
 #define WaitOnBaseBusy(BaseIoAddress, Status) \
+{ \
+    ULONG i; \
+    for (i=0; i<200; i++) { \
+        GetBaseStatus(BaseIoAddress, Status); \
+        if (Status & IDE_STATUS_BUSY) { \
+            ScsiPortStallExecution(10); \
+            continue; \
+        } else { \
+            break; \
+        } \
+    } \
+}
+
+#define WaitOnBaseBusyLong(BaseIoAddress, Status) \
 { \
     ULONG i; \
     for (i=0; i<20000; i++) { \
@@ -864,12 +892,6 @@ IdeSendCommand(
     IN ULONG CmdAction
     );
 
-VOID
-AtapiZeroMemory(
-    IN PCHAR Buffer,
-    IN ULONG Count
-    );
-
 #define AtapiCopyMemory RtlCopyMemory
 
 VOID
@@ -878,12 +900,7 @@ AtapiHexToString (
     PCHAR *Buffer
     );
 
-LONG
-AtapiStringCmp (
-    PCHAR FirstStr,
-    PCHAR SecondStr,
-    ULONG Count
-    );
+#define AtapiStringCmp(s1, s2, n)  _strnicmp(s1, s2, n)
 
 BOOLEAN
 AtapiInterrupt(

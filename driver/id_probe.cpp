@@ -1,13 +1,13 @@
 /*++
 
-Copyright (c) 2002-2003 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2004 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
-    id_dma.cpp
+    id_probe.cpp
 
 Abstract:
     This module scans PCI and ISA buses for IDE controllers
-    and determines teir Busmaster DMA capabilities
+    and determines their Busmaster DMA capabilities
 
 Author:
     Alexander A. Telyatnikov (Alter)
@@ -40,6 +40,9 @@ Revision History:
     Device search/init algorithm is completly rewritten by
          Alter, Copyright (c) 2002-2003
 
+    Fixes for Native/Compatible modes of onboard IDE controller by
+         Vitaliy Vorobyov, deathsoft@yandex.ru (c) 2004
+
 --*/
 
 extern "C" {
@@ -61,7 +64,7 @@ ULONG         BMListLen = 0;
 ULONG         maxPciBus = 16;
 PDRIVER_OBJECT SavedDriverObject = NULL;
 
-// debug
+// local routines 
 
 ULONG
 AtapiEnumBusMasterController__(
@@ -73,6 +76,9 @@ AtapiEnumBusMasterController__(
     OUT PBOOLEAN Again
     );
 
+/*
+    Get PCI address by ConfigInfo and RID
+*/
 ULONG
 AtapiGetIoRange(
     IN PVOID HwDeviceExtension,
@@ -103,7 +109,7 @@ AtapiGetIoRange(
                            &
                     ~0x07/*PCI_ADDRESS_IOMASK*/);
 
-    KdPrint2((PRINT_PREFIX "  AtapiGetIoRange: %x\n", io_start));
+    KdPrint2((PRINT_PREFIX "  AtapiGetIoRange: %#x\n", io_start));
     if(io_start > offset) {
         return io_start;
     }
@@ -116,11 +122,21 @@ AtapiGetIoRange(
     } else {
         io_start = 0;
     }
-    KdPrint2((PRINT_PREFIX "  AtapiGetIoRange: (2) %x\n", io_start));
+    KdPrint2((PRINT_PREFIX "  AtapiGetIoRange: (2) %#x\n", io_start));
     return io_start;
 
 } // end AtapiGetIoRange()
 
+/*
+    Do nothing, but build list of supported IDE controllers
+    It is a hack, ScsiPort architecture assumes, that DriverEntry
+    can support only KNOWN Vendor/Device combinations.
+    Thus, we build list here. Later will pretend that always knew
+    about found devices.
+
+    We shall initiate ISA device init, but callback will use
+    Hal routines directly in order to scan PCI bus.
+*/
 VOID
 AtapiEnumBusMasterController(
     IN PVOID DriverObject,
@@ -130,7 +146,7 @@ AtapiEnumBusMasterController(
     HW_INITIALIZATION_DATA hwInitializationData;
 
     // Zero out structure.
-    AtapiZeroMemory(((PCHAR)&hwInitializationData), sizeof(HW_INITIALIZATION_DATA));
+    RtlZeroMemory(((PCHAR)&hwInitializationData), sizeof(HW_INITIALIZATION_DATA));
 
     // Set size of hwInitializationData.
     hwInitializationData.HwInitializationDataSize =
@@ -161,6 +177,10 @@ AtapiEnumBusMasterController(
 }
 
 
+/*
+    Device initializaton callback
+    Builds PCI device list using Hal routines (not ScsiPort wrappers)
+*/
 ULONG
 AtapiEnumBusMasterController__(
     IN PVOID HwDeviceExtension,
@@ -205,7 +225,7 @@ AtapiEnumBusMasterController__(
             for(slotNumber=0; slotNumber<PCI_MAX_DEVICES  && !no_buses; slotNumber++) {
             for(funcNumber=0; funcNumber<PCI_MAX_FUNCTION && !no_buses; funcNumber++) {
                 
-//                KdPrint2((PRINT_PREFIX "-- BusID: %x:%x:%x\n",busNumber,slotNumber,funcNumber));
+//                KdPrint2((PRINT_PREFIX "-- BusID: %#x:%#x:%#x\n",busNumber,slotNumber,funcNumber));
                 slotData.u.bits.DeviceNumber   = slotNumber;
                 slotData.u.bits.FunctionNumber = funcNumber;
 
@@ -280,8 +300,8 @@ AtapiEnumBusMasterController__(
                         if(known) {
                             RtlCopyMemory(newBMListPtr, (PVOID)&(BusMasterAdapters[i]), sizeof(BUSMASTER_CONTROLLER_INFORMATION));
                         } else {
-                            AtapiHexToString(VendorID, (PCHAR*)(&vendorStrPtr));
-                            AtapiHexToString(DeviceID, (PCHAR*)(&deviceStrPtr));
+                            sprintf((PCHAR)vendorStrPtr, "%4.4x", VendorID);
+                            sprintf((PCHAR)deviceStrPtr, "%4.4x", DeviceID);
 
                             RtlCopyMemory(&(newBMListPtr->VendorIdStr), (PCHAR)vendorStrPtr, 4);
                             RtlCopyMemory(&(newBMListPtr->DeviceIdStr), (PCHAR)deviceStrPtr, 4);
@@ -315,12 +335,10 @@ AtapiEnumBusMasterController__(
     return(SP_RETURN_NOT_FOUND);
 } // end AtapiEnumBusMasterController__()
 
-/*ULONG
-AtapiGetDeviceBase(
-    ) {
-}*/
 
-
+/*
+    Wrapper for read PCI config space
+*/
 ULONG 
 ScsiPortGetBusDataByOffset(
     IN PVOID  HwDeviceExtension,
@@ -351,8 +369,12 @@ ScsiPortGetBusDataByOffset(
     }
     RtlCopyMemory(Buffer, tmp+Offset, Length);
     return Length;
-}
+} // end ScsiPortGetBusDataByOffset()
 
+/*
+    Looks for device with specified Device/Vendor and Revision
+    on specified Bus/Slot
+*/
 ULONG
 AtapiFindDev(
     IN PVOID  HwDeviceExtension,
@@ -372,6 +394,7 @@ AtapiFindDev(
     PCI_SLOT_NUMBER       slotData;
 
     slotData.u.AsULONG = SlotNumber;
+    // walk through all Function Numbers
     for(funcNumber = 0; funcNumber < PCI_MAX_FUNCTION; funcNumber++) {
         
         slotData.u.bits.FunctionNumber = funcNumber;
@@ -398,8 +421,12 @@ AtapiFindDev(
             return 1;
     }
     return 0;
-}
+} // end AtapiFindDev()
 
+/*
+    Do some 'magic staff' for VIA SouthBridge
+    This will prevent data losses
+*/
 VOID
 AtapiViaSouthBridgeFixup(
     IN PVOID  HwDeviceExtension,
@@ -530,22 +557,21 @@ AtapiFindBusMasterController(
 //    PORT_CONFIGURATION_INFORMATION SavedConfigInfo = *ConfigInfo;
     *Again = FALSE;
 
+    KdPrint2((PRINT_PREFIX "AtapiFindBusMasterController"));
+
     if (!deviceExtension) {
+        KdPrint2((PRINT_PREFIX "!deviceExtension => SP_RETURN_ERROR"));
         return SP_RETURN_ERROR;
     }
 
     vendorStrPtr = vendorString;
     deviceStrPtr = deviceString;
 
-/*    if(!WinVer_IsNT) {
-        for(i=0;
-    }*/
-
     slotNumber = BMList[i].slotNumber;
     SystemIoBusNumber = BMList[i].busNumber;
 
-    KdPrint2((PRINT_PREFIX "IoBusNumber=%x\n",ConfigInfo->SystemIoBusNumber));
-    KdPrint2((PRINT_PREFIX "slotNumber=%x\n",slotNumber));
+    KdPrint2((PRINT_PREFIX "IoBusNumber=%#x\n",ConfigInfo->SystemIoBusNumber));
+    KdPrint2((PRINT_PREFIX "slotNumber=%#x\n",slotNumber));
 
     busDataRead = ScsiPortGetBusData(HwDeviceExtension,
                                      PCIConfiguration,
@@ -555,6 +581,7 @@ AtapiFindBusMasterController(
                                      PCI_COMMON_HDR_LENGTH);
 
     if (busDataRead < PCI_COMMON_HDR_LENGTH) {
+        KdPrint2((PRINT_PREFIX "busDataRead < PCI_COMMON_HDR_LENGTH => SP_RETURN_ERROR"));
         return SP_RETURN_ERROR;
     }
 
@@ -573,8 +600,10 @@ AtapiFindBusMasterController(
     slotData.u.AsULONG = slotNumber;
     KdPrint2((PRINT_PREFIX "DevId = %8.8X Class = %4.4X/%4.4X\n", dev_id, BaseClass, SubClass ));
 
-    if(BaseClass != PCI_DEV_CLASS_STORAGE)
+    if(BaseClass != PCI_DEV_CLASS_STORAGE) {
+        KdPrint2((PRINT_PREFIX "BaseClass != PCI_DEV_CLASS_STORAGE => SP_RETURN_NOT_FOUND\n"));
         return(SP_RETURN_NOT_FOUND);
+    }
 
     KdPrint2((PRINT_PREFIX "Storage Class\n"));
 
@@ -595,8 +624,10 @@ AtapiFindBusMasterController(
     switch(dev_id) {
     /* additional checks for some supported chipsets */
     case 0xc6931080:
-        if (SubClass != PCI_DEV_SUBCLASS_IDE)
+        if (SubClass != PCI_DEV_SUBCLASS_IDE) {
+            KdPrint2((PRINT_PREFIX "0xc6931080, SubClass != PCI_DEV_SUBCLASS_IDE => found = FALSE\n"));
             found = FALSE;
+        }
         break;
 
     /* unknown chipsets, try generic DMA if it seems possible */
@@ -604,13 +635,17 @@ AtapiFindBusMasterController(
         KdPrint2((PRINT_PREFIX "Default device\n"));
         if (found)
             break;
-        if(!Ata_is_supported_dev(&pciData))
+        if(!Ata_is_supported_dev(&pciData)) {
+            KdPrint2((PRINT_PREFIX "!Ata_is_supported_dev => found = FALSE\n"));
             found = FALSE;
+        }
         break;
     }
 
-    if(!found)
+    if(!found) {
+        KdPrint2((PRINT_PREFIX "!found => SP_RETURN_NOT_FOUND\n"));
         return(SP_RETURN_NOT_FOUND);
+    }
 
     KdPrint2((PRINT_PREFIX "found suitable device\n"));
 
@@ -622,10 +657,14 @@ AtapiFindBusMasterController(
     MasterDev = IsMasterDev(&pciData);
 
     if(MasterDev) {
-        if((channel==0) && ConfigInfo->AtdiskPrimaryClaimed)
+        if((channel==0) && ConfigInfo->AtdiskPrimaryClaimed) {
+            KdPrint2((PRINT_PREFIX "Error: Primary channel already claimed by another driver\n"));
             return(SP_RETURN_NOT_FOUND);
-        if((channel==1) && ConfigInfo->AtdiskSecondaryClaimed)
+        }
+        if((channel==1) && ConfigInfo->AtdiskSecondaryClaimed) {
+            KdPrint2((PRINT_PREFIX "Error: Secondary channel already claimed by another driver\n"));
             return(SP_RETURN_NOT_FOUND);
+        }
     }
 
 /*    if(!MasterDev) {
@@ -638,13 +677,14 @@ AtapiFindBusMasterController(
 
     deviceExtension->BusMaster = FALSE;
     if(IsBusMaster(&pciData)) {
+        KdPrint2((PRINT_PREFIX "IsBusMaster == TRUE\n"));
         deviceExtension->BaseIoAddressBM_0 = (PIDE_BUSMASTER_REGISTERS)
             (AtapiGetIoRange(HwDeviceExtension, ConfigInfo, pciData, SystemIoBusNumber,
                             4, bm_offset, MasterDev ? 0x08 : 0x10/*ATA_BMIOSIZE*/) - bm_offset); //range id
         if(deviceExtension->BaseIoAddressBM_0) {
             deviceExtension->BusMaster = TRUE;
         }
-        KdPrint2((PRINT_PREFIX "  BusMasterAddress (base): %x\n", deviceExtension->BaseIoAddressBM_0));
+        KdPrint2((PRINT_PREFIX "  BusMasterAddress (base): %#x\n", deviceExtension->BaseIoAddressBM_0));
     }
 
     if(!WinVer_IsNT) {
@@ -652,6 +692,7 @@ AtapiFindBusMasterController(
     }
 
     if(deviceExtension->BusMaster && !MasterDev) {
+        KdPrint2((PRINT_PREFIX "IsBusMaster == TRUE && !MasterDev\n"));
         statusByte = ScsiPortReadPortUchar((PUCHAR)&(deviceExtension->BaseIoAddressBM_0->Status));
         if(statusByte & BM_STATUS_SIMPLEX_ONLY) {
             KdPrint2((PRINT_PREFIX "  simplexOnly\n"));
@@ -660,7 +701,7 @@ AtapiFindBusMasterController(
     }
 
     ConfigInfo->AlignmentMask = 0x00000003;
-    
+
     /* do extra chipset specific setups */
     switch (dev_id) {
     case 0x522910b9: /* AcerLabs Aladdin need to activate the ATAPI FIFO */
@@ -811,6 +852,7 @@ AtapiFindBusMasterController(
      * doesn't work with the crappy ATA interrupt setup on the alpha.
      */
     if (dev_id == 0xc6931080 && slotData.u.bits.FunctionNumber > 1) {
+        KdPrint2((PRINT_PREFIX "dev_id == 0xc6931080 && FunctionNumber > 1 => exit_findbm\n"));
         goto exit_findbm;
     }
 
@@ -820,6 +862,7 @@ AtapiFindBusMasterController(
     deviceExtension->simplexOnly = simplexOnly;
     if((channel > 0) &&
        (deviceExtension->NumberChannels > 1)) {
+        KdPrint2((PRINT_PREFIX "Error: channel > 0 && NumberChannels > 1\n"));
         goto exit_findbm;
     }
 
@@ -827,6 +870,7 @@ AtapiFindBusMasterController(
     ConfigInfo->NumberOfBuses = (UCHAR)(deviceExtension->NumberChannels);
     if(!ConfigInfo->InitiatorBusId[0]) {
         ConfigInfo->InitiatorBusId[0] = (CHAR)(IoGetConfigurationInformation()->ScsiPortCount);
+        KdPrint2((PRINT_PREFIX "set ConfigInfo->InitiatorBusId[0] = %#x\n", ConfigInfo->InitiatorBusId[0]));
 /*        if(ConfigInfo->NumberOfBuses > 1)
             ConfigInfo->InitiatorBusId[1] = (CHAR)(IoGetConfigurationInformation()->ScsiPortCount)+1;*/
     }
@@ -835,7 +879,13 @@ AtapiFindBusMasterController(
     ConfigInfo->MaximumTransferLength = DEV_BSIZE*256;
 
     if (MasterDev) {
-        if(simplexOnly || !WinVer_IsNT) {
+        KdPrint2((PRINT_PREFIX "MasterDev\n"));
+        if(simplexOnly ||
+           !WinVer_IsNT ||
+           (deviceExtension->NumberChannels > 1)) {
+
+            KdPrint2((PRINT_PREFIX "2 channels & 2 irq for 1 controller\n"));
+
             if (ConfigInfo->AdapterInterfaceType == MicroChannel) {
                 ConfigInfo->InterruptMode2 =
                 ConfigInfo->InterruptMode = LevelSensitive;
@@ -846,6 +896,7 @@ AtapiFindBusMasterController(
             ConfigInfo->BusInterruptLevel = 14;
             ConfigInfo->BusInterruptLevel2 = 15;
         } else {
+            KdPrint2((PRINT_PREFIX "1 channels & 1 irq for 1 controller\n"));
             if (ConfigInfo->AdapterInterfaceType == MicroChannel) {
                 ConfigInfo->InterruptMode = LevelSensitive;
             } else {
@@ -854,14 +905,19 @@ AtapiFindBusMasterController(
             ConfigInfo->BusInterruptLevel = (channel == 0 ? 14 : 15);
         }
     } else {
+        KdPrint2((PRINT_PREFIX "!MasterDev\n"));
         ConfigInfo->SlotNumber = slotNumber;
         ConfigInfo->SystemIoBusNumber = SystemIoBusNumber;
+        
         /* primary and secondary channels share the same interrupt */
         if(!ConfigInfo->BusInterruptVector || 
             (ConfigInfo->BusInterruptVector != pciData.u.type0.InterruptLine)) {
+            KdPrint2((PRINT_PREFIX "patch irq line = %#x\n", pciData.u.type0.InterruptLine));
             ConfigInfo->BusInterruptVector = pciData.u.type0.InterruptLine;  // set default value
-            if(!ConfigInfo->BusInterruptVector)
+            if(!ConfigInfo->BusInterruptVector) {
+                KdPrint2((PRINT_PREFIX "patch irq line (2) = 10\n"));
                 ConfigInfo->BusInterruptVector = 10;
+            }
         }
         if(!simplexOnly) {
 /*            ConfigInfo->TaggedQueuing = TRUE;
@@ -883,45 +939,54 @@ AtapiFindBusMasterController(
 
     found = FALSE;
 
-    if(deviceExtension->BusMaster /*&& found*/) {
+    if(deviceExtension->BusMaster) {
         
         KdPrint2((PRINT_PREFIX "Reconstruct ConfigInfo\n"));
         ConfigInfo->MapBuffers = TRUE;
         ConfigInfo->NeedPhysicalAddresses = TRUE;
         if(!MasterDev) {
+            KdPrint2((PRINT_PREFIX "set Dma32BitAddresses\n"));
             ConfigInfo->Dma32BitAddresses = TRUE;
         }
-//        if(MasterDev) {
+
+        // set AdapterInterfaceType = PCIBus to make HalGetAdapter() 
+        // understand Master, ScatterGather, etc. flags
+        // and work with 2-channel MasterDev adapters properly
+
+        // We also need this hack to work with PIO and DMA on a single channel
+        // under NT4+sp4 (and probably previous sp)
+
+        // thanks to Vitaliy Vorobyov aka deathsoft@yandex.ru for
+        // better solution:
+        if(!WinVer_IsNT || (SPVersion < 0x0600)) {
+            KdPrint2((PRINT_PREFIX "set AdapterInterfaceType = PCIBus\n"));
             ConfigInfo->AdapterInterfaceType = PCIBus;
-//        }
+            ConfigInfo->SlotNumber = slotNumber;
+            ConfigInfo->SystemIoBusNumber = SystemIoBusNumber;
+        }
 
         ConfigInfo->Master = TRUE;
         ConfigInfo->DmaWidth = Width16Bits;
         ConfigInfo->CachesData = TRUE;
         ConfigInfo->ScatterGather = TRUE;
 
-/*        if(!MasterDev && BMList[i].channel) {
-            slotData.u.bits.FunctionNumber ++;
-            slotNumber = slotData.u.AsULONG;
-        }*/
-
-        ConfigInfo->SlotNumber = slotNumber;
-        ConfigInfo->SystemIoBusNumber = SystemIoBusNumber;
     }
+
+    // Note: now we can support only 2 channels !!!
+    // in order to add support for multichannel controllers we must rewrite
+    // io-range claiming algorithm
 
     for (; channel < (BMList[i].channel + deviceExtension->NumberChannels); channel++, c++) {
 
-        KdPrint2((PRINT_PREFIX "Channel %x\n",channel));
+        KdPrint2((PRINT_PREFIX "Channel %#x\n",channel));
 
-//        KeInitializeSpinLock(&(deviceExtension->chan[c].QueueSpinLock));
-//        KeInitializeDpc(&(deviceExtension->chan[c].Dpc), AtapiDpcDispatch, (PVOID)((ULONG)deviceExtension | channel));
-//        KeInitializeTimer(&(deviceExtension->chan[c].Timer));
         deviceExtension->chan[c].DeviceExtension = deviceExtension;
         deviceExtension->chan[c].lun[0] = &(deviceExtension->lun[c*2+0]);
         deviceExtension->chan[c].lun[1] = &(deviceExtension->lun[c*2+1]);
 
         // Check if the range specified is not used by another driver
         if(MasterDev) {
+            KdPrint2((PRINT_PREFIX "set AccessRanges\n"));
             (*ConfigInfo->AccessRanges)[channel * 2 + 0].RangeStart =
                 ScsiPortConvertUlongToPhysicalAddress(channel ? IO_WD2 : IO_WD1);
             (*ConfigInfo->AccessRanges)[channel * 2 + 0].RangeLength = ATA_IOSIZE;
@@ -929,11 +994,14 @@ AtapiFindBusMasterController(
             (*ConfigInfo->AccessRanges)[channel * 2 + 1].RangeStart =
                 ScsiPortConvertUlongToPhysicalAddress((channel ? IO_WD2 : IO_WD1) + ATA_ALTOFFSET);
             (*ConfigInfo->AccessRanges)[channel * 2 + 1].RangeLength = ATA_ALTIOSIZE;
-/*        } else {
-            AtapiGetIoRange(HwDeviceExtension, ConfigInfo, pciData, SystemIoBusNumber,
-                            channel * 2 + 0, ATA_IOSIZE); //range id
-            AtapiGetIoRange(HwDeviceExtension, ConfigInfo, pciData, SystemIoBusNumber,
-                            channel * 2 + 1, ATA_ALTIOSIZE); //range id*/
+
+            // do not claim 2nd BM io-range for Secondary channel of
+            // Compatible-mode controllers
+            if(WinVer_IsNT && !c && channel == 1) {
+                KdPrint2((PRINT_PREFIX "cheat ScsiPort for 2nd channel, BM io-range\n"));
+                (*ConfigInfo->AccessRanges)[4].RangeStart = ScsiPortConvertUlongToPhysicalAddress(0);
+                (*ConfigInfo->AccessRanges)[4].RangeLength = 0;
+            }
         }
 
         IoBasePort1 = (*ConfigInfo->AccessRanges)[channel * 2 + 0].RangeStart;
@@ -944,26 +1012,32 @@ AtapiFindBusMasterController(
                                   SystemIoBusNumber /*ConfigInfo->SystemIoBusNumber*/,
                                   IoBasePort1,
                                   ATA_IOSIZE,
-                                  TRUE) )
+                                  TRUE) ) {
+            KdPrint2((PRINT_PREFIX "ScsiPortValidateRange failed (1)\n"));
             continue;
+        }
         
         if(!ScsiPortValidateRange(HwDeviceExtension,
                                   PCIBus /*ConfigInfo->AdapterInterfaceType*/,
                                   SystemIoBusNumber /*ConfigInfo->SystemIoBusNumber*/,
                                   IoBasePort2,
                                   ATA_ALTIOSIZE,
-                                  TRUE) )
+                                  TRUE) ) {
+            KdPrint2((PRINT_PREFIX "ScsiPortValidateRange failed (2)\n"));
             continue;
+        }
 
         KdPrint2((PRINT_PREFIX "Getting IO ranges\n"));
 
         // Ok, translate adresses to io-space
         if(ScsiPortConvertPhysicalAddressToUlong(IoBasePort2)) {
             if(!(MasterDev /* || USE_16_BIT */)) {
+                KdPrint2((PRINT_PREFIX "!MasterDev mode\n"));
                 IoBasePort2 = ScsiPortConvertUlongToPhysicalAddress(
                                   ScsiPortConvertPhysicalAddressToUlong(IoBasePort2) + 2);
             }
         } else {
+            KdPrint2((PRINT_PREFIX "use relartive IoBasePort2\n"));
             IoBasePort2 = ScsiPortConvertUlongToPhysicalAddress(
                               ScsiPortConvertPhysicalAddressToUlong(IoBasePort1) + ATA_PCCARD_ALTOFFSET);
         }
@@ -975,14 +1049,16 @@ AtapiFindBusMasterController(
                                         IoBasePort1,
                                         ATA_IOSIZE,
                                         TRUE);
-        KdPrint2((PRINT_PREFIX "IO range 1 %x\n",ioSpace));
+        KdPrint2((PRINT_PREFIX "IO range 1 %#x\n",ioSpace));
 
         // Check if ioSpace accessible.
         if (!ioSpace) {
+            KdPrint2((PRINT_PREFIX "!ioSpace\n"));
             continue;
         }
 
         if(deviceExtension->BusMaster) {
+            KdPrint2((PRINT_PREFIX "set BusMaster io-range in DO\n"));
             deviceExtension->BaseIoAddressBM[c] = (PIDE_BUSMASTER_REGISTERS)
                 ((ULONG)(deviceExtension->BaseIoAddressBM_0) + bm_offset + (c ? ATA_BM_OFFSET1 : 0));
         }
@@ -1022,11 +1098,12 @@ free_iospace_1:
                                         IoBasePort2,
                                         ATA_ALTIOSIZE,
                                         TRUE);
-        KdPrint2((PRINT_PREFIX "IO range 2 %x\n",ioSpace));
+        KdPrint2((PRINT_PREFIX "IO range 2 %#x\n",ioSpace));
 
         deviceExtension->BaseIoAddress2[c] = (PIDE_REGISTERS_2)(ioSpace);
         if(!deviceExtension->BaseIoAddress2[c]) {
             // Release all allocated resources
+            KdPrint2((PRINT_PREFIX "!deviceExtension->BaseIoAddress2\n"));
             ioSpace = (PUCHAR)(deviceExtension->BaseIoAddress1[c]);
             goto free_iospace_1;
         }
@@ -1039,6 +1116,7 @@ free_iospace_1:
             KdPrint2((PRINT_PREFIX "Found some devices\n"));
             found = TRUE;
         } else {
+            KdPrint2((PRINT_PREFIX "no devices\n"));
 /*            KeBugCheckEx(0xc000000e,
                          ScsiPortConvertPhysicalAddressToUlong(IoBasePort1),
                          ScsiPortConvertPhysicalAddressToUlong(IoBasePort2), 
@@ -1048,21 +1126,16 @@ free_iospace_1:
 
         deviceExtension->chan[c].PrimaryAddress = FALSE;
         // Claim primary or secondary ATA IO range.
-/*        if (ScsiPortConvertPhysicalAddressToUlong(IoBasePort1) == IO_WD1) {
-            ConfigInfo->AtdiskPrimaryClaimed = TRUE;
-            deviceExtension->chan[c].PrimaryAddress = TRUE;
-
-        } else
-        if (ScsiPortConvertPhysicalAddressToUlong(IoBasePort1) == IO_WD2) {
-            ConfigInfo->AtdiskSecondaryClaimed = TRUE;
-        }*/
         if (MasterDev) {
+            KdPrint2((PRINT_PREFIX "claim Compatible controller\n"));
             if (channel == 0) {
+                KdPrint2((PRINT_PREFIX "claim Primary\n"));
                 ConfigInfo->AtdiskPrimaryClaimed = TRUE;
                 deviceExtension->chan[c].PrimaryAddress = TRUE;
 
             } else
             if (channel == 1) {
+                KdPrint2((PRINT_PREFIX "claim Secondary\n"));
                 ConfigInfo->AtdiskSecondaryClaimed = TRUE;
             }
         }
@@ -1073,6 +1146,7 @@ free_iospace_1:
 exit_findbm:
 
     if(!found) {
+        KdPrint2((PRINT_PREFIX "exit: !found\n"));
         if(deviceExtension->BaseIoAddress1[0])
             ScsiPortFreeDeviceBase(HwDeviceExtension,
                                    deviceExtension->BaseIoAddress1[0]);
@@ -1091,24 +1165,11 @@ exit_findbm:
             ScsiPortFreeDeviceBase(HwDeviceExtension,
                                    deviceExtension->BaseIoAddressBM_0);
         
-/*        if(channel == 1) {
-            BMList[i].channel = 1;
-            *ConfigInfo = SavedConfigInfo;
-            return AtapiFindBusMasterController(HwDeviceExtension,
-                                                Context,
-                                                BusInformation,
-                                                ArgumentString,
-                                                ConfigInfo,
-                                                Again
-                                                );
-        }*/
-        
+        KdPrint2((PRINT_PREFIX "return SP_RETURN_NOT_FOUND\n"));
         return SP_RETURN_NOT_FOUND;
     } else {
-/*        if(channel == 1) {
-            BMList[i].channel = 1;
-            *Again = TRUE;
-        }*/
+
+        KdPrint2((PRINT_PREFIX "exit: init spinlock\n"));
         KeInitializeSpinLock(&(deviceExtension->DpcSpinLock));
         deviceExtension->ActiveDpcChan =
         deviceExtension->FirstDpcChan = -1;
@@ -1117,22 +1178,30 @@ exit_findbm:
 
         BMList[i].Isr2Enable = FALSE;
 
+        KdPrint2((PRINT_PREFIX "MasterDev=%#x, NumberChannels=%#x, Isr2DevObj=%#x\n",
+            MasterDev, deviceExtension->NumberChannels, BMList[i].Isr2DevObj));
+
         if(!MasterDev && (deviceExtension->NumberChannels > 1) &&   // do not touch MasterDev
            !BMList[i].Isr2DevObj) {                       // handle re-init under w2k+
+
+            KdPrint2((PRINT_PREFIX "Init ISR:\n"));
 
             PISR2_DEVICE_EXTENSION Isr2DevExt;
 
 //            __asm int 3;
 
+            KdPrint2((PRINT_PREFIX "Create DO\n"));
             status = IoCreateDevice(SavedDriverObject, sizeof(ISR2_DEVICE_EXTENSION),
                                     NULL/*devname*/, FILE_DEVICE_UNKNOWN,
                                     0, FALSE, &(BMList[i].Isr2DevObj));
 
             if(!NT_SUCCESS(status)) {
+                KdPrint2((PRINT_PREFIX "failed\n"));
                 found = FALSE;
                 goto exit_findbm;
             }
 
+            KdPrint2((PRINT_PREFIX "HalGetInterruptVector\n"));
             BMList[i].Isr2Vector = HalGetInterruptVector(
                 ConfigInfo->AdapterInterfaceType,
                 ConfigInfo->SystemIoBusNumber,
@@ -1147,6 +1216,7 @@ exit_findbm:
 
 //            deviceExtension->QueueNewIrql = BMList[i].Isr2Irql;
             
+            KdPrint2((PRINT_PREFIX "IoConnectInterrupt\n"));
             status = IoConnectInterrupt(
                 &(BMList[i].Isr2InterruptObject),
                 AtapiInterrupt2,
@@ -1161,6 +1231,7 @@ exit_findbm:
                 FALSE);
 
             if(!NT_SUCCESS(status)) {
+                KdPrint2((PRINT_PREFIX "failed\n"));
                 IoDeleteDevice(BMList[i].Isr2DevObj);
                 found = FALSE;
                 goto exit_findbm;
@@ -1169,6 +1240,7 @@ exit_findbm:
         }
     }
 
+    KdPrint2((PRINT_PREFIX "return SP_RETURN_FOUND\n"));
     return SP_RETURN_FOUND;
 
 } // end AtapiFindBusMasterController()
@@ -1214,9 +1286,6 @@ AtapiFindController(
     ULONG                irq;
     ULONG                portBase;
     ULONG                retryCount;
-/*    PCI_SLOT_NUMBER      slotData;
-    PPCI_COMMON_CONFIG   pciData;*/
-//    ULONG                pciBuffer;
     BOOLEAN              atapiOnly;
     UCHAR                statusByte;
     BOOLEAN              preConfig = FALSE;
@@ -1325,7 +1394,7 @@ retryIdentifier:
         // Check if indentifier can be read back.
         if ((statusByte = ScsiPortReadPortUchar(&((PIDE_REGISTERS_1)ioSpace)->i.CylinderLow)) != 0xAA) {
 
-            KdPrint2((PRINT_PREFIX "AtapiFindController: Identifier read back from Master (%x)\n",
+            KdPrint2((PRINT_PREFIX "AtapiFindController: Identifier read back from Master (%#x)\n",
                         statusByte));
 
             statusByte = ScsiPortReadPortUchar(&((PATAPI_REGISTERS_2)ioSpace)->AlternateStatus);
@@ -1340,7 +1409,7 @@ retryIdentifier:
                     ScsiPortStallExecution(1000);
                     statusByte = ScsiPortReadPortUchar(&((PATAPI_REGISTERS_1)ioSpace)->i.Status);
                     KdPrint2((PRINT_PREFIX 
-                                "AtapiFindController: First access to status %x\n",
+                                "AtapiFindController: First access to status %#x\n",
                                 statusByte));
                 } while ((statusByte & IDE_STATUS_BUSY) && ++i < 10);
 
@@ -1358,7 +1427,7 @@ retryIdentifier:
             if ((statusByte = ScsiPortReadPortUchar(&((PIDE_REGISTERS_1)ioSpace)->i.CylinderLow)) != 0xAA) {
 
                 KdPrint2((PRINT_PREFIX 
-                            "AtapiFindController: Identifier read back from Slave (%x)\n",
+                            "AtapiFindController: Identifier read back from Slave (%#x)\n",
                             statusByte));
 
                 // No controller at this base address.
@@ -1429,7 +1498,7 @@ retryIdentifier:
         ConfigInfo->MaximumTransferLength = 0x10000;
 
         KdPrint2((PRINT_PREFIX 
-                   "AtapiFindController: Found IDE at %x\n",
+                   "AtapiFindController: Found IDE at %#x\n",
                    deviceExtension->BaseIoAddress1[0]));
 
         // For Daytona, the atdisk driver gets the first shot at the
@@ -1464,9 +1533,6 @@ retryIdentifier:
             } else {
                 atapiOnly = FALSE;
             }
-
-            // If this is a PCI machine, pick up all devices.
-//            deviceExtension->DWordIO = FALSE;
 
         } else {
 
@@ -1541,7 +1607,10 @@ CheckDevice(
     UCHAR                statusByte;
     ULONG                RetVal=0;
 
+    KdPrint2((PRINT_PREFIX "CheckDevice: Device %#x\n",
+               deviceNumber));
     if(ResetBus) {
+        KdPrint2((PRINT_PREFIX "CheckDevice: reset bus\n"));
         // Reset controller
         AtapiSoftReset(baseIoAddress1,deviceNumber);
         WaitOnBusy(baseIoAddress2,statusByte);
@@ -1550,14 +1619,16 @@ CheckDevice(
     SelectDrive(baseIoAddress1, deviceNumber);
 
     ScsiPortStallExecution(10);
-    WaitOnBaseBusy(baseIoAddress1,statusByte);
+    WaitOnBaseBusyLong(baseIoAddress1,statusByte);
 
     // Check here for some SCSI adapters that incorporate IDE emulation.
     GetBaseStatus(baseIoAddress1, statusByte);
 /*        if (statusByte == 0xFF) {
         continue;
     }*/
+    KdPrint2((PRINT_PREFIX "CheckDevice: status %#x\n", statusByte));
     if(statusByte & IDE_STATUS_BUSY) {
+        KdPrint2((PRINT_PREFIX "CheckDevice: busy => return\n"));
         deviceExtension->lun[ldev].DeviceFlags = 0;
         return 0;
     }
@@ -1567,6 +1638,7 @@ CheckDevice(
 
     if (signatureLow == ATAPI_MAGIC_LSB && signatureHigh == ATAPI_MAGIC_MSB) {
 
+        KdPrint2((PRINT_PREFIX "CheckDevice: ATAPI signature found\n"));
         // ATAPI signature found.
         // Issue the ATAPI identify command if this
         // is not for the crash dump utility.
@@ -1580,7 +1652,7 @@ CheckDevice(
                               IDE_COMMAND_ATAPI_IDENTIFY)) {
 
                 // Indicate ATAPI device.
-                KdPrint2((PRINT_PREFIX "CheckDevice: Device %x is ATAPI\n",
+                KdPrint2((PRINT_PREFIX "CheckDevice: Device %#x is ATAPI\n",
                            deviceNumber));
 
                 RetVal = DFLAGS_DEVICE_PRESENT | DFLAGS_ATAPI_DEVICE;
@@ -1594,7 +1666,7 @@ CheckDevice(
             } else {
 
                 // Indicate no working device.
-                KdPrint2((PRINT_PREFIX "CheckDevice: Device %x not responding\n",
+                KdPrint2((PRINT_PREFIX "CheckDevice: Device %#x not responding\n",
                            deviceNumber));
 
                 deviceExtension->lun[ldev].DeviceFlags = 0;
@@ -1606,6 +1678,7 @@ CheckDevice(
 
     } else {
 
+        KdPrint2((PRINT_PREFIX "CheckDevice: IDE device check\n"));
         // Issue IDE Identify. If an Atapi device is actually present, the signature
         // will be asserted, and the drive will be recognized as such.
         if (IssueIdentify(HwDeviceExtension,
@@ -1614,7 +1687,7 @@ CheckDevice(
                           IDE_COMMAND_IDENTIFY)) {
 
             // IDE drive found.
-            KdPrint2((PRINT_PREFIX "CheckDevice: Device %x is IDE\n",
+            KdPrint2((PRINT_PREFIX "CheckDevice: Device %#x is IDE\n",
                        deviceNumber));
 
             // Indicate IDE - not ATAPI device.
@@ -1624,6 +1697,7 @@ CheckDevice(
         }
         GetBaseStatus(baseIoAddress1, statusByte);
     }
+    KdPrint2((PRINT_PREFIX "CheckDevice: check status: %sfound\n", RetVal ? "" : "not "));
     return RetVal;
 }
 
@@ -1767,7 +1841,7 @@ FindDevices(
             WaitOnBusy(baseIoAddress2,statusByte);
 
             KdPrint2((PRINT_PREFIX 
-                        "FindDevices: Status before SetDriveParameters: (%x) (%x)\n",
+                        "FindDevices: Status before SetDriveParameters: (%#x) (%#x)\n",
                         statusByte,
                         ScsiPortReadPortUchar(&baseIoAddress1->i.DriveSelect)));
 

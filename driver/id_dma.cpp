@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2003 Alexander A. Telyatnikov (Alter)
+Copyright (c) 2002-2004 Alexander A. Telyatnikov (Alter)
 
 Module Name:
     id_dma.cpp
@@ -45,7 +45,6 @@ Revision History:
 extern "C" {
 
 #include <ntddk.h>
-//#include "miniport.h"
 
 };
 #include "stddef.h"
@@ -104,42 +103,7 @@ AtapiDmaAlloc(
     )
 {
     return;
-/*    PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
-
-    if(!ConfigInfo)
-        return;
-
-    if(deviceExtension->chan[lChannel].dma_tab)
-        return;
-    if( !deviceExtension->dma_tab_0 &&
-       !(deviceExtension->HbaCtrlFlags & HBAFLAGS_DMA_DISABLED)) {
-        deviceExtension->dma_tab_0 = (PBM_DMA_ENTRY)
-            ScsiPortGetUncachedExtension(HwDeviceExtension, ConfigInfo, PAGE_SIZE*2);
-    }
-    if(!deviceExtension->dma_tab_0 ||
-       ((LONG)(deviceExtension->dma_tab_0) == -1) ) {
-        deviceExtension->dma_tab_0 = NULL;
-        deviceExtension->HbaCtrlFlags |= HBAFLAGS_DMA_DISABLED;
-        return;
-    }
-    if(!deviceExtension->chan[lChannel].dma_tab) {
-        deviceExtension->chan[lChannel].dma_tab = (PBM_DMA_ENTRY)
-            ((PUCHAR)(deviceExtension->dma_tab_0) + (lChannel ? PAGE_SIZE : 0));
-    }*/
 } // end AtapiDmaAlloc()
-
-/*VOID
-AtapiDmaAlloc(
-    IN PVOID HwDeviceExtension,
-    IN PSCSI_REQUEST_BLOCK Srb
-    )
-{
-    PATA_REQ AtaReq = (PATA_REQ)(Srb->SrbExtension);
-    ULONG lChannel = GET_CHANNEL(Srb);
-    PHW_CHANNEL chan = &(deviceExtension->chan[lChannel]);
-
-
-}*/
 
 BOOLEAN
 AtapiDmaSetup(
@@ -157,7 +121,7 @@ AtapiDmaSetup(
     PHW_CHANNEL chan = &(deviceExtension->chan[lChannel]);
     PATA_REQ AtaReq = (PATA_REQ)(Srb->SrbExtension);
 
-    KdPrint2((PRINT_PREFIX "AtapiDmaSetup: mode %x\n", deviceExtension->lun[lChannel*2+DeviceNumber].TransferMode ));
+    KdPrint2((PRINT_PREFIX "AtapiDmaSetup: mode %#x\n", deviceExtension->lun[lChannel*2+DeviceNumber].TransferMode ));
     if(!count) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: count=0\n" ));
         return FALSE;
@@ -223,7 +187,7 @@ AtapiDmaStart(
     PIDE_BUSMASTER_REGISTERS BaseIoAddressBM = deviceExtension->BaseIoAddressBM[lChannel];
     PATA_REQ AtaReq = (PATA_REQ)(Srb->SrbExtension);
 
-    KdPrint2((PRINT_PREFIX "AtapiDmaStart: %s on %x:%x\n", 
+    KdPrint2((PRINT_PREFIX "AtapiDmaStart: %s on %#x:%#x\n", 
         (Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? "read" : "write",
         lChannel, DeviceNumber ));
 
@@ -260,9 +224,6 @@ AtapiDmaStart(
     ScsiPortWritePortUchar(&(BaseIoAddressBM->Command), 
          ScsiPortReadPortUchar(&(BaseIoAddressBM->Command)) |
              BM_COMMAND_START_STOP);
-
-    // Enable interrupts
-//    ScsiPortWritePortUchar(&(deviceExtension->BaseIoAddress2[lChannel]->AlternateStatus), IDE_DC_A_4BIT );
 
 } // end AtapiDmaStart()
 
@@ -390,41 +351,6 @@ AtapiDmaInit(
     if(!deviceExtension->BaseIoAddressBM[lChannel]) {
         wdmamode = udmamode = -1;
     }
-/*    if(!deviceExtension->BaseIoAddressBM[lChannel] ||
-        (wdmamode < 0 && udmamode < 0)) {
-        // try to init advanced PIO mode if no DMA available
-        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                            ph_piomode = (CHAR)AtaPio2Mode(apiomode),
-                            ATA_C_F_SETXFER,ATA_WAIT_BASE_READY);
-        if (!(statusByte & IDE_STATUS_ERROR)) {
-            deviceExtension->lun[ldev].TransferMode = ph_piomode;
-            return;
-        }
-        // hm... can't init max PIO mode
-        // try downclock...
-        for(;apiomode != 0xff; apiomode--) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ph_piomode = (CHAR)AtaPio2Mode(apiomode),
-                                ATA_C_F_SETXFER,ATA_WAIT_BASE_READY);
-            if (statusByte == IDE_STATUS_SUCCESS) {
-                deviceExtension->lun[ldev].TransferMode = ph_piomode;
-                return;
-            }
-        }
-//        BrutePoint();
-        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                            ATA_PIO,
-                            ATA_C_F_SETXFER,ATA_WAIT_BASE_READY);
-        deviceExtension->lun[ldev].TransferMode = ATA_PIO;
-        return;
-    }*/
-/*    if (ATAPI_DEVICE(deviceExtension, ldev)) {
-        udmamode = -1;
-        wdmamode = -1;
-    }*/
 
     if (udmamode > 2 && !deviceExtension->lun[ldev].IdentifyData.HwResCableId) {
         KdPrint2((PRINT_PREFIX "AtapiDmaInit: DMA limited to UDMA33, non-ATA66 compliant cable"));
@@ -986,9 +912,22 @@ AtapiDmaInit(
 	/* we could set PIO mode timings, but we assume the BIOS did that */
 	break;
 
-    case 0x06491095:	/* CMD 649 ATA100 controller */
-	if (udmamode >= 5) {
+    case 0x06481095:    /* CMD 648 ATA66 controller */
+        udmamode = min(udmamode, 4);
+	/* FALLTHROUGH */
+
+    case 0x06491095:    /* CMD 649 ATA100 controller */
+        {
+        static const UCHAR cmd_modes[2][6] = {
+            { 0x00, 0x00, 0x011, 0x00, 0x15, 0x05 },
+            { 0x00, 0x00, 0x042, 0x00, 0x4a, 0x0a } };
+
+        udmamode = min(udmamode, 5);
+        /* enable UDMA mode */
+        for(i = udmamode; i>=0; i--) {
 	    UCHAR umode;
+            if(!valid_udma[i])
+                continue;
 
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,
@@ -996,51 +935,18 @@ AtapiDmaInit(
             if (!(statusByte & IDE_STATUS_ERROR)) {
                 GetPciConfig1(Channel ? 0x7b : 0x73, umode);
 		umode &= ~(!(DeviceNumber & 1) ? 0x35 : 0xca);
-		umode |= (!(DeviceNumber & 1) ? 0x05 : 0x0a);
+		umode |= ( cmd_modes[DeviceNumber & 1][i]);
                 SetPciConfig1(Channel ? 0x7b : 0x73, umode);
                 deviceExtension->lun[ldev].TransferMode = ATA_UDMA5;
 		return;
 	    }
-	}
-	/* FALLTHROUGH */
-
-    case 0x06481095:	/* CMD 648 ATA66 controller */
-	if (udmamode >= 4) {
-	    UCHAR umode;
-
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-            		    ATA_UDMA4,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                GetPciConfig1(Channel ? 0x7b : 0x73, umode);
-		umode &= ~(!(DeviceNumber & 1) ? 0x35 : 0xca);
-		umode |= (!(DeviceNumber & 1) ? 0x15 : 0x4a);
-                SetPciConfig1(Channel ? 0x7b : 0x73, umode);
-                deviceExtension->lun[ldev].TransferMode = ATA_UDMA4;
-		return;
-	    }
-	}
-	if (udmamode >= 2) {
-	    UCHAR umode;
-
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-            		    ATA_UDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                GetPciConfig1(Channel ? 0x7b : 0x73, umode);
-		umode &= ~(!(DeviceNumber & 1) ? 0x35 : 0xca);
-		umode |= (!(DeviceNumber & 1) ? 0x11 : 0x42);
-                SetPciConfig1(Channel ? 0x7b : 0x73, umode);
-                deviceExtension->lun[ldev].TransferMode = ATA_UDMA2;
-		return;
-	    }
-	}
+        }
 	/* make sure eventual UDMA mode from the BIOS is disabled */
         ChangePciConfig1(Channel ? 0x7b : 0x73, a & ~(!(DeviceNumber & 1) ? 0x35 : 0xca));
-
+        }
 	/* FALLTHROUGH */
 
-    case 0x06461095:	/* CMD 646 ATA controller */
+    case 0x06461095:    /* CMD 646 ATA controller */
 	if (wdmamode >= 2 && apiomode >= 4) {
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,

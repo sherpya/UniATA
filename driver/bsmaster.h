@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2003 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2004 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     bsmaster.h
@@ -179,6 +179,11 @@ typedef struct _ATA_REQ {
 #define REQ_STATE_DPC_RESET_REQ         0x52
 #define REQ_STATE_DPC_COMPLETE_REQ      0x53
 
+#define REQ_STATE_DPC_WAIT_BUSY0        0x57
+#define REQ_STATE_DPC_WAIT_BUSY         0x58
+#define REQ_STATE_DPC_WAIT_DRQ          0x59
+#define REQ_STATE_DPC_WAIT_DRQ0         0x5a
+
 #define REQ_STATE_TRANSFER_COMPLETE     0x7f
 
 // Command actions:
@@ -304,10 +309,14 @@ typedef struct _HW_LU_EXTENSION {
 #endif//IO_STATISTICS
 } HW_LU_EXTENSION, *PHW_LU_EXTENSION;
 
+#define IDE_MAX_CHAN          2
+#define IDE_MAX_LUN_PER_CHAN  2
+#define IDE_MAX_LUN           (IDE_MAX_CHAN*IDE_MAX_LUN_PER_CHAN)
+
 // Device extension
 typedef struct _HW_DEVICE_EXTENSION {
-    PIDE_REGISTERS_1 BaseIoAddress1[2];    // Base register locations
-    PIDE_REGISTERS_2 BaseIoAddress2[2];
+    PIDE_REGISTERS_1 BaseIoAddress1[IDE_MAX_CHAN];    // Base register locations
+    PIDE_REGISTERS_2 BaseIoAddress2[IDE_MAX_CHAN];
     ULONG BusInterruptLevel;    // Interrupt level
     ULONG InterruptMode;    // Interrupt Mode (Level or Edge)
     // Number of channels being supported by one instantiation
@@ -315,8 +324,8 @@ typedef struct _HW_DEVICE_EXTENSION {
     // with so many broken PCI IDE controllers being sold, we have
     // to support them.
     ULONG NumberChannels;
-    HW_LU_EXTENSION lun[4];
-    HW_CHANNEL chan[2];
+    HW_LU_EXTENSION lun[IDE_MAX_LUN];
+    HW_CHANNEL chan[IDE_MAX_CHAN];
     UCHAR LastInterruptedChannel;
     // Indicates the number of blocks transferred per int. according to the
     // identify data.
@@ -337,7 +346,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     PDEVICE_OBJECT Isr2DevObj;
 
     PIDE_BUSMASTER_REGISTERS  BaseIoAddressBM_0;
-    PIDE_BUSMASTER_REGISTERS  BaseIoAddressBM[2];
+    PIDE_BUSMASTER_REGISTERS  BaseIoAddressBM[IDE_MAX_CHAN];
     ULONG DevID;
     ULONG RevID;
     ULONG Channel;
