@@ -945,6 +945,14 @@ SetDriveParameters(
     IN ULONG Channel
     );
 
+ULONG
+CheckDevice(
+    IN PVOID   HwDeviceExtension,
+    IN ULONG   Channel,
+    IN ULONG   deviceNumber,
+    IN BOOLEAN ResetBus
+    );
+
 BOOLEAN
 FindDevices(
     IN PVOID HwDeviceExtension,
@@ -1037,6 +1045,13 @@ extern VOID
 AtapiDisableInterrupts(
     IN PVOID HwDeviceExtension,
     IN ULONG c
+    );
+
+extern ULONG
+AtapiRegCheckParameterValue(
+    IN PVOID HwDeviceExtension,
+    IN PWSTR Name,
+    IN ULONG Default
     );
 
 #pragma pack(pop)

@@ -71,6 +71,8 @@ ULONG  MajorVersion = 0;
 ULONG  MinorVersion = 0;
 ULONG  BuildNumber  = 0;
 
+ULONG  SkipRaids = 1;
+
 //UCHAR EnableDma = FALSE;
 //UCHAR EnableReorder = FALSE;
 
@@ -1340,8 +1342,10 @@ AtapiResetController__(
         for (i = 0; i < 2; i++) {
 
             // Check if device present.
-            if (!(deviceExtension->lun[i + (j * 2)].DeviceFlags & DFLAGS_DEVICE_PRESENT))
-                continue;
+            if (!(deviceExtension->lun[i + (j * 2)].DeviceFlags & DFLAGS_DEVICE_PRESENT)) {
+                if(!CheckDevice(HwDeviceExtension, i, j, FALSE))
+                    continue;
+            }
 
             // Check for ATAPI disk.
             if (deviceExtension->lun[i + (j * 2)].DeviceFlags & DFLAGS_ATAPI_DEVICE) {
@@ -1821,8 +1825,10 @@ AtapiHwInitialize__(
     for (i = lChannel*2; i < (lChannel+1)*2; i++) {
 
         // skip empty slots
-        if (!(deviceExtension->lun[i].DeviceFlags & DFLAGS_DEVICE_PRESENT))
-            continue;
+        if (!(deviceExtension->lun[i].DeviceFlags & DFLAGS_DEVICE_PRESENT)) {
+            if(!CheckDevice(deviceExtension, lChannel, i, FALSE))
+                continue;
+        }
 
         baseIoAddress1 = deviceExtension->BaseIoAddress1[lChannel];
         baseIoAddress2 = deviceExtension->BaseIoAddress2[lChannel];
@@ -4479,8 +4485,8 @@ IdeSendCommand(
         // which support up to two devices.
         if ((Srb->Lun != 0) ||
             (Srb->PathId >= deviceExtension->NumberChannels) ||
-            (Srb->TargetId > 2) ||
-            (!deviceExtension->lun[ldev].DeviceFlags & DFLAGS_DEVICE_PRESENT)) {
+            (Srb->TargetId > 2) /*||
+            (!deviceExtension->lun[ldev].DeviceFlags & DFLAGS_DEVICE_PRESENT)*/) {
 
             KdPrint2((PRINT_PREFIX 
                        "IdeSendCommand: SCSIOP_INQUIRY rejected\n"));
@@ -4494,6 +4500,17 @@ IdeSendCommand(
                        "IdeSendCommand: SCSIOP_INQUIRY ok\n"));
             PINQUIRYDATA    inquiryData  = (PINQUIRYDATA)(Srb->DataBuffer);
             PIDENTIFY_DATA2 identifyData = &(deviceExtension->lun[ldev].IdentifyData);
+
+
+            if (!(deviceExtension->lun[ldev].DeviceFlags & DFLAGS_DEVICE_PRESENT)) {
+                if(!CheckDevice(HwDeviceExtension, lChannel, ldev & 1, FALSE)) {
+                    KdPrint2((PRINT_PREFIX 
+                               "IdeSendCommand: SCSIOP_INQUIRY rejected (2)\n"));
+                    // Indicate no device found at this address.
+                    status = SRB_STATUS_SELECTION_TIMEOUT;
+                    break;
+                }
+            }
 
             // Zero INQUIRY data structure.
             AtapiZeroMemory((PCHAR)(Srb->DataBuffer), Srb->DataTransferLength);
@@ -4958,9 +4975,15 @@ AtapiStartIo__(
         case SRB_FUNCTION_EXECUTE_SCSI:
 
             if(!(deviceExtension->lun[ldev].DeviceFlags & DFLAGS_DEVICE_PRESENT)) {
-                KdPrint2((PRINT_PREFIX "SRB_STATUS_SELECTION_TIMEOUT\n"));
-                status = SRB_STATUS_SELECTION_TIMEOUT;
-                break;
+
+                if(!CheckDevice(HwDeviceExtension, lChannel, ldev & 1, FALSE)) {
+                    KdPrint2((PRINT_PREFIX 
+                               "IdeSendCommand: SCSIOP_INQUIRY rejected (2)\n"));
+                    // Indicate no device found at this address.
+                    KdPrint2((PRINT_PREFIX "SRB_STATUS_SELECTION_TIMEOUT\n"));
+                    status = SRB_STATUS_SELECTION_TIMEOUT;
+                    break;
+                }
             }
 
             if(TopLevel) {
@@ -5380,6 +5403,8 @@ DriverEntry(
         ReEnter = TRUE;
     }
 
+    SkipRaids = AtapiRegCheckParameterValue(NULL, L"SkipRaids", 1);
+
     statusToReturn = 0xffffffff;
 
 //    __asm int 3;
@@ -5728,7 +5753,8 @@ BuildRequestSenseSrb (
 ULONG
 AtapiRegCheckParameterValue(
     IN PVOID HwDeviceExtension,
-    IN PWSTR Name
+    IN PWSTR Name,
+    IN ULONG Default
     )
 {
 #define ITEMS_TO_QUERY 2 // always 1 greater than what is searched 
@@ -5736,7 +5762,7 @@ AtapiRegCheckParameterValue(
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     PRTL_QUERY_REGISTRY_TABLE parameters = NULL;
     NTSTATUS          status;
-    LONG              zero = 0;
+    LONG              zero = Default;
 
     LONG              tmp = 0;
     LONG              doRun = 0;
@@ -5745,7 +5771,7 @@ AtapiRegCheckParameterValue(
     ANSI_STRING       paramNum;
 
     PUNICODE_STRING   RegistryPath = &SavedRegPath;
-    ULONG DeviceNumber = deviceExtension->DevIndex;
+    ULONG DeviceNumber = deviceExtension ? deviceExtension->DevIndex : -1;
 
     UNICODE_STRING    paramStr;
 

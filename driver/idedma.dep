@@ -28,7 +28,7 @@
 	".\bsmaster.h"\
 	
 BusMaster_v$(VER).rar : \
-	".\Debug\idedma.sys"\
+	"Debug\idedma.sys"\
 	".\pkg_files.dist"\
 	".\pkg_files.src"\
-	".\Release\idedma.sys"\
+	"Release\idedma.sys"\

@@ -617,5 +617,6 @@ extern PDRIVER_OBJECT SavedDriverObject;
 #define GET_LDEV(Srb)  (Srb->TargetId | (Srb->PathId << 1))
 #define GET_LDEV2(P, T, L)  (T | (P<<1))
 
+extern ULONG SkipRaids;
 
 #endif //__IDE_BUSMASTER_H__

@@ -239,14 +239,14 @@ AtapiEnumBusMasterController__(
                 // look for known chipsets
                 found = FALSE;
                 known = FALSE;
-                for(i=0; i<NUM_BUSMASTER_ADAPTERS; i++) {
-                    if(VendorID == BusMasterAdapters[i].nVendorId &&
-                       DeviceID == BusMasterAdapters[i].nDeviceId) {
-                        KdPrint2((PRINT_PREFIX "Known device\n"));
-                        found = TRUE;
-                        known = TRUE;
-                        break;
+                i = Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[0], VendorID, DeviceID, NUM_BUSMASTER_ADAPTERS);
+                if(i != -1) {
+                    if((BusMasterAdapters[i].RaidFlags & UNIATA_RAID_CONTROLLER) &&
+                        SkipRaids) {
+                        continue;
                     }
+                    found = TRUE;
+                    known = TRUE;
                 }
 
                 switch(dev_id) {
@@ -259,10 +259,8 @@ AtapiEnumBusMasterController__(
                 /* unknown chipsets, try generic DMA if it seems possible */
                 default:
                     KdPrint2((PRINT_PREFIX "Default device\n"));
-                    if (BaseClass == PCI_DEV_CLASS_STORAGE &&
-                        SubClass == PCI_DEV_SUBCLASS_IDE) {
+                    if(Ata_is_supported_dev(&pciData))
                         found = TRUE;
-                    }
                     break;
                 }
 
@@ -587,6 +585,12 @@ AtapiFindBusMasterController(
         return(SP_RETURN_NOT_FOUND);
     }
 
+    if((BusMasterAdapters[i].RaidFlags & UNIATA_RAID_CONTROLLER) &&
+        SkipRaids) {
+        KdPrint2((PRINT_PREFIX "RAID support disabled\n"));
+        return(SP_RETURN_NOT_FOUND);
+    }
+
     found = TRUE;
     switch(dev_id) {
     /* additional checks for some supported chipsets */
@@ -600,10 +604,8 @@ AtapiFindBusMasterController(
         KdPrint2((PRINT_PREFIX "Default device\n"));
         if (found)
             break;
-        if (BaseClass != PCI_DEV_CLASS_STORAGE ||
-            SubClass != PCI_DEV_SUBCLASS_IDE) {
+        if(!Ata_is_supported_dev(&pciData))
             found = FALSE;
-        }
         break;
     }
 
@@ -1520,6 +1522,112 @@ retryIdentifier:
 } // end AtapiFindController()
 
 
+ULONG
+CheckDevice(
+    IN PVOID   HwDeviceExtension,
+    IN ULONG   Channel,
+    IN ULONG   deviceNumber,
+    IN BOOLEAN ResetBus
+    )
+{
+    PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
+    PHW_CHANNEL          chan = &(deviceExtension->chan[Channel]);
+    PIDE_REGISTERS_1     baseIoAddress1 = deviceExtension->BaseIoAddress1[Channel];
+    PIDE_REGISTERS_2     baseIoAddress2 = deviceExtension->BaseIoAddress2[Channel];
+    ULONG                ldev = GET_LDEV2(Channel, deviceNumber, 0);
+
+    UCHAR                signatureLow,
+                         signatureHigh;
+    UCHAR                statusByte;
+    ULONG                RetVal=0;
+
+    if(ResetBus) {
+        // Reset controller
+        AtapiSoftReset(baseIoAddress1,deviceNumber);
+        WaitOnBusy(baseIoAddress2,statusByte);
+    }
+    // Select the device.
+    SelectDrive(baseIoAddress1, deviceNumber);
+
+    ScsiPortStallExecution(10);
+    WaitOnBaseBusy(baseIoAddress1,statusByte);
+
+    // Check here for some SCSI adapters that incorporate IDE emulation.
+    GetBaseStatus(baseIoAddress1, statusByte);
+/*        if (statusByte == 0xFF) {
+        continue;
+    }*/
+    if(statusByte & IDE_STATUS_BUSY) {
+        deviceExtension->lun[ldev].DeviceFlags = 0;
+        return 0;
+    }
+
+    signatureLow = ScsiPortReadPortUchar(&baseIoAddress1->i.CylinderLow);
+    signatureHigh = ScsiPortReadPortUchar(&baseIoAddress1->i.CylinderHigh);
+
+    if (signatureLow == ATAPI_MAGIC_LSB && signatureHigh == ATAPI_MAGIC_MSB) {
+
+        // ATAPI signature found.
+        // Issue the ATAPI identify command if this
+        // is not for the crash dump utility.
+
+        if (!deviceExtension->DriverMustPoll) {
+
+            // Issue ATAPI packet identify command.
+            if (IssueIdentify(HwDeviceExtension,
+                              deviceNumber,
+                              Channel,
+                              IDE_COMMAND_ATAPI_IDENTIFY)) {
+
+                // Indicate ATAPI device.
+                KdPrint2((PRINT_PREFIX "CheckDevice: Device %x is ATAPI\n",
+                           deviceNumber));
+
+                RetVal = DFLAGS_DEVICE_PRESENT | DFLAGS_ATAPI_DEVICE;
+                deviceExtension->lun[ldev].DeviceFlags |= (DFLAGS_DEVICE_PRESENT | DFLAGS_ATAPI_DEVICE);
+
+                GetStatus(baseIoAddress2, statusByte);
+                if (statusByte & IDE_STATUS_ERROR) {
+                    AtapiSoftReset(baseIoAddress1, deviceNumber);
+                }
+
+            } else {
+
+                // Indicate no working device.
+                KdPrint2((PRINT_PREFIX "CheckDevice: Device %x not responding\n",
+                           deviceNumber));
+
+                deviceExtension->lun[ldev].DeviceFlags = 0;
+                RetVal = 0;
+            }
+            GetBaseStatus(baseIoAddress1, statusByte);
+
+        }
+
+    } else {
+
+        // Issue IDE Identify. If an Atapi device is actually present, the signature
+        // will be asserted, and the drive will be recognized as such.
+        if (IssueIdentify(HwDeviceExtension,
+                          deviceNumber,
+                          Channel,
+                          IDE_COMMAND_IDENTIFY)) {
+
+            // IDE drive found.
+            KdPrint2((PRINT_PREFIX "CheckDevice: Device %x is IDE\n",
+                       deviceNumber));
+
+            // Indicate IDE - not ATAPI device.
+            RetVal = DFLAGS_DEVICE_PRESENT;
+            deviceExtension->lun[ldev].DeviceFlags |= DFLAGS_DEVICE_PRESENT;
+            deviceExtension->lun[ldev].DeviceFlags &= ~DFLAGS_ATAPI_DEVICE;
+        }
+        GetBaseStatus(baseIoAddress1, statusByte);
+    }
+    return RetVal;
+}
+
+
 /*++
 
 Routine Description:
@@ -1552,10 +1660,8 @@ FindDevices(
     BOOLEAN              deviceResponded = FALSE,
                          skipSetParameters = FALSE;
     ULONG                waitCount = 10000;
-    ULONG                deviceNumber;
+    //ULONG                deviceNumber;
     ULONG                i;
-    UCHAR                signatureLow,
-                         signatureHigh;
     UCHAR                statusByte;
 
     // Disable interrupts
@@ -1567,96 +1673,9 @@ FindDevices(
 //    chan->CurrentSrb = NULL;
 
     // Search for devices.
-    for (deviceNumber = 0; deviceNumber < 2; deviceNumber++) {
-        ULONG ldev = GET_LDEV2(Channel, deviceNumber, 0);
-
-        // Reset controller
-        AtapiSoftReset(baseIoAddress1,deviceNumber);
-        WaitOnBusy(baseIoAddress2,statusByte);
-
-        // Select the device.
-        SelectDrive(baseIoAddress1, deviceNumber);
-
-        ScsiPortStallExecution(10);
-        WaitOnBaseBusy(baseIoAddress1,statusByte);
-
-        // Check here for some SCSI adapters that incorporate IDE emulation.
-        GetBaseStatus(baseIoAddress1, statusByte);
-/*        if (statusByte == 0xFF) {
-            continue;
-        }*/
-        if(statusByte & IDE_STATUS_BUSY)
-            continue;
-
-        signatureLow = ScsiPortReadPortUchar(&baseIoAddress1->i.CylinderLow);
-        signatureHigh = ScsiPortReadPortUchar(&baseIoAddress1->i.CylinderHigh);
-
-        if (signatureLow == ATAPI_MAGIC_LSB && signatureHigh == ATAPI_MAGIC_MSB) {
-
-            // ATAPI signature found.
-            // Issue the ATAPI identify command if this
-            // is not for the crash dump utility.
-
-            if (!deviceExtension->DriverMustPoll) {
-
-                // Issue ATAPI packet identify command.
-                if (IssueIdentify(HwDeviceExtension,
-                                  deviceNumber,
-                                  Channel,
-                                  IDE_COMMAND_ATAPI_IDENTIFY)) {
-
-                    // Indicate ATAPI device.
-                    KdPrint2((PRINT_PREFIX "FindDevices: Device %x is ATAPI\n",
-                               deviceNumber));
-
-                    deviceExtension->lun[ldev].DeviceFlags |= (DFLAGS_DEVICE_PRESENT | 
-                                                                                       DFLAGS_ATAPI_DEVICE);
-
-                    deviceResponded = TRUE;
-
-                    GetStatus(baseIoAddress2, statusByte);
-                    if (statusByte & IDE_STATUS_ERROR) {
-                        AtapiSoftReset(baseIoAddress1, deviceNumber);
-                    }
-
-                } else {
-
-                    // Indicate no working device.
-                    KdPrint2((PRINT_PREFIX "FindDevices: Device %x not responding\n",
-                               deviceNumber));
-
-                    deviceExtension->lun[ldev].DeviceFlags &= ~DFLAGS_DEVICE_PRESENT;
-                }
-                GetBaseStatus(baseIoAddress1, statusByte);
-
-            }
-
-        } else {
-
-            // Issue IDE Identify. If an Atapi device is actually present, the signature
-            // will be asserted, and the drive will be recognized as such.
-            if (IssueIdentify(HwDeviceExtension,
-                              deviceNumber,
-                              Channel,
-                              IDE_COMMAND_IDENTIFY)) {
-
-                // IDE drive found.
-                KdPrint2((PRINT_PREFIX "FindDevices: Device %x is IDE\n",
-                           deviceNumber));
-
-                deviceExtension->lun[ldev].DeviceFlags |= DFLAGS_DEVICE_PRESENT;
-
-                if (!AtapiOnly) {
-                    deviceResponded = TRUE;
-                } else {
-                    KdPrint2((PRINT_PREFIX "FindDevices: AtapiOnly...\n"));
-                }
-
-                // Indicate IDE - not ATAPI device.
-                deviceExtension->lun[ldev].DeviceFlags &= ~DFLAGS_ATAPI_DEVICE;
-            }
-            GetBaseStatus(baseIoAddress1, statusByte);
-        }
+    for (i = 0; i < 2; i++) {
+        deviceResponded |= 
+            (CheckDevice(HwDeviceExtension, Channel, i, TRUE) != 0);
     }
 
     for (i = 0; i < 2; i++) {
@@ -1717,61 +1736,61 @@ FindDevices(
             }
 
 
-            if (!skipSetParameters) {
+            if (skipSetParameters)
+                continue;
 
-                WaitOnBusy(baseIoAddress2,statusByte);
+            WaitOnBusy(baseIoAddress2,statusByte);
 
-                // Select the device.
+            // Select the device.
+            SelectDrive(baseIoAddress1, i & 0x01);
+            GetStatus(baseIoAddress2, statusByte);
+
+            if (statusByte & IDE_STATUS_ERROR) {
+
+                // Reset the device.
+                KdPrint2((PRINT_PREFIX 
+                            "FindDevices: Resetting controller before SetDriveParameters.\n"));
+
+                ScsiPortWritePortUchar(&baseIoAddress2->AlternateStatus,IDE_DC_RESET_CONTROLLER );
+                ScsiPortStallExecution(500 * 1000);
+                ScsiPortWritePortUchar(&baseIoAddress2->AlternateStatus,IDE_DC_REENABLE_CONTROLLER);
                 SelectDrive(baseIoAddress1, i & 0x01);
-                GetStatus(baseIoAddress2, statusByte);
 
-                if (statusByte & IDE_STATUS_ERROR) {
+                do {
+                    // Wait for Busy to drop.
+                    ScsiPortStallExecution(100);
+                    GetStatus(baseIoAddress2, statusByte);
 
-                    // Reset the device.
-                    KdPrint2((PRINT_PREFIX 
-                                "FindDevices: Resetting controller before SetDriveParameters.\n"));
+                } while ((statusByte & IDE_STATUS_BUSY) && waitCount--);
+            }
 
-                    ScsiPortWritePortUchar(&baseIoAddress2->AlternateStatus,IDE_DC_RESET_CONTROLLER );
-                    ScsiPortStallExecution(500 * 1000);
-                    ScsiPortWritePortUchar(&baseIoAddress2->AlternateStatus,IDE_DC_REENABLE_CONTROLLER);
-                    SelectDrive(baseIoAddress1, i & 0x01);
+            WaitOnBusy(baseIoAddress2,statusByte);
 
-                    do {
-                        // Wait for Busy to drop.
-                        ScsiPortStallExecution(100);
-                        GetStatus(baseIoAddress2, statusByte);
+            KdPrint2((PRINT_PREFIX 
+                        "FindDevices: Status before SetDriveParameters: (%x) (%x)\n",
+                        statusByte,
+                        ScsiPortReadPortUchar(&baseIoAddress1->i.DriveSelect)));
 
-                    } while ((statusByte & IDE_STATUS_BUSY) && waitCount--);
-                }
-
-                WaitOnBusy(baseIoAddress2,statusByte);
+            // Use the IDENTIFY data to set drive parameters.
+            if (!SetDriveParameters(HwDeviceExtension,i,Channel)) {
 
                 KdPrint2((PRINT_PREFIX 
-                            "FindDevices: Status before SetDriveParameters: (%x) (%x)\n",
-                            statusByte,
-                            ScsiPortReadPortUchar(&baseIoAddress1->i.DriveSelect)));
+                           "FindDevices: Set drive parameters for device %d failed\n",
+                           i));
+                // Don't use this device as writes could cause corruption.
+                deviceExtension->lun[ldev].DeviceFlags = 0;
+                continue;
 
-                // Use the IDENTIFY data to set drive parameters.
-                if (!SetDriveParameters(HwDeviceExtension,i,Channel)) {
+            }
+            if (deviceExtension->lun[ldev].DeviceFlags & DFLAGS_REMOVABLE_DRIVE) {
 
-                    KdPrint2((PRINT_PREFIX 
-                               "FindDevices: Set drive parameters for device %d failed\n",
-                               i));
-                    // Don't use this device as writes could cause corruption.
-                    deviceExtension->lun[ldev].DeviceFlags = 0;
-                    continue;
+                // Pick up ALL IDE removable drives that conform to Yosemite V0.2...
+                AtapiOnly = FALSE;
+            }
 
-                }
-                if (deviceExtension->lun[ldev].DeviceFlags & DFLAGS_REMOVABLE_DRIVE) {
-
-                    // Pick up ALL IDE removable drives that conform to Yosemite V0.2...
-                    AtapiOnly = FALSE;
-                }
-
-                // Indicate that a device was found.
-                if (!AtapiOnly) {
-                    deviceResponded = TRUE;
-                }
+            // Indicate that a device was found.
+            if (!AtapiOnly) {
+                deviceResponded = TRUE;
             }
         }
     }

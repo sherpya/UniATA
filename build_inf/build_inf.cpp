@@ -13,7 +13,7 @@ Author:
     Alexander A. Telyatnikov (Alter)
 
 Environment:
-    kernel mode only
+    User mode only
 
 Notes:
 
@@ -34,14 +34,24 @@ Revision History:
 
 #include <windows.h>
 #include <stdio.h>
-#include "../driver/bm_devs.h"
+#include "..\driver\bm_devs.h"
+#include "..\..\..\PCIDump\Head\Driver\PCIDump.h"
+#include "SvcManLib.h"
 
 #define DEVLIST_NAME     ";DEVLIST"
 #define DEVNAMELIST_NAME ";DEVNAMELIST"
 
+#define MAX_NEW_NUM_BUSMASTER_ADAPTERS  64
+ULONG NewBusmasterCount=0;
+BUSMASTER_CONTROLLER_INFORMATION NewBusMasterAdapters[MAX_NEW_NUM_BUSMASTER_ADAPTERS];
+
+#define UNKNOWN_DEVNAME_TEMPLATE  "Compatible ATA controller (Vendor/Device %4.4x/%4.4x)"
+CHAR UnknownDevName[] = "Compatible ATA controller (Vendor/Device ffff/ffff)";
+
 LONGLONG
 get_image_size(
-    HANDLE h)
+    HANDLE h
+    )
 {
     LONG offh = 0;
     LONG offl = 0;
@@ -52,10 +62,12 @@ get_image_size(
     return (((LONGLONG)offh)<<32) | offl;
 }
 
+
 LONGLONG
 set_file_pointer(
     HANDLE h,
-    LONGLONG offs)
+    LONGLONG offs
+    )
 {
     LONG offh = (ULONG)(offs >> 32);
     LONG offl = (ULONG)offs;
@@ -64,6 +76,113 @@ set_file_pointer(
     if(GetLastError())
         return -1;
     return (((LONGLONG)offh)<<32) | offl;
+}
+
+VOID
+BuildDevList()
+{
+    ULONG BusId=0;
+    ULONG DevId=0;
+    ULONG DevFunc=0;
+
+    ULONG returned;
+
+    PciDump_GetHeader_USER_IN  buf_in;
+    PciDump_GetHeader_USER_OUT buf_out;
+
+    HANDLE h;
+
+    h = CreateFile(NT_PciDump_USER_NAME, GENERIC_READ | GENERIC_WRITE,
+                   FILE_SHARE_READ | FILE_SHARE_WRITE,
+                   NULL,
+                   OPEN_EXISTING,
+                   FILE_ATTRIBUTE_NORMAL/* | FILE_FLAG_NO_BUFFERING*/,  NULL);
+
+    while(h != ((HANDLE)-1)) {
+
+        buf_in.BusNumber = BusId;
+        buf_in.DeviceNumber = 0;
+        buf_in.FunctionNumber = 0;
+        
+        if(!DeviceIoControl(h,IOCTL_PciDump_GetHeader,
+                            &buf_in,sizeof(buf_in),
+                            &buf_out,sizeof(buf_out),
+                            &returned,NULL)
+                  ||
+            buf_out.status == 0) {
+            CloseHandle(h);
+            h = ((HANDLE)-1);
+            break;
+        }
+        
+        for(DevId=0; DevId<PCI_MAX_DEVICES; DevId++) {
+            
+            buf_in.BusNumber = BusId;
+            buf_in.DeviceNumber = DevId;
+            buf_in.FunctionNumber = 0;
+
+            DeviceIoControl(h,IOCTL_PciDump_GetHeader,
+                                &buf_in,sizeof(buf_in),
+                                &buf_out,sizeof(buf_out),
+                                &returned,NULL);
+
+            if(buf_out.status == 2)
+                continue;
+
+            buf_in.BusNumber = BusId;
+            buf_in.DeviceNumber = DevId;
+            buf_in.FunctionNumber = 1;
+
+            DeviceIoControl(h,IOCTL_PciDump_GetHeader,
+                                &buf_in,sizeof(buf_in),
+                                &buf_out,sizeof(buf_out),
+                                &returned,NULL);
+
+            if(buf_out.status == 2)
+                continue;
+
+            for(DevFunc=0; DevFunc<PCI_MAX_FUNCTION; DevFunc++) {
+
+                buf_in.BusNumber = BusId;
+                buf_in.DeviceNumber = DevId;
+                buf_in.FunctionNumber = DevFunc;
+
+                DeviceIoControl(h,IOCTL_PciDump_GetHeader,
+                                    &buf_in,sizeof(buf_in),
+                                    &buf_out,sizeof(buf_out),
+                                    &returned,NULL);
+
+                if(buf_out.status == 2)
+                    break;
+
+                if(Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[0],
+                                     buf_out.pciData.VendorID,
+                                     buf_out.pciData.DeviceID,
+                                     NUM_BUSMASTER_ADAPTERS) != -1)
+                    continue;
+                if(Ata_is_dev_listed(&NewBusMasterAdapters[0],
+                                     buf_out.pciData.VendorID,
+                                     buf_out.pciData.DeviceID,
+                                     NewBusmasterCount) != -1)
+                    continue;
+                if(!Ata_is_supported_dev(&buf_out.pciData))
+                    continue;
+                if(NewBusmasterCount >= MAX_NEW_NUM_BUSMASTER_ADAPTERS)
+                    continue;
+
+                NewBusMasterAdapters[NewBusmasterCount].nVendorId = buf_out.pciData.VendorID;
+                NewBusMasterAdapters[NewBusmasterCount].nDeviceId = buf_out.pciData.DeviceID;
+                NewBusmasterCount++;
+            }
+        }
+
+        BusId++;
+    }
+      
+    if(h != ((HANDLE)-1)) {
+        CloseHandle(h);
+        h = ((HANDLE)-1);
+    }
 }
 
 void main (int argc, char* argv[]) {
@@ -102,6 +221,8 @@ void main (int argc, char* argv[]) {
     }
     CloseHandle(h);
 
+    memset(NewBusMasterAdapters, 0, sizeof(NewBusMasterAdapters));
+
     for(i=0, j=0; i<l; i++) {
         if(buff[i] == '\r')
             continue;
@@ -117,17 +238,40 @@ void main (int argc, char* argv[]) {
         tmp != l) {
         exit(-6);
     }*/
+    k = NtServiceIsRunning(NT_PciDump_SVC_NAME);
+    if(k == 1) {
+        // Ok
+    } else
+    if(k == 0) {
+        k = NtServiceStart(NT_PciDump_SVC_NAME);
+    }
+    if(k >= 0) {
+        BuildDevList();
+    }
+
     buff_i[0]=0;
     printf("%s", buff);
+    printf(";Well-known adapters\n");
     for(k=0; k<NUM_BUSMASTER_ADAPTERS; k++) {
-        printf("%%PCI\\VEN_%s&DEV_%s.DeviceDesc%%=uniata_Inst, PCI\\VEN_%s&DEV_%s\n", 
-               BusMasterAdapters[k].VendorId,
-               BusMasterAdapters[k].DeviceId,
-               BusMasterAdapters[k].VendorId,
-               BusMasterAdapters[k].DeviceId
+        if(BusMasterAdapters[k].RaidFlags & UNIATA_RAID_CONTROLLER)
+            printf(";");
+        printf("%%PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc%%=uniata_Inst, PCI\\VEN_%4.4x&DEV_%4.4x\n", 
+               BusMasterAdapters[k].nVendorId,
+               BusMasterAdapters[k].nDeviceId,
+               BusMasterAdapters[k].nVendorId,
+               BusMasterAdapters[k].nDeviceId
                );
     }
-    printf("%s\n\r", DEVLIST_NAME);
+    printf(";Compatible adapters\n");
+    for(k=0; k<NewBusmasterCount; k++) {
+        printf("%%PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc%%=uniata_Inst, PCI\\VEN_%4.4x&DEV_%4.4x\n", 
+               NewBusMasterAdapters[k].nVendorId,
+               NewBusMasterAdapters[k].nDeviceId,
+               NewBusMasterAdapters[k].nVendorId,
+               NewBusMasterAdapters[k].nDeviceId
+               );
+    }
+    printf("%s\n", DEVLIST_NAME);
     buff_i+=sizeof(DEVLIST_NAME);
     buff_j=buff_i;
     buff_i = (PUCHAR)strstr((PCHAR)buff_i, DEVNAMELIST_NAME);
@@ -136,14 +280,29 @@ void main (int argc, char* argv[]) {
     }
     buff_i[0]=0;
     printf("%s", buff_j);
+    printf(";Well-known adapters\n");
     for(k=0; k<NUM_BUSMASTER_ADAPTERS; k++) {
-        printf("PCI\\VEN_%s&DEV_%s.DeviceDesc=\"%s\"\n", 
-               BusMasterAdapters[k].VendorId,
-               BusMasterAdapters[k].DeviceId,
+        if(BusMasterAdapters[k].RaidFlags & UNIATA_RAID_CONTROLLER)
+            printf(";");
+        printf("PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc=\"%s\"\n", 
+               BusMasterAdapters[k].nVendorId,
+               BusMasterAdapters[k].nDeviceId,
                BusMasterAdapters[k].FullDevName
                );
     }
-    printf("%s\n\r", DEVNAMELIST_NAME);
+    printf(";Compatible adapters\n");
+    for(k=0; k<NewBusmasterCount; k++) {
+        sprintf(&UnknownDevName[0], UNKNOWN_DEVNAME_TEMPLATE, 
+               BusMasterAdapters[k].nVendorId,
+               BusMasterAdapters[k].nDeviceId
+               );
+        printf("PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc=\"%s\"\n", 
+               BusMasterAdapters[k].nVendorId,
+               BusMasterAdapters[k].nDeviceId,
+               &UnknownDevName
+               );
+    }
+    printf("%s\n", DEVNAMELIST_NAME);
     buff_i+=sizeof(DEVNAMELIST_NAME);
     printf("%s", buff_i);
 

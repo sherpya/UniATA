@@ -1,8 +1,8 @@
 Installation for Windows 2000
 =============================
-(for version 25f and higher)
+(for version 25g and higher)
 
-Note:
+Notes:
 
   THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
   IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
@@ -19,14 +19,17 @@ Note:
 
   Only controller(s) described in installation .INF file will be visible
   through standard Device Manager.
-  ALL other IDE controllers may become invisible, or listed as unknown 
-  devices, or system will report resource conflicts, but WILL WORK.
-  UniATA setup also disables PciIde port driver to be able to operate with
-  onboard (Native Mode) controllers. This makes IDE Primary and Secondary 
-  channels to disappear from Device Manager.
+  ALL other IDE controllers (see also RAID notes below) may become invisible,
+  or listed as unknown devices, or system will report resource conflicts,
+  but WILL WORK. UniATA setup also disables PciIde port driver to be able
+  to operate with onboard (Native Mode) controllers. This makes IDE Primary
+  and Secondary channels to disappear from Device Manager.
 
-  In order to install UniATA for some newer controller, you may add
-  entries in device list in uniata2k.inf.
+  In order to install UniATA for some newer controller, you can add
+  entries in device list in uniata2k.inf with help of rebuild_inf.bat.
+  Just run this batch file to rebuild .INF file.
+
+  You can also modify .INF-file manually:
   Add line before ';DEVLIST' and type there something like this:
     %PCI\VEN_$VV$&DEV_$DD$.DeviceDesc%=uniata_Inst, PCI\VEN_$VV$&DEV_$DD$
   where $VV$ is 4-digit hexedecimal VendorID of controller and
@@ -34,9 +37,24 @@ Note:
   Many BIOS'es shows this information at boot-up time, but is you have
   some other BIOS, it is possible to use some PCI enumeration utility
   (for ex. from http://alter.org.ua/soft/win/ntpcidump/index.php).
-  PS. this will be automated in future.
+  Then do similar thing before ';DEVLISTNAME' line:
+    PCI\VEN_$DD$&DEV_$VV$.DeviceDesc="Your new ATA controller"
+  PS. this process will be automated in future.
 
-  Another way is setup_w2k.bat
+  Another installation way is setup_w2k.bat
+
+RAID Notes:
+  
+  Current version of UniATA doesn't support RAID arrays. But it can
+  manipulate with ATA RAID controllers as with additional ATA
+  controllers. This option is disabled by default for Promise and HighPoint
+  controllers and can be enabled via registry settings.
+  See 'SkipRaids' value in uniata_w2k.reg
+
+  If your ATA controller reports itself as RAID and is not included
+  to list of supported devices, UniATA will not recognize it even
+  after .INF file modification.
+
 
 Installation steps:
 

@@ -38,6 +38,7 @@ ALL : "$(OUTDIR)\build_inf.exe"
 
 CLEAN :
 	-@erase "$(INTDIR)\build_inf.obj"
+	-@erase "$(INTDIR)\SvcManLib.obj"
 	-@erase "$(INTDIR)\vc60.idb"
 	-@erase "$(OUTDIR)\build_inf.exe"
 	-@erase "$(OUTDIR)\build_inf.map"
@@ -86,7 +87,8 @@ BSC32_SBRS= \
 LINK32=link.exe
 LINK32_FLAGS=kernel32.lib user32.lib advapi32.lib /nologo /subsystem:console /pdb:none /map:"$(INTDIR)\build_inf.map" /machine:I386 /out:"$(OUTDIR)\build_inf.exe" /align:512 /merge:.bss=.data 
 LINK32_OBJS= \
-	"$(INTDIR)\build_inf.obj"
+	"$(INTDIR)\build_inf.obj" \
+	"$(INTDIR)\SvcManLib.obj"
 
 "$(OUTDIR)\build_inf.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
     $(LINK32) @<<
@@ -114,16 +116,17 @@ INTDIR=.\Debug
 OutDir=.\Debug
 # End Custom Macros
 
-ALL : "$(OUTDIR)\build_inf1.exe"
+ALL : "$(OUTDIR)\build_inf.exe"
 
 
 CLEAN :
 	-@erase "$(INTDIR)\build_inf.obj"
+	-@erase "$(INTDIR)\SvcManLib.obj"
 	-@erase "$(INTDIR)\vc60.idb"
 	-@erase "$(INTDIR)\vc60.pdb"
-	-@erase "$(OUTDIR)\build_inf1.exe"
-	-@erase "$(OUTDIR)\build_inf1.ilk"
-	-@erase "$(OUTDIR)\build_inf1.pdb"
+	-@erase "$(OUTDIR)\build_inf.exe"
+	-@erase "$(OUTDIR)\build_inf.ilk"
+	-@erase "$(OUTDIR)\build_inf.pdb"
 
 "$(OUTDIR)" :
     if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
@@ -167,11 +170,12 @@ BSC32_FLAGS=/nologo /o"$(OUTDIR)\build_inf.bsc"
 BSC32_SBRS= \
 	
 LINK32=link.exe
-LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /incremental:yes /pdb:"$(OUTDIR)\build_inf1.pdb" /debug /machine:I386 /out:"$(OUTDIR)\build_inf1.exe" /pdbtype:sept 
+LINK32_FLAGS=kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:console /incremental:yes /pdb:"$(OUTDIR)\build_inf1.pdb" /debug /machine:I386 /out:"$(OUTDIR)\build_inf.exe" /pdbtype:sept 
 LINK32_OBJS= \
-	"$(INTDIR)\build_inf.obj"
+	"$(INTDIR)\build_inf.obj" \
+	"$(INTDIR)\SvcManLib.obj"
 
-"$(OUTDIR)\build_inf1.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+"$(OUTDIR)\build_inf.exe" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
     $(LINK32) @<<
   $(LINK32_FLAGS) $(LINK32_OBJS)
 <<
@@ -192,6 +196,11 @@ LINK32_OBJS= \
 SOURCE=.\build_inf.cpp
 
 "$(INTDIR)\build_inf.obj" : $(SOURCE) "$(INTDIR)"
+
+
+SOURCE=.\SvcManLib.cpp
+
+"$(INTDIR)\SvcManLib.obj" : $(SOURCE) "$(INTDIR)"
 
 
 
