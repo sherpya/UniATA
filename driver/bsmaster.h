@@ -183,6 +183,7 @@ typedef struct _ATA_REQ {
 #define REQ_STATE_DPC_WAIT_BUSY         0x58
 #define REQ_STATE_DPC_WAIT_DRQ          0x59
 #define REQ_STATE_DPC_WAIT_DRQ0         0x5a
+#define REQ_STATE_DPC_WAIT_DRQ_ERR      0x5b
 
 #define REQ_STATE_TRANSFER_COMPLETE     0x7f
 

@@ -2816,6 +2816,7 @@ ServiceInterrupt:
     ldev = GET_LDEV2(PathId, TargetId, Lun);
     DeviceNumber = (UCHAR)(ldev & 1);
     atapiDev = (deviceExtension->lun[ldev].DeviceFlags & DFLAGS_ATAPI_DEVICE) ? TRUE : FALSE;
+    KdPrint2((PRINT_PREFIX "dev_type %s\n", atapiDev ? "ATAPI" : "IDE"));
 
     if(AtaReq && InDpc) {
         switch(AtaReq->ReqState) {
@@ -2825,13 +2826,15 @@ ServiceInterrupt:
             goto PIO_wait_busy;
         case REQ_STATE_DPC_WAIT_DRQ:
             goto PIO_wait_DRQ;
+        case REQ_STATE_DPC_WAIT_DRQ_ERR:
+            goto continue_err;
         }
     }
 
     // make additional delay for old devices (if we are not in DPC)
     if(!deviceExtension->lun[ldev].IdentifyData.MajorRevision &&
        !InDpc) {
-        KdPrint2((PRINT_PREFIX "AtapiInterrupt: additional delay 10us for old devics\n"));
+        KdPrint2((PRINT_PREFIX "AtapiInterrupt: additional delay 10us for old devices\n"));
         ScsiPortStallExecution(10);
     }
 
@@ -2881,6 +2884,12 @@ ServiceInterrupt:
                 goto IntrPrepareResetController;
             }
         }
+    } else {
+        if(!deviceExtension->lun[ldev].IdentifyData.MajorRevision &&
+            InDpc) {
+            KdPrint2((PRINT_PREFIX "AtapiInterrupt: additional delay 10us for old devices (2)\n"));
+            ScsiPortStallExecution(10);
+        }
     }
 
     // Check for error conditions.
@@ -2895,18 +2904,28 @@ ServiceInterrupt:
             KdPrint2((PRINT_PREFIX "AtapiInterrupt: Bad Lba unknown\n"));
         }
 
+        KdPrint2((PRINT_PREFIX "AtapiInterrupt: wait ready after error\n"));
+
+        ScsiPortStallExecution(10);
+continue_err:
+        for (k = 0; k < 500; k++) {
+            GetStatus(baseIoAddress2,statusByte);
+            if (!(statusByte & IDE_STATUS_DRQ)) {
+                if(!InDpc) {
+                    // goto DPC
+                    AtaReq->ReqState = REQ_STATE_DPC_WAIT_DRQ_ERR;
+                    TimerValue = 500;
+                    KdPrint2((PRINT_PREFIX "AtapiInterrupt: go to DPC (busy)\n"));
+                    goto PostToDpc;
+                }
+                ScsiPortStallExecution(50);
+            } else {
+                break;
+            }
+        }
+
         if (!atapiDev) {
             /* if this is a UDMA CRC error, reinject request */
-
-            ScsiPortStallExecution(100);
-            for (k = 0; k < 500; k++) {
-                GetStatus(baseIoAddress2,statusByte);
-                if (!(statusByte & IDE_STATUS_DRQ)) {
-                    ScsiPortStallExecution(50);
-                } else {
-                    break;
-                }
-            }
 
             AtaReq->retry++;
             if(AtaReq->retry < MAX_RETRIES) {
@@ -2961,6 +2980,7 @@ ServiceInterrupt:
     // check reason for this interrupt.
     if (atapiDev) {
 
+        KdPrint2((PRINT_PREFIX "AtapiInterrupt: ATAPI branch\n"));
         // ATAPI branch
 
         interruptReason = (ScsiPortReadPortUchar(&baseIoAddress1->i.InterruptReason) & 0x3);
@@ -3043,7 +3063,7 @@ IntrPrepareResetController:
         }
     }
 
-
+    KdPrint2((PRINT_PREFIX "AtapiInterrupt: i-reason=%d, status=%#x\n", interruptReason, statusByte));
     if (interruptReason == 0x1 && (statusByte & IDE_STATUS_DRQ)) {
         // Write the packet.
         KdPrint2((PRINT_PREFIX "AtapiInterrupt: Writing Atapi packet.\n"));
@@ -3500,7 +3520,7 @@ IntrCompleteReq:
 
                         srb->SrbStatus |= SRB_STATUS_AUTOSENSE_VALID;
                     }
-                    KdPrint2((PRINT_PREFIX "AtapiInterrupt: remove srb %#x\n", srb));
+                    KdPrint2((PRINT_PREFIX "AtapiInterrupt: remove srb %#x, status %x\n", srb, status));
                     AtapiRemoveRequest(chan, srb);
                     KdPrint2((PRINT_PREFIX "AtapiInterrupt: RequestComplete, srb %#x\n", srb));
                     ScsiPortNotification(RequestComplete,
@@ -4996,6 +5016,11 @@ AtapiStartIo__(
     BMList[deviceExtension->DevIndex].Isr2Enable = TRUE;
 //    deviceExtension->QueueNewIrql = max(deviceExtension->QueueNewIrql, KeGetCurrentIrql());
 
+/*                KeBugCheckEx(0xc000000e,
+                             (Srb->PathId<<16) | (Srb->TargetId<<8) | (Srb->Lun),
+                             Srb->Function, 
+                             TopLevel, 0x80000001);
+*/
     do {
 
         lChannel = GET_CHANNEL(Srb);
@@ -5125,6 +5150,7 @@ AtapiStartIo__(
                     status = SRB_STATUS_SUCCESS;
                 }
             } else {
+                KdPrint2((PRINT_PREFIX "AtapiInterrupt: remove aborted srb %#x\n", tmpSrb));
                 if (tmpSrb->SenseInfoBuffer &&
                     tmpSrb->SenseInfoBufferLength >= sizeof(SENSE_DATA)) {
 
