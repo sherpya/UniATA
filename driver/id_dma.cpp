@@ -108,8 +108,10 @@ AtapiDmaAlloc(
     ULONG c = lChannel;
 
     deviceExtension->chan[c].CopyDmaBuffer = FALSE;
+/*
     deviceExtension->chan[c].DmaBuffer =
         (PUCHAR)ExAllocatePool(NonPagedPool, ConfigInfo->MaximumTransferLength);
+*/
 #endif //USE_OWN_DMA
 
     return;

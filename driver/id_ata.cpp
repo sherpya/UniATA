@@ -81,6 +81,8 @@ ULONG  SPVersion = 0;
 ULONG  SkipRaids = 1;
 ULONG  ForceSimplex = 0;
 
+ULONG  g_WaitBusyInISR = 1;
+
 BOOLEAN InDriverEntry = TRUE;
 
 //UCHAR EnableDma = FALSE;
@@ -1029,7 +1031,7 @@ AtapiRemoveRequest(
         return;
 
     PATA_REQ AtaReq = (PATA_REQ)(Srb->SrbExtension);
-    PHW_DEVICE_EXTENSION deviceExtension = chan->DeviceExtension;
+    //PHW_DEVICE_EXTENSION deviceExtension = chan->DeviceExtension;
 
     ULONG cdev = GET_LDEV(Srb) & 1;
     PHW_LU_EXTENSION LunExt = chan->lun[cdev];
@@ -3423,6 +3425,7 @@ AtapiCheckInterrupt__(
     BOOLEAN OurInterrupt = FALSE;
     ULONG k;
     UCHAR interruptReason;
+    BOOLEAN EarlyIntr = FALSE;
 
     KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__:\n"));
 
@@ -3456,7 +3459,7 @@ AtapiCheckInterrupt__(
                 if(!chan->ExpectingInterrupt) {
                     /* clear interrupt for ICH4 and get status */
                     GetBaseStatus(chan, baseIoAddress1, statusByte);
-                    KdPrint2((PRINT_PREFIX "  prevent IC4 unexpected intr, base status %#x\n", statusByte));
+                    KdPrint2((PRINT_PREFIX "  prevent ICH4 unexpected intr, base status %#x\n", statusByte));
                 }
             }
             return FALSE;
@@ -3590,19 +3593,25 @@ skip_dma_stat_check:
             KdPrint2((PRINT_PREFIX "  unexpected status, seems it is not our\n"));
             return FALSE;
         }
-        for(k=20; k; k--) {
-            GetStatus(chan, baseIoAddress2, statusByte);
-            KdPrint2((PRINT_PREFIX "  status re-check %#x\n", statusByte));
-            if (!(statusByte & IDE_STATUS_BUSY)) {
-                KdPrint2((PRINT_PREFIX "  expecting intr + cleared BUSY\n"));
-                break;
+
+        EarlyIntr = TRUE;
+
+        if(g_WaitBusyInISR) {
+            for(k=20; k; k--) {
+                GetStatus(chan, baseIoAddress2, statusByte);
+                KdPrint2((PRINT_PREFIX "  status re-check %#x\n", statusByte));
+                if (!(statusByte & IDE_STATUS_BUSY)) {
+                    KdPrint2((PRINT_PREFIX "  expecting intr + cleared BUSY\n"));
+                    break;
+                }
+                AtapiStallExecution(25);
             }
-            AtapiStallExecution(25);
+            if (statusByte & IDE_STATUS_BUSY) {
+                KdPrint2((PRINT_PREFIX "  still BUSY, seems it is not our\n"));
+                return FALSE;
+            }
         }
-        if (statusByte & IDE_STATUS_BUSY) {
-            KdPrint2((PRINT_PREFIX "  still BUSY, seems it is not our\n"));
-            return FALSE;
-        }
+
 #if 0
 /*
         if(DmaTransfer && !(statusByte & IDE_STATUS_DMA)) {
@@ -3644,7 +3653,19 @@ skip_dma_stat_check:
     }
 
     if(DmaTransfer) {
-        dma_status = AtapiDmaDone(HwDeviceExtension, -1/*DeviceNumber*/, lChannel, NULL/*srb*/);
+        if(!EarlyIntr || g_WaitBusyInISR) {
+            dma_status = AtapiDmaDone(HwDeviceExtension, -1/*DeviceNumber*/, lChannel, NULL/*srb*/);
+        } else {
+            PSCSI_REQUEST_BLOCK srb = AtapiGetCurRequest(chan);
+            PATA_REQ AtaReq = srb ? (PATA_REQ)(srb->SrbExtension) : NULL;
+
+            ASSERT(AtaReq);
+
+            KdPrint2((PRINT_PREFIX "  set REQ_STATE_EARLY_INTR.\n"));
+            if(AtaReq) {
+                AtaReq->ReqState = REQ_STATE_EARLY_INTR;
+            }
+        }
     }
 
     if (!(chan->ExpectingInterrupt)) {
@@ -3791,7 +3812,7 @@ CallTimerDpc:
         return TRUE;
     }
 
-try_use_dpc:
+//try_use_dpc:
     if(!UseDpc)
         goto ServiceInterrupt;
 
@@ -3848,12 +3869,16 @@ ServiceInterrupt:
             goto PIO_wait_DRQ;
         case REQ_STATE_DPC_WAIT_DRQ_ERR:
             goto continue_err;
+        case REQ_STATE_DPC_WAIT_BUSY0:
+            // continue normal execution
+            break;
         }
     }
 
     // make additional delay for old devices (if we are not in DPC)
     if(!LunExt->IdentifyData.MajorRevision &&
-       !InDpc) {
+       !InDpc &&
+       !atapiDev) {
         KdPrint2((PRINT_PREFIX "  additional delay 10us for old devices\n"));
         AtapiStallExecution(10);
     }
@@ -3879,7 +3904,7 @@ ServiceInterrupt:
 try_dpc_wait:
             // Ensure BUSY is non-asserted.
             // make a very small idle before falling to DPC
-            k = InDpc ? 1000 : 2;
+            k = (InDpc && UseDpc) ? 1000 : 2;
 
             for (i = 0; i < k; i++) {
 
@@ -3890,10 +3915,13 @@ try_dpc_wait:
                 AtapiStallExecution(10);
             }
 
-            if (!InDpc && i == 2) {
+            if (!InDpc && UseDpc && i == 2) {
 
                 KdPrint2((PRINT_PREFIX "  BUSY on entry. Status %#x, Base IO %#x\n", statusByte,
                             baseIoAddress1));
+
+                TimerValue = 50;
+                AtaReq->ReqState = REQ_STATE_DPC_WAIT_BUSY0;
 
                 goto PostToDpc;
             } else 
@@ -3908,7 +3936,8 @@ try_dpc_wait:
         }
     } else {
         if(!LunExt->IdentifyData.MajorRevision &&
-            InDpc) {
+            InDpc &&
+            !atapiDev) {
             KdPrint2((PRINT_PREFIX "  additional delay 10us for old devices (2)\n"));
             AtapiStallExecution(10);
         }
@@ -3922,6 +3951,12 @@ try_dpc_wait:
                     KdPrint2((PRINT_PREFIX "  expecting intr + cleared BUSY\n"));
                     break;
                 }
+                if (!InDpc && UseDpc && k == 19 && !g_WaitBusyInISR) {
+                    TimerValue = 25;
+                    AtaReq->ReqState = REQ_STATE_DPC_WAIT_BUSY0;
+
+                    goto PostToDpc;
+                }
                 AtapiStallExecution(25);
             }
             if (statusByte & IDE_STATUS_BUSY) {
@@ -3930,6 +3965,20 @@ try_dpc_wait:
             }
         }
     }
+
+    if(AtaReq && DmaTransfer) {
+        switch(OldReqState) {
+        case REQ_STATE_EARLY_INTR:
+        case REQ_STATE_DPC_WAIT_BUSY0:
+
+            if(chan->ChannelCtrlFlags & CTRFLAGS_DMA_ACTIVE) {
+                KdPrint2((PRINT_PREFIX "AtapiInterrupt: DMA still active\n"));
+                dma_status = AtapiDmaDone(HwDeviceExtension, -1/*DeviceNumber*/, lChannel, NULL/*srb*/);
+            }
+            break;
+        }
+    }
+
 retry_check:
     // Check for error conditions.
     if ((statusByte & IDE_STATUS_ERROR) ||
@@ -5695,6 +5744,8 @@ GetLba:
 
     } else {
 
+        // This device quickly sets DRQ when ready to receive the packet.
+
         KdPrint2((PRINT_PREFIX "AtapiSendCommand: Poll for int. to send packet. Status (%#x)\n",
                    statusByte));
 
@@ -5731,7 +5782,9 @@ GetLba:
     KdPrint2((PRINT_PREFIX "AtapiSendCommand: status (%#x)\n", statusByte));
 
     // Send CDB to device.
-    statusByte = WaitOnBusy(chan, &baseIoAddress2->ide);
+    statusByte = WaitOnBaseBusy(chan, &baseIoAddress1->ide);
+
+    //GetBaseStatus(chan, &baseIoAddress1->ide, statusByte);
 
     // Indicate expecting an interrupt and wait for it.
     chan->ExpectingInterrupt = TRUE;
@@ -5741,11 +5794,11 @@ GetLba:
 
     GetBaseStatus(chan, &baseIoAddress1->ide, statusByte);
 
+    AtapiEnableInterrupts(deviceExtension, lChannel);
+
     WriteBuffer(chan, baseIoAddress1,
                 (PUSHORT)Srb->Cdb,
                 6);
-
-    AtapiEnableInterrupts(deviceExtension, lChannel);
 
     if(chan->ChannelCtrlFlags & CTRFLAGS_DMA_OPERATION) {
         AtapiDmaStart(HwDeviceExtension, ldev & 1, lChannel, Srb);

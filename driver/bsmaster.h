@@ -197,6 +197,8 @@ typedef struct _ATA_REQ {
 #define REQ_STATE_ATAPI_EXPECTING_DATA_INTR    0x42
 #define REQ_STATE_ATAPI_DO_NOTHING_INTR        0x43
 
+#define REQ_STATE_EARLY_INTR            0x48
+
 #define REQ_STATE_PROCESSING_INTR       0x50
 
 #define REQ_STATE_DPC_INTR_REQ          0x51

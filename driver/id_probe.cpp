@@ -212,6 +212,7 @@ AtapiEnumBusMasterController__(
     )
 {
 //    PHW_DEVICE_EXTENSION  deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
+    PVOID HwDeviceExtension;
     PHW_DEVICE_EXTENSION  deviceExtension = NULL;
     PCI_SLOT_NUMBER       slotData;
     PCI_COMMON_CONFIG     pciData;
@@ -241,11 +242,18 @@ AtapiEnumBusMasterController__(
     BOOLEAN found;
     BOOLEAN known;
 
+    UCHAR IrqForCompat = 10;
+
     vendorStrPtr = vendorString;
     deviceStrPtr = deviceString;
     slotData.u.AsULONG = 0;
 
+    HwDeviceExtension =
     deviceExtension = (PHW_DEVICE_EXTENSION)ExAllocatePool(NonPagedPool, sizeof(HW_DEVICE_EXTENSION));
+    if(!deviceExtension) {
+        return(SP_RETURN_NOT_FOUND);
+    }
+    RtlZeroMemory(deviceExtension, sizeof(HW_DEVICE_EXTENSION));
 
     for(pass=0; pass<3; pass++) {
         for(busNumber=0 ;busNumber<maxPciBus && !no_buses; busNumber++) {
@@ -348,32 +356,93 @@ AtapiEnumBusMasterController__(
                         KdPrint2((PRINT_PREFIX "found suitable device\n"));
                         PBUSMASTER_CONTROLLER_INFORMATION newBMListPtr = BMList+BMListLen;
 
-                        if(pass == 1 && !IsMasterDev(&pciData))
-                            continue;
-                        if(pass == 2 && IsMasterDev(&pciData))
-                            continue;
+                        if(pass == 1) {
+                            if(!IsMasterDev(&pciData))
+                                continue;
+                            if(AtapiRegCheckDevValue(deviceExtension, -1, -1, L"NativePCIMode", 0)) {
+                                KdPrint2((PRINT_PREFIX "try switch to native mode\n"));
+
+                                IrqForCompat = (UCHAR)AtapiRegCheckDevValue(deviceExtension, -1, -1, L"NativePCIModeIRQ", 0xff);
+                                if((IrqForCompat & 0xffffff00) ||
+                                   (IrqForCompat & 0xff) > 15) {
+                                    IrqForCompat = 10;
+                                    KdPrint2((PRINT_PREFIX "default to IRQ 10\n"));
+                                }
+
+                                //ChangePciConfig1(0x09, a | PCI_IDE_PROGIF_NATIVE_ALL); // ProgIf
+                                pciData.ProgIf |= PCI_IDE_PROGIF_NATIVE_ALL;
+                                HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                        &(pciData.ProgIf),
+                                                        offsetof(PCI_COMMON_CONFIG, ProgIf),
+                                                        sizeof(pciData.ProgIf));
+
+                                // reread config space
+                                busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                            &pciData, PCI_COMMON_HDR_LENGTH);
+                                // check if the device have switched to Native Mode
+                                if(!IsMasterDev(&pciData)) {
+                                    KdPrint2((PRINT_PREFIX "switched to native mode\n"));
+                                    continue;
+                                }
+                                // check if IRQ assigned to device
+                                if(!pciData.u.type0.InterruptLine ||
+                                    pciData.u.type0.InterruptLine == 0xff) {
+                                    KdPrint2((PRINT_PREFIX "assign interrupt for device\n"));
+                                    pciData.u.type0.InterruptLine = IrqForCompat;
+                                    HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                            &(pciData.u.type0.InterruptLine),
+                                                            offsetof(PCI_COMMON_CONFIG, u.type0.InterruptLine),
+                                                            sizeof(pciData.u.type0.InterruptLine));
+                                }
+                                // reread config space
+                                busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                            &pciData, PCI_COMMON_HDR_LENGTH);
+                                // check if we have successfully assigned IRQ to device
+                                if(pciData.u.type0.InterruptLine != IrqForCompat) {
+                                    KdPrint2((PRINT_PREFIX "can't assign interrupt for device, revert to compat mode\n"));
+                                    pciData.u.type0.InterruptLine = 0xff;
+                                    HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                            &(pciData.u.type0.InterruptLine),
+                                                            offsetof(PCI_COMMON_CONFIG, u.type0.InterruptLine),
+                                                            sizeof(pciData.u.type0.InterruptLine));
+                                    pciData.ProgIf &= ~PCI_IDE_PROGIF_NATIVE_ALL;
+                                    HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                            &(pciData.ProgIf),
+                                                            offsetof(PCI_COMMON_CONFIG, ProgIf),
+                                                            sizeof(pciData.ProgIf));
+                                    // reread config space
+                                    busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                                &pciData, PCI_COMMON_HDR_LENGTH);
+                                }
+                            }
+                        } else
+                        if(pass == 2) {
+                            if(IsMasterDev(&pciData))
+                                continue;
+                        }
 
 /*                        if(known) {
                             RtlCopyMemory(newBMListPtr, (PVOID)&(BusMasterAdapters[i]), sizeof(BUSMASTER_CONTROLLER_INFORMATION));
                         } else {*/
-                            sprintf((PCHAR)vendorStrPtr, "%4.4x", VendorID);
-                            sprintf((PCHAR)deviceStrPtr, "%4.4x", DeviceID);
+                        sprintf((PCHAR)vendorStrPtr, "%4.4x", VendorID);
+                        sprintf((PCHAR)deviceStrPtr, "%4.4x", DeviceID);
 
-                            RtlCopyMemory(&(newBMListPtr->VendorIdStr), (PCHAR)vendorStrPtr, 4);
-                            RtlCopyMemory(&(newBMListPtr->DeviceIdStr), (PCHAR)deviceStrPtr, 4);
-                            
-                            newBMListPtr->nVendorId = VendorID;
-                            newBMListPtr->VendorId = (PCHAR)&(newBMListPtr->VendorIdStr);
-                            newBMListPtr->VendorIdLength = 4;
-                            newBMListPtr->nDeviceId = DeviceID;
-                            newBMListPtr->DeviceId = (PCHAR)&(newBMListPtr->DeviceIdStr);
-                            newBMListPtr->DeviceIdLength = 4;
+                        RtlCopyMemory(&(newBMListPtr->VendorIdStr), (PCHAR)vendorStrPtr, 4);
+                        RtlCopyMemory(&(newBMListPtr->DeviceIdStr), (PCHAR)deviceStrPtr, 4);
+                        
+                        newBMListPtr->nVendorId = VendorID;
+                        newBMListPtr->VendorId = (PCHAR)&(newBMListPtr->VendorIdStr);
+                        newBMListPtr->VendorIdLength = 4;
+                        newBMListPtr->nDeviceId = DeviceID;
+                        newBMListPtr->DeviceId = (PCHAR)&(newBMListPtr->DeviceIdStr);
+                        newBMListPtr->DeviceIdLength = 4;
 
-                            newBMListPtr->RaidFlags = RaidFlags;
+                        newBMListPtr->RaidFlags = RaidFlags;
 //                        }
                         newBMListPtr->slotNumber = slotData.u.AsULONG;
                         newBMListPtr->MasterDev = IsMasterDev(&pciData) ? 1 : 0;
                         newBMListPtr->busNumber = busNumber;
+                    } else {
                     }
 
                     KdPrint2((PRINT_PREFIX "Add to BMList\n"));
@@ -387,6 +456,11 @@ AtapiEnumBusMasterController__(
                  break;
              BMList = (PBUSMASTER_CONTROLLER_INFORMATION)ExAllocatePool(NonPagedPool, 
                                          (BMListLen+1)*sizeof(BUSMASTER_CONTROLLER_INFORMATION));
+             if(!BMList) {
+                 BMListLen=0;
+                 break;
+             }
+             RtlZeroMemory(BMList, (BMListLen+1)*sizeof(BUSMASTER_CONTROLLER_INFORMATION));
              no_buses = FALSE;
              BMListLen=0;
         }
@@ -676,6 +750,8 @@ AtapiFindBusMasterController(
         KdPrint2((PRINT_PREFIX "!deviceExtension => SP_RETURN_ERROR\n"));
         return SP_RETURN_ERROR;
     }
+
+    RtlZeroMemory(deviceExtension, sizeof(HW_DEVICE_EXTENSION));
 
     vendorStrPtr = vendorString;
     deviceStrPtr = deviceString;
@@ -1445,6 +1521,8 @@ AtapiFindController(
     if (!deviceExtension) {
         return SP_RETURN_ERROR;
     }
+    RtlZeroMemory(deviceExtension, sizeof(HW_DEVICE_EXTENSION));
+
     // Check to see if this is a special configuration environment.
     portBase = irq = 0;
     if (ArgumentString) {
