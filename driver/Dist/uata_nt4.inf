@@ -3,7 +3,7 @@ Signature="$WINDOWS NT$"
 Class=SCSIAdapter
 ClassGuid={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Provider=%ALTERWARE%
-DriverVer=14/01/2004
+DriverVer=07/04/2004
 CatalogFile=uniata.cat
 
 
@@ -30,7 +30,7 @@ DefaultDestDir = 12 ; DIRID_DRIVERS
 %ALTERWARE%=UNIATA_HDC
 
 [UNIATA_HDC]
-;DEVLIST=uniata_Inst
+%DeviceDesc%=uniata_Inst
 
 [DISABLE_PCIIDE]
 HKLM, system\currentcontrolset\services\pciide, "Start", %REG_DWORD%, 0x00000004
@@ -55,7 +55,7 @@ LoadOrderGroup = System Bus Extender
 [Strings]
 HDCClassName            = "SCSI and RAID controllers"
 ALTERWARE="AlterWare"
-;DEVNAMELIST="Universal ATA Driver"
+DeviceDesc="Universal ATA Driver"
 
 ;*******************************************
 ;Handy macro substitutions (non-localizable)

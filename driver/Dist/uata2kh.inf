@@ -1,0 +1,175 @@
+[version]
+Signature="$WINDOWS NT$"
+Class=hdc
+ClassGuid={4D36E96A-E325-11CE-BFC1-08002BE10318}
+Provider=%ALTERWARE%
+DriverVer=07/04/2004
+CatalogFile=uniata.cat
+
+
+[SourceDisksNames]
+1 = "UniATA Installation disk",,,
+
+[SourceDisksFiles]
+uniata.sys = 1
+uniata2k.inf = 1
+
+;Class Install
+[ClassInstall32.NT]
+AddReg=HDC_Class
+
+[HDC_Class]
+HKR,,,,%HDCClassName%
+HKR,,Icon,,"-9"
+HKR,,Installer32,,"SysSetup.Dll,HdcClassInstaller"
+
+[DestinationDirs]
+DefaultDestDir = 12 ; DIRID_DRIVERS
+
+[Manufacturer]
+%ALTERWARE%=UNIATA_HDC
+
+[UNIATA_HDC]
+;Well-known adapters
+%PCI\VEN_8086&DEV_24db.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_24db
+%PCI\VEN_8086&DEV_24cb.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_24cb
+%PCI\VEN_8086&DEV_248a.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_248a
+%PCI\VEN_8086&DEV_248b.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_248b
+%PCI\VEN_8086&DEV_244a.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_244a
+%PCI\VEN_8086&DEV_244b.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_244b
+%PCI\VEN_8086&DEV_2411.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_2411
+%PCI\VEN_8086&DEV_7601.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_7601
+%PCI\VEN_8086&DEV_7111.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_7111
+%PCI\VEN_8086&DEV_84ca.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_84ca
+%PCI\VEN_8086&DEV_7199.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_7199
+%PCI\VEN_8086&DEV_2421.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_2421
+%PCI\VEN_8086&DEV_7010.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_7010
+%PCI\VEN_8086&DEV_1230.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_1230
+%PCI\VEN_10b9&DEV_5229.DeviceDesc%=uniata_Inst, PCI\VEN_10b9&DEV_5229
+%PCI\VEN_10de&DEV_01bc.DeviceDesc%=uniata_Inst, PCI\VEN_10de&DEV_01bc
+%PCI\VEN_10de&DEV_0065.DeviceDesc%=uniata_Inst, PCI\VEN_10de&DEV_0065
+%PCI\VEN_1022&DEV_7441.DeviceDesc%=uniata_Inst, PCI\VEN_1022&DEV_7441
+%PCI\VEN_1022&DEV_7411.DeviceDesc%=uniata_Inst, PCI\VEN_1022&DEV_7411
+%PCI\VEN_1022&DEV_7409.DeviceDesc%=uniata_Inst, PCI\VEN_1022&DEV_7409
+%PCI\VEN_1106&DEV_0571.DeviceDesc%=uniata_Inst, PCI\VEN_1106&DEV_0571
+%PCI\VEN_1039&DEV_5513.DeviceDesc%=uniata_Inst, PCI\VEN_1039&DEV_5513
+%PCI\VEN_1095&DEV_0680.DeviceDesc%=uniata_Inst, PCI\VEN_1095&DEV_0680
+%PCI\VEN_1095&DEV_0649.DeviceDesc%=uniata_Inst, PCI\VEN_1095&DEV_0649
+%PCI\VEN_1095&DEV_0648.DeviceDesc%=uniata_Inst, PCI\VEN_1095&DEV_0648
+%PCI\VEN_1095&DEV_0646.DeviceDesc%=uniata_Inst, PCI\VEN_1095&DEV_0646
+%PCI\VEN_1080&DEV_c693.DeviceDesc%=uniata_Inst, PCI\VEN_1080&DEV_c693
+%PCI\VEN_1078&DEV_0102.DeviceDesc%=uniata_Inst, PCI\VEN_1078&DEV_0102
+%PCI\VEN_1166&DEV_0211.DeviceDesc%=uniata_Inst, PCI\VEN_1166&DEV_0211
+%PCI\VEN_1166&DEV_0212.DeviceDesc%=uniata_Inst, PCI\VEN_1166&DEV_0212
+;%PCI\VEN_105a&DEV_4d68.DeviceDesc%=uniata_Inst, PCI\VEN_105a&DEV_4d68
+;%PCI\VEN_105a&DEV_6268.DeviceDesc%=uniata_Inst, PCI\VEN_105a&DEV_6268
+;%PCI\VEN_105a&DEV_4d69.DeviceDesc%=uniata_Inst, PCI\VEN_105a&DEV_4d69
+;%PCI\VEN_105a&DEV_5275.DeviceDesc%=uniata_Inst, PCI\VEN_105a&DEV_5275
+;%PCI\VEN_105a&DEV_6269.DeviceDesc%=uniata_Inst, PCI\VEN_105a&DEV_6269
+;%PCI\VEN_105a&DEV_7275.DeviceDesc%=uniata_Inst, PCI\VEN_105a&DEV_7275
+;%PCI\VEN_105a&DEV_4d33.DeviceDesc%=uniata_Inst, PCI\VEN_105a&DEV_4d33
+%PCI\VEN_105a&DEV_0d38.DeviceDesc%=uniata_Inst, PCI\VEN_105a&DEV_0d38
+;%PCI\VEN_105a&DEV_4d38.DeviceDesc%=uniata_Inst, PCI\VEN_105a&DEV_4d38
+;%PCI\VEN_105a&DEV_4d30.DeviceDesc%=uniata_Inst, PCI\VEN_105a&DEV_4d30
+;%PCI\VEN_105a&DEV_0d30.DeviceDesc%=uniata_Inst, PCI\VEN_105a&DEV_0d30
+;%PCI\VEN_1103&DEV_0004.DeviceDesc%=uniata_Inst, PCI\VEN_1103&DEV_0004
+;%PCI\VEN_1103&DEV_0005.DeviceDesc%=uniata_Inst, PCI\VEN_1103&DEV_0005
+;%PCI\VEN_1103&DEV_0008.DeviceDesc%=uniata_Inst, PCI\VEN_1103&DEV_0008
+%PCI\VEN_1191&DEV_0007.DeviceDesc%=uniata_Inst, PCI\VEN_1191&DEV_0007
+%PCI\VEN_1191&DEV_0006.DeviceDesc%=uniata_Inst, PCI\VEN_1191&DEV_0006
+%PCI\VEN_1191&DEV_0009.DeviceDesc%=uniata_Inst, PCI\VEN_1191&DEV_0009
+%PCI\VEN_1191&DEV_0008.DeviceDesc%=uniata_Inst, PCI\VEN_1191&DEV_0008
+%PCI\VEN_1191&DEV_0005.DeviceDesc%=uniata_Inst, PCI\VEN_1191&DEV_0005
+%PCI\VEN_16ca&DEV_0001.DeviceDesc%=uniata_Inst, PCI\VEN_16ca&DEV_0001
+;Compatible adapters
+;DEVLIST
+uniata_Inst
+
+[DISABLE_PCIIDE]
+HKLM, system\currentcontrolset\services\pciide, "Start", %REG_DWORD%, 0x00000004
+
+[uniata_Inst]
+AddReg = RegUninstall,DISABLE_PCIIDE
+CopyFiles = @uniata.sys
+
+[uniata_Inst.Services]
+AddService = UniATA, %SPSVCINST_ASSOCSERVICE%, uniata_Service_Inst
+
+[uniata_Service_Inst]
+ServiceType    = %SERVICE_KERNEL_DRIVER%
+StartType      = %SERVICE_BOOT_START%
+ErrorControl   = %SERVICE_ERROR_NORMAL%
+ServiceBinary  = %12%\uniata.sys
+LoadOrderGroup = System Bus Extender
+
+[uniata_Inst.PosDup]            ;; BUGBUG: What does this do?
+*PNP0600
+
+[Strings]
+HDCClassName            = "SCSI and RAID controllers"
+ALTERWARE="AlterWare"
+;Well-known adapters
+PCI\VEN_8086&DEV_24db.DeviceDesc="Intel ICH5"
+PCI\VEN_8086&DEV_24cb.DeviceDesc="Intel ICH4"
+PCI\VEN_8086&DEV_248a.DeviceDesc="Intel ICH3 mobile ATA-100 controller"
+PCI\VEN_8086&DEV_248b.DeviceDesc="Intel ICH3 ATA-100 controller"
+PCI\VEN_8086&DEV_244a.DeviceDesc="Intel ICH2 mobile ATA-100 controller"
+PCI\VEN_8086&DEV_244b.DeviceDesc="Intel ICH2 ATA-100 controller"
+PCI\VEN_8086&DEV_2411.DeviceDesc="Intel ICH (2411) ATA-66 controller"
+PCI\VEN_8086&DEV_7601.DeviceDesc="Intel ICH (7601) ATA-66 controller"
+PCI\VEN_8086&DEV_7111.DeviceDesc="Intel PIIX4 (7111) ATA-33 controller"
+PCI\VEN_8086&DEV_84ca.DeviceDesc="Intel PIIX4 (84ca) ATA-33 controller"
+PCI\VEN_8086&DEV_7199.DeviceDesc="Intel PIIX4e ATA-33 controller"
+PCI\VEN_8086&DEV_2421.DeviceDesc="Intel ICH0 ATA-33 controller"
+PCI\VEN_8086&DEV_7010.DeviceDesc="Intel PIIX3 ATA controller"
+PCI\VEN_8086&DEV_1230.DeviceDesc="Intel PIIX ATA controller"
+PCI\VEN_10b9&DEV_5229.DeviceDesc="AcerLabs Aladdin ATA/ATA-33 controller"
+PCI\VEN_10de&DEV_01bc.DeviceDesc="nVIDIA nForce"
+PCI\VEN_10de&DEV_0065.DeviceDesc="nVIDIA nForce 2"
+PCI\VEN_1022&DEV_7441.DeviceDesc="AMD 768"
+PCI\VEN_1022&DEV_7411.DeviceDesc="AMD 766"
+PCI\VEN_1022&DEV_7409.DeviceDesc="AMD 756"
+PCI\VEN_1106&DEV_0571.DeviceDesc="VIA ATA-XXX controller"
+PCI\VEN_1039&DEV_5513.DeviceDesc="SiS ATA-XXX controller"
+PCI\VEN_1095&DEV_0680.DeviceDesc="Sil 0680 ATA-133 controller"
+PCI\VEN_1095&DEV_0649.DeviceDesc="CMD 649 ATA100 controller"
+PCI\VEN_1095&DEV_0648.DeviceDesc="CMD 648 ATA66 controller"
+PCI\VEN_1095&DEV_0646.DeviceDesc="CMD 646 ATA controller"
+PCI\VEN_1080&DEV_c693.DeviceDesc="Cypress 82C693 ATA controller"
+PCI\VEN_1078&DEV_0102.DeviceDesc="Cyrix 5530 ATA33 controller"
+PCI\VEN_1166&DEV_0211.DeviceDesc="ServerWorks ROSB4 ATA33 controller"
+PCI\VEN_1166&DEV_0212.DeviceDesc="ServerWorks CSB5 ATA66/100 controller"
+;PCI\VEN_105a&DEV_4d68.DeviceDesc="Promise TX2 ATA-100 controller"
+;PCI\VEN_105a&DEV_6268.DeviceDesc="Promise TX2 ATA-100 controller"
+;PCI\VEN_105a&DEV_4d69.DeviceDesc="Promise TX2 ATA-133 controller"
+;PCI\VEN_105a&DEV_5275.DeviceDesc="Promise TX2 ATA-133 controller"
+;PCI\VEN_105a&DEV_6269.DeviceDesc="Promise TX2 ATA-133 controller"
+;PCI\VEN_105a&DEV_7275.DeviceDesc="Promise TX2 ATA-133 controller"
+;PCI\VEN_105a&DEV_4d33.DeviceDesc="Promise Ultra/FastTrak-33 controller"
+PCI\VEN_105a&DEV_0d38.DeviceDesc="Promise FastTrak 66 controller"
+;PCI\VEN_105a&DEV_4d38.DeviceDesc="Promise Ultra/FastTrak-66 controller"
+;PCI\VEN_105a&DEV_4d30.DeviceDesc="Promise Ultra/FastTrak-100 controller"
+;PCI\VEN_105a&DEV_0d30.DeviceDesc="Promise OEM ATA-100 controllers"
+;PCI\VEN_1103&DEV_0004.DeviceDesc="HighPoint HPT366/368/370/372 controller"
+;PCI\VEN_1103&DEV_0005.DeviceDesc="HighPoint HPT372 controller"
+;PCI\VEN_1103&DEV_0008.DeviceDesc="HighPoint HPT374 controller"
+PCI\VEN_1191&DEV_0007.DeviceDesc="Acard ATP860R controller"
+PCI\VEN_1191&DEV_0006.DeviceDesc="Acard ATP860 controller"
+PCI\VEN_1191&DEV_0009.DeviceDesc="Acard ATP865R controller"
+PCI\VEN_1191&DEV_0008.DeviceDesc="Acard ATP865 controller"
+PCI\VEN_1191&DEV_0005.DeviceDesc="Acard ATP850UF controller"
+PCI\VEN_16ca&DEV_0001.DeviceDesc="Cenatek Rocket Drive controller"
+;Compatible adapters
+;DEVNAMELIST
+"Universal ATA Driver"
+
+;*******************************************
+;Handy macro substitutions (non-localizable)
+SPSVCINST_ASSOCSERVICE = 0x00000002
+SERVICE_KERNEL_DRIVER  = 1
+SERVICE_BOOT_START     = 0
+SERVICE_ERROR_NORMAL   = 1
+REG_EXPAND_SZ          = 0x00020000
+REG_DWORD              = 0x00010001
+REG_MULTI_SZ           = 0x00010000
+

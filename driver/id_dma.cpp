@@ -30,14 +30,15 @@ Notes:
 
 Revision History:
 
-    This module is a port from FreeBSD 4.3-4.6 ATA driver (ata-dma.c) by
-         Søren Schmidt, Copyright (c) 1998,1999,2000,2001
+    This module is a port from FreeBSD 4.3-5.1 ATA driver (ata-dma.c) by
+         Søren Schmidt, Copyright (c) 1998-2004
 
     Changed defaulting-to-generic-PIO/DMA policy
     Added PIO settings for VIA
     Optimized VIA/AMD/nVidia init part
     Optimized Promise TX2 init part
-         by Alex A. Telyatnikov (Alter) (c) 2002-2003
+    Optimized Intel init part
+         by Alex A. Telyatnikov (Alter) (c) 2002-2004
 
 
 --*/
@@ -157,25 +158,13 @@ AtapiDmaSetup(
     PHW_CHANNEL chan = &(deviceExtension->chan[lChannel]);
     PATA_REQ AtaReq = (PATA_REQ)(Srb->SrbExtension);
 
-    // Debug ONLY !!!!
-//    PUCHAR DmaBuffer;
-//    ULONG dma_count_, dma_base_;
-
     KdPrint2((PRINT_PREFIX "AtapiDmaSetup: mode %#x\n", deviceExtension->lun[lChannel*2+DeviceNumber].TransferMode ));
     if(!count) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: count=0\n" ));
         return FALSE;
     }
-/*    if(!chan->dma_tab) {
-        KdPrint2((PRINT_PREFIX "AtapiDmaSetup: dma_tab=NULL\n" ));
-        return FALSE;
-    }*/
-    
-    dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, NULL, (PUCHAR)&(AtaReq->dma_tab) /*chan->dma_tab*/, &i);
 
-    // Debug ONLY !!!!!
-//    dma_base_ = AtapiVirtToPhysAddr_(HwDeviceExtension, NULL, (PUCHAR)&(AtaReq->dma_tab) /*chan->dma_tab*/, &dma_count_);
-//    KdPrint2((PRINT_PREFIX "AtapiDmaSetup: dma_base_ %#x dma_count_ %#x\n", dma_base_, dma_count_ ));
+    dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, NULL, (PUCHAR)&(AtaReq->dma_tab) /*chan->dma_tab*/, &i);
 
     if(!dma_base || !i || ((LONG)(dma_base) == -1)) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: No BASE\n" ));
@@ -207,20 +196,6 @@ AtapiDmaSetup(
             return FALSE;
         }
 
-        // Debug ONLY !!!!
-/*        DmaBuffer = (PUCHAR)ScsiPortGetVirtualAddress(HwDeviceExtension,
-                                                      ScsiPortConvertUlongToPhysicalAddress(dma_base));
-        KdPrint2((PRINT_PREFIX "AtapiDmaSetup: DmaBuffer %#x for dma_base %#x\n", DmaBuffer, dma_base));*/
-/*        DmaBuffer = (PUCHAR)MmMapIoSpace(ScsiPortConvertUlongToPhysicalAddress(dma_base),
-                                         dma_count, MmNonCached);
-        KdPrint2((PRINT_PREFIX "AtapiDmaSetup: DmaBuffer(2) %#x for dma_base %#x\n", DmaBuffer, dma_base));
-        if(DmaBuffer) {
-            MmUnmapIoSpace(DmaBuffer, dma_base);
-        }*/
-        // Debug ONLY !!!!!
-/*        dma_base_ = AtapiVirtToPhysAddr_(HwDeviceExtension, Srb, data, &dma_count_);
-        KdPrint2((PRINT_PREFIX "AtapiDmaSetup: dma_base %#x, dma_base_ %#x, dma_count_ %#x\n", dma_base, dma_base_, dma_count_ ));
-*/
         dma_count = min(count, PAGE_SIZE);
         data += min(count, PAGE_SIZE);
         count -= min(count, PAGE_SIZE);
@@ -299,62 +274,6 @@ AtapiDmaPioSync(
     return TRUE;
 } // end AtapiDmaPioSync()
 
-#if 0
-BOOLEAN
-AtapiReadBuffer(
-    PVOID  HwDeviceExtension,
-    PSCSI_REQUEST_BLOCK Srb,
-    PIDE_REGISTERS_1 baseIoAddress1,
-    PUCHAR data,
-    ULONG  count
-    )
-{
-    ULONG dma_count, dma_base;
-    PVOID tmp;
-    ULONG i;
-    PHYSICAL_ADDRESS ph_addr;
-
-    dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, Srb, data, &dma_count);
-    if(!dma_count || ((LONG)(dma_base) == -1)) {
-        KdPrint2((PRINT_PREFIX "AtapiReadBuffer: No 1st block\n" ));
-        return FALSE;
-    }
-    dma_count = min(count, (PAGE_SIZE - ((ULONG)data & PAGE_MASK)));
-    data += dma_count;
-    count -= dma_count;
-    i = 0;
-
-    while (count) {
-
-        ph_addr.QuadPart = dma_base;
-        tmp = MmGetVirtualForPhysical(ph_addr);
-        if(!tmp || tmp == (PVOID)(-1))
-            return FALSE;
-        ReadBuffer(baseIoAddress1,
-                  (PUSHORT)tmp,
-                  count/2);
-
-        i++; 
-        dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, Srb, data, &dma_count);
-        if(!dma_count || ((LONG)(dma_base) == -1)) {
-            KdPrint2((PRINT_PREFIX "AtapiReadBuffer: No NEXT block\n" ));
-            return FALSE;
-        }
-        dma_count = min(count, PAGE_SIZE);
-        data += min(count, PAGE_SIZE);
-        count -= min(count, PAGE_SIZE);
-    }
-    ph_addr.QuadPart = dma_base;
-    tmp = MmGetVirtualForPhysical(ph_addr);
-    if(!tmp || tmp == (PVOID)(-1))
-        return FALSE;
-    ReadBuffer(baseIoAddress1,
-              (PUSHORT)tmp,
-              count/2);
-    return TRUE;
-} // end AtapiReadBuffer()
-#endif 
-
 VOID
 AtapiDmaStart(
     IN PVOID HwDeviceExtension,
@@ -366,44 +285,63 @@ AtapiDmaStart(
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     PIDE_BUSMASTER_REGISTERS BaseIoAddressBM = deviceExtension->BaseIoAddressBM[lChannel];
     PATA_REQ AtaReq = (PATA_REQ)(Srb->SrbExtension);
+    PHW_CHANNEL chan = &deviceExtension->chan[lChannel];
+
+    ULONG VendorID =  deviceExtension->DevID        & 0xffff;
+    ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
 
     KdPrint2((PRINT_PREFIX "AtapiDmaStart: %s on %#x:%#x\n", 
         (Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? "read" : "write",
         lChannel, DeviceNumber ));
 
-    switch(deviceExtension->DevID) {
-    case 0x0d38105a:  /* Promise Fasttrak 66 */
-    case 0x4d38105a:  /* Promise Ultra/Fasttrak 66 */
-    case 0x0d30105a:  /* Promise OEM ATA 100 */
-    case 0x4d30105a:  /* Promise Ultra/Fasttrak 100 */
-        ScsiPortWritePortUchar((PUCHAR)(BaseIoAddressBM)+0x11, 
-              ScsiPortReadPortUchar((PUCHAR)(BaseIoAddressBM)+0x11) |
-                  (DeviceNumber ? 0x08 : 0x02));
-        ScsiPortWritePortUlong((PULONG)((PUCHAR)(BaseIoAddressBM) + (DeviceNumber ? 0x24 : 0x20)), 
-              ((Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? 0x05000000 : 0x06000000) | (Srb->DataTransferLength >> 1)
-              );
+    // set flag
+    chan->ChannelCtrlFlags |= CTRFLAGS_DMA_ACTIVE;
+
+    switch(VendorID) {
+    case ATA_PROMISE_ID:
+        if(ChipType == PRNEW) {
+            if(chan->ChannelCtrlFlags & CTRFLAGS_LBA48) {
+                AtapiWritePort1(chan, (PUCHAR)(BaseIoAddressBM)+0x11, 
+                      AtapiReadPort1(chan, (PUCHAR)(BaseIoAddressBM)+0x11) |
+                          (DeviceNumber ? 0x08 : 0x02));
+/*                AtapiWritePort4(chan, (PULONG)((PUCHAR)(BaseIoAddressBM) + (DeviceNumber ? 0x24 : 0x20)), 
+                      ((Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? 0x05000000 : 0x06000000) | (Srb->DataTransferLength >> 1)
+                      );*/
+                AtapiWritePort4(chan, (PULONG)((PUCHAR)(BaseIoAddressBM) + 0x20), 
+                      ((Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? 0x05000000 : 0x06000000) | (Srb->DataTransferLength >> 1)
+                      );
+            }
+        } else
+        if(deviceExtension->MemIo) {
+            // begin transaction
+            AtapiWritePort4(chan,
+                 (PULONG)&(BaseIoAddressBM->Command), 
+                 (AtapiReadPort4(chan,
+                     (PULONG)&(BaseIoAddressBM->Command)) & ~0x000000c0) |
+                     ((Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? 0x00000080 : 0x000000c0) );
+            return;
+        }
         break;
     }
 
-    // set flag
-    deviceExtension->chan[lChannel].ChannelCtrlFlags |= CTRFLAGS_DMA_ACTIVE;
     // set pointer to Pointer Table
-    ScsiPortWritePortUlong(&(BaseIoAddressBM->PRD_Table), 
+    AtapiWritePort4(chan, &(BaseIoAddressBM->PRD_Table), 
           AtaReq->dma_base
           );
     // set transfer direction
-    ScsiPortWritePortUchar(&(BaseIoAddressBM->Command), 
+    AtapiWritePort1(chan, &(BaseIoAddressBM->Command), 
           (Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? BM_COMMAND_READ : BM_COMMAND_WRITE);
     // clear Error & Intr bits (writeing 1 clears bits)
     // set DMA capability bit
-    ScsiPortWritePortUchar(&(BaseIoAddressBM->Status), 
-         ScsiPortReadPortUchar(&(BaseIoAddressBM->Status)) |
+    AtapiWritePort1(chan, &(BaseIoAddressBM->Status), 
+         AtapiReadPort1(chan, &(BaseIoAddressBM->Status)) |
              (BM_STATUS_INTR | BM_STATUS_ERR) /*|
              (DeviceNumber ? BM_STATUS_DRIVE_1_DMA : BM_STATUS_DRIVE_0_DMA)*/);
     // begin transaction
-    ScsiPortWritePortUchar(&(BaseIoAddressBM->Command), 
-         ScsiPortReadPortUchar(&(BaseIoAddressBM->Command)) |
+    AtapiWritePort1(chan, &(BaseIoAddressBM->Command), 
+         AtapiReadPort1(chan, &(BaseIoAddressBM->Command)) |
              BM_COMMAND_START_STOP);
+    return;
 
 } // end AtapiDmaStart()
 
@@ -417,31 +355,54 @@ AtapiDmaDone(
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     PIDE_BUSMASTER_REGISTERS BaseIoAddressBM = deviceExtension->BaseIoAddressBM[lChannel];
+    PHW_CHANNEL chan = &deviceExtension->chan[lChannel];
+    UCHAR dma_status;
+
+    ULONG VendorID =  deviceExtension->DevID        & 0xffff;
+    ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
 
     KdPrint2((PRINT_PREFIX "AtapiDmaDone:\n" ));
 
-    switch(deviceExtension->DevID) {
-    case 0x0d38105a:  /* Promise Fasttrak 66 */
-    case 0x4d38105a:  /* Promise Ultra/Fasttrak 66 */
-    case 0x0d30105a:  /* Promise OEM ATA 100 */
-    case 0x4d30105a:  /* Promise Ultra/Fasttrak 100 */
-        ScsiPortWritePortUlong((PULONG)((PUCHAR)(BaseIoAddressBM) + (DeviceNumber ? 0x24 : 0x20)), 
-              0
-              );
-        ScsiPortWritePortUchar((PUCHAR)(BaseIoAddressBM)+0x11, 
-              ScsiPortReadPortUchar((PUCHAR)(BaseIoAddressBM)+0x11) &
-                  ~(DeviceNumber ? 0x08 : 0x02));
+    switch(VendorID) {
+    case ATA_PROMISE_ID:
+        if(ChipType == PRNEW) {
+            if(chan->ChannelCtrlFlags & CTRFLAGS_LBA48) {
+                AtapiWritePort1(chan, (PUCHAR)(BaseIoAddressBM)+0x11, 
+                      AtapiReadPort1(chan, (PUCHAR)(BaseIoAddressBM)+0x11) &
+                          ~(DeviceNumber ? 0x08 : 0x02));
+/*                AtapiWritePort4(chan, (PULONG)((PUCHAR)(BaseIoAddressBM) + (DeviceNumber ? 0x24 : 0x20)), 
+                      0
+                      );*/
+                AtapiWritePort4(chan, (PULONG)((PUCHAR)(BaseIoAddressBM) + 0x20), 
+                      0
+                      );
+            }
+        } else
+        if(deviceExtension->MemIo) {
+            // end transaction
+            AtapiWritePort4(chan,
+                 (PULONG)&(BaseIoAddressBM->Command), 
+                 (AtapiReadPort4(chan,
+                     (PULONG)&(BaseIoAddressBM->Command)) & ~0x00000080) );
+            // clear flag
+            chan->ChannelCtrlFlags &= ~CTRFLAGS_DMA_ACTIVE;
+            return 0;
+        }
         break;
     }
 
-    // begin transaction
-    ScsiPortWritePortUchar(&(BaseIoAddressBM->Command), 
-         ScsiPortReadPortUchar(&(BaseIoAddressBM->Command)) &
+    // get status
+    dma_status = AtapiReadPort1(chan, &(BaseIoAddressBM->Status)) & BM_STATUS_MASK;
+    // end transaction
+    AtapiWritePort1(chan, &(BaseIoAddressBM->Command), 
+         AtapiReadPort1(chan, &(BaseIoAddressBM->Command)) &
              ~BM_COMMAND_START_STOP);
+    // clear interrupt and error status
+    AtapiWritePort1(chan, &(BaseIoAddressBM->Status), BM_STATUS_ERR | BM_STATUS_INTR);
     // clear flag
-    deviceExtension->chan[lChannel].ChannelCtrlFlags &= ~CTRFLAGS_DMA_ACTIVE;
+    chan->ChannelCtrlFlags &= ~CTRFLAGS_DMA_ACTIVE;
 
-    return ScsiPortReadPortUchar(&(BaseIoAddressBM->Status)) & BM_STATUS_MASK;
+    return dma_status;
 
 } // end AtapiDmaDone()
 
@@ -484,6 +445,18 @@ AtapiDmaInit__(
     if(deviceExtension->lun[ldev].IdentifyData.SupportDma) {
         KdPrint2((PRINT_PREFIX 
                     "AtapiHwInitialize: Set (U)DMA on Device %d\n", ldev & 1));
+/*        for(i=AtaUmode(&(lun->IdentifyData)); i>=0; i--) {
+            AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
+                         (CHAR)AtaPioMode(&(lun->IdentifyData)),
+                         (CHAR)AtaWmode(&(lun->IdentifyData)),
+                         UDMA_MODE0+(CHAR)i );
+        }
+        for(i=AtaWmode(&(lun->IdentifyData)); i>=0; i--) {
+            AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
+                         (CHAR)AtaPioMode(&(lun->IdentifyData)),
+                         (CHAR)AtaWmode(&(lun->IdentifyData)),
+                         UDMA_MODE0+(CHAR)i );
+        }*/
         AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
                      (CHAR)AtaPioMode(&(lun->IdentifyData)),
                      (CHAR)AtaWmode(&(lun->IdentifyData)),
@@ -509,26 +482,42 @@ AtapiDmaInit(
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     ULONG Channel = deviceExtension->Channel + lChannel;
+    PHW_CHANNEL chan = &deviceExtension->chan[lChannel];
     LONG statusByte = 0;
     ULONG dev = Channel*2 + DeviceNumber;
     ULONG ldev = lChannel*2 + DeviceNumber;
     ULONG slotNumber = deviceExtension->slotNumber;
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
     LONG i;
-//    CHAR ph_piomode;
+
+    ULONG VendorID  =  deviceExtension->DevID        & 0xffff;
+    ULONG DeviceID  = (deviceExtension->DevID >> 16) & 0xffff;
+    ULONG RevID     =  deviceExtension->RevID;
+    ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
+    ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
+
     static const UCHAR via_modes[5][7] = {
         { 0x00, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00 },        /* ATA33 */
         { 0x00, 0x00, 0xea, 0x00, 0xe8, 0x00, 0x00 },        /* ATA66 */
         { 0x00, 0x00, 0xf4, 0x00, 0xf1, 0xf0, 0x00 },        /* ATA100 */
-        { 0xfc, 0x00, 0xf6, 0x00, 0xf2, 0xf1, 0xf0 },   /* VIA ATA133 */
-        { 0x00, 0x00, 0xc0, 0x00, 0xc5, 0xc6, 0xc7 }};  /* AMD/nVIDIA */
+        { 0xfc, 0x00, 0xf6, 0x00, 0xf2, 0xf1, 0xf0 },        /* VIA ATA133 */
+        { 0x00, 0x00, 0xc0, 0x00, 0xc5, 0xc6, 0xc7 }};       /* AMD/nVIDIA */
     UCHAR *reg_val = NULL;
-
-    USHORT reg50;
 
     /* set our most pessimistic default mode */
     deviceExtension->lun[ldev].TransferMode = ATA_PIO;
     if(!deviceExtension->BaseIoAddressBM[lChannel]) {
+        wdmamode = udmamode = -1;
+    }
+
+    // Limit transfer mode
+    if(deviceExtension->MaxTransferMode >= ATA_UDMA) {
+        udmamode = min( udmamode, (CHAR)(deviceExtension->MaxTransferMode - ATA_UDMA));
+    } else
+    if(deviceExtension->MaxTransferMode >= ATA_WDMA) {
+        udmamode = -1;
+        wdmamode = min( wdmamode, (CHAR)(deviceExtension->MaxTransferMode - ATA_WDMA));
+    } else {
         wdmamode = udmamode = -1;
     }
 
@@ -537,14 +526,326 @@ AtapiDmaInit(
         udmamode = 2;
     }
 
-    switch(deviceExtension->DevID) {
+    if(deviceExtension->UnknownDev) {
+        KdPrint2((PRINT_PREFIX "Unknown chip, omit Vendor/Dev checks"));
+        goto try_generic_dma;
+    }
 
-    case 0x24db8086:        /* Intel ICH5 */
-    case 0x24cb8086:        /* Intel ICH4 */
-    case 0x248a8086:        /* Intel ICH3 mobile */
-    case 0x248b8086:        /* Intel ICH3 */
-    case 0x244a8086:        /* Intel ICH2 mobile */ 
-    case 0x244b8086:        /* Intel ICH2 */
+    switch(VendorID) {
+    case ATA_ACARD_ID: {
+        /*********/
+        /* Acard */
+        /*********/
+        static const USHORT reg4a = 0xa6;
+        UCHAR  reg = 0x40 + (UCHAR)dev;
+
+        if(ChipType == ATPOLD) {
+            /* Old Acard 850 */
+            static const USHORT reg4x = 0x0301;
+
+            for(i=udmamode; i>=0; i--) {
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                if (!(statusByte & IDE_STATUS_ERROR)) {
+                    deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
+set_old_acard:
+                    ChangePciConfig1(0x54, a | (0x01 << dev) | ((i+1) << (dev*2)));
+                    SetPciConfig1(0x4a, reg4a);
+                    SetPciConfig2(reg,  reg4x);
+                    return;
+                }
+
+            }
+            if (wdmamode >= 2 && apiomode >= 4) {
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                if (!(statusByte & IDE_STATUS_ERROR)) {
+                    deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
+                    goto set_old_acard;
+                }
+            }
+        } else {
+            /* New Acard 86X */
+            static const UCHAR reg4x = 0x31;
+
+            for(i=udmamode; i>=0; i--) {
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                if (!(statusByte & IDE_STATUS_ERROR)) {
+                    deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
+set_new_acard:
+                    ChangePciConfig2(0x44, (a & ~(0x000f << (dev * 4))) | ((i+1) << (dev*4)));
+                    SetPciConfig1(0x4a, reg4a);
+                    SetPciConfig1(reg,  reg4x);
+                    return;
+                }
+
+            }
+            if (wdmamode >= 2 && apiomode >= 4) {
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                if (!(statusByte & IDE_STATUS_ERROR)) {
+                    deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
+                    goto set_new_acard;
+                }
+            }
+        }
+        break; }
+    case ATA_ACER_LABS_ID: {
+        /************************/
+        /* Acer Labs Inc. (ALI) */
+        /************************/
+        static const UCHAR ali_udma[] = {0x0c, 0x0b, 0x0a, 0x09, 0x08, 0x0f};
+        static const ULONG ali_pio[]  =
+                { 0x006d0003, 0x00580002, 0x00440001, 0x00330001,
+                  0x00310001, 0x00440001};
+        /* the older Aladdin doesn't support ATAPI DMA on both master & slave */
+        if ((ChipFlags & ALIOLD) &&
+            (udmamode >= 0 || wdmamode >= 0)) {
+            if(ATAPI_DEVICE(deviceExtension, lChannel*2) &&
+               ATAPI_DEVICE(deviceExtension, lChannel*2 + 1)) {
+                // 2 devices on this channel - NO DMA
+                chan->MaxTransferMode =
+                    min(chan->MaxTransferMode, ATA_PIO4);
+                udmamode = wdmamode = -1;
+                break;
+            }
+        }
+        for(i=udmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_UDMA0 + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                ULONG word54;
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA0 + i);
+        
+                GetPciConfig4(0x54, word54);
+                word54 &= ~(0x000f000f << (dev * 4));
+                word54 |= (((ali_udma[i]<<16) | 5) << (dev * 4));
+                SetPciConfig4(0x54, word54);
+                ChangePciConfig1(0x53, a | 0x03);
+                SetPciConfig4(0x58 + (Channel<<2), 0x00310001);
+                return;
+            }
+        }
+        /* make sure eventual UDMA mode from the BIOS is disabled */
+        ChangePciConfig2(0x56, a & ~(0x0008 << (dev * 4)) );
+        if (wdmamode >= 2 && apiomode >= 4) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                ChangePciConfig1(0x53, a | 0x03);
+                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
+                chan->ChannelCtrlFlags |= CTRFLAGS_DMA_RO;
+                return;
+            }
+        }
+        ChangePciConfig1(0x53, (a & ~0x01) | 0x02);
+
+        for(i=apiomode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_PIO0 + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_PIO0 + i);
+                ChangePciConfig4(0x54, a & ~(0x0008000f << (dev * 4)));
+                SetPciConfig4(0x58 + (Channel<<2), ali_pio[i]);
+                return;
+            }
+        }
+        break; }
+    case ATA_AMD_ID:
+    case ATA_NVIDIA_ID:
+    case ATA_VIA_ID: {
+        /********************/
+        /* AMD, nVidia, VIA */
+        /********************/
+        static const UCHAR via_modes[5][7] = {
+            { 0xc2, 0xc1, 0xc0, 0x00, 0x00, 0x00, 0x00 },        /* ATA33 */
+            { 0xee, 0xec, 0xea, 0xe9, 0xe8, 0x00, 0x00 },        /* ATA66 */
+            { 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0, 0x00 },        /* ATA100 */
+            { 0xf7, 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0 },        /* VIA ATA133 */
+            { 0xc2, 0xc1, 0xc0, 0xc4, 0xc5, 0xc6, 0xc7 }};       /* AMD/nVIDIA */
+        static const via_pio[] = { 0xff, 0xff, 0xff, 0x55, 0x51, 0xff, 0x55 };
+        const UCHAR *reg_val = NULL;
+        UCHAR reg = 0x53-(UCHAR)dev;
+
+        reg_val = &via_modes[ChipType][0];
+
+        if(ChipFlags & NVIDIA)
+            reg += 0x10;
+
+        for(i = udmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                ATA_UDMA0+(UCHAR)i,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                SetPciConfig1(reg-0x08, 0x51);
+                SetPciConfig1(reg, (UCHAR)reg_val[i]);
+                deviceExtension->lun[ldev].TransferMode = ATA_UDMA0+(UCHAR)i;
+                return;
+            }
+        }
+        for(i = wdmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                ATA_WDMA0+(UCHAR)i,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                SetPciConfig1(reg-0x08, i ? 0x51 : 0x55);
+                SetPciConfig1(reg, 0x8b);
+                deviceExtension->lun[ldev].TransferMode = ATA_UDMA0+(UCHAR)i;
+                return;
+            }
+        }
+        /* set PIO mode timings */
+        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                            ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        if(apiomode >= 0)
+            SetPciConfig1(reg-0x08, via_pio[apiomode]);
+        via82c_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
+        deviceExtension->lun[ldev].TransferMode = ATA_PIO0 + apiomode;
+        return;
+
+        break; }
+    case ATA_CYRIX_ID: {
+        /*********/
+        /* Cyrix */
+        /*********/
+        ULONG cyr_piotiming[] = 
+            { 0x00009172, 0x00012171, 0x00020080, 0x00032010, 0x00040010 };
+        ULONG cyr_wdmatiming[] = { 0x00077771, 0x00012121, 0x00002020 };
+        ULONG cyr_udmatiming[] = { 0x00921250, 0x00911140, 0x00911030 };
+
+        if(apiomode >= 4)
+            apiomode = 4;
+        for(i=udmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
+                AtapiWritePort4(chan, (PULONG)(((PUCHAR)(&(deviceExtension->BaseIoAddressBM_0->Command))+0x24+(dev << 3))), 
+                      cyr_udmatiming[udmamode]);
+                return;
+            }
+        }
+        for(i=wdmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_WDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA + i);
+                AtapiWritePort4(chan, (PULONG)((PUCHAR)(&(deviceExtension->BaseIoAddressBM_0->Command))+0x24+(dev << 3)), 
+                      cyr_wdmatiming[wdmamode]);
+                return;
+            }
+        }
+        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                            (UCHAR)(ATA_PIO0 + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        if (!(statusByte & IDE_STATUS_ERROR)) {
+            deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_PIO0 + i);
+            AtapiWritePort4(chan, (PULONG)((PUCHAR)(&(deviceExtension->BaseIoAddressBM_0->Command))+0x24+(dev << 3)), 
+                  cyr_piotiming[apiomode]);
+            return;
+        }
+
+        break; }
+    case ATA_CYPRESS_ID:
+        /***********/
+        /* Cypress */
+        /***********/
+        if (wdmamode >= 2 && apiomode >= 4) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                SetPciConfig2(Channel ? 0x4e:0x4c, 0x2020);
+                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
+                return;
+            }
+        }
+    case ATA_HIGHPOINT_ID: {
+        /********************/
+        /* High Point (HPT) */
+        /********************/
+        for(i=udmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                hpt_timing(deviceExtension, dev, (UCHAR)(ATA_UDMA + i));       // ???
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
+                return;
+            }
+        }
+        
+        for(i=wdmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_WDMA0+i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                hpt_timing(deviceExtension, dev, (UCHAR)(ATA_WDMA0+i));
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA0+i);
+                return;
+            }
+        }
+        /* try generic DMA, use hpt_timing() */
+        if (wdmamode >= 0 && apiomode >= 4) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                ATA_DMA,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                deviceExtension->lun[ldev].TransferMode = ATA_DMA;
+                return;
+            }
+        }
+        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                            ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        hpt_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
+        deviceExtension->lun[ldev].TransferMode = ATA_PIO0 + apiomode;
+        return;
+        break; }
+    case ATA_INTEL_ID: {
+        /*********/
+        /* Intel */
+        /*********/
+        if(deviceExtension->DevID == ATA_I82371FB) {
+            if (wdmamode >= 2 && apiomode >= 4) {
+                ULONG word40;
+
+                GetPciConfig4(0x40, word40);
+                word40 >>= Channel * 16;
+
+                /* Check for timing config usable for DMA on controller */
+                if (!((word40 & 0x3300) == 0x2300 &&
+                      ((word40 >> ((!(DeviceNumber & 1)) ? 0 : 4)) & 1) == 1)) {
+                    udmamode = wdmamode = -1;
+                    break;
+                }
+
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+
+                if (!(statusByte & IDE_STATUS_ERROR)) {
+                    deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
+                    return;
+                }
+            }
+            break;
+        }
+        if(udmamode >= ATA_SA150) {
+            deviceExtension->lun[ldev].TransferMode = udmamode;
+            return;
+        }
         if (udmamode >= 5) {
             ULONG  mask48, new48;
             USHORT word54;
@@ -569,10 +870,6 @@ AtapiDmaInit(
         /* make sure eventual ATA100 mode from the BIOS is disabled */
         ChangePciConfig2(0x54, a & ~(0x1000<<dev));
 
-        /* FALLTHROUGH */
-
-    case 0x24118086:    /* Intel ICH */
-    case 0x76018086:        /* Intel ICH */
         if (udmamode >= 4) {
             ULONG  mask48, new48;
             USHORT word54;
@@ -595,13 +892,7 @@ AtapiDmaInit(
         }           
         /* make sure eventual ATA66 mode from the BIOS is disabled */
         ChangePciConfig2(0x54, a & ~(1<<dev));
-
-        /* FALLTHROUGH */
-
-    case 0x71118086:        /* Intel PIIX4 */
-    case 0x84CA8086:        /* Intel PIIX4 */
-    case 0x71998086:        /* Intel PIIX4e */
-    case 0x24218086:        /* Intel ICH0 */
+        
         if (udmamode >= 2) {
             ULONG mask48, new48;
 
@@ -620,9 +911,6 @@ AtapiDmaInit(
         /* make sure eventual ATA33 mode from the BIOS is disabled */
         ChangePciConfig2(0x48, a & ~(1<<dev));
 
-        /* FALLTHROUGH */
-
-    case 0x70108086:        /* Intel PIIX3 */
         if (wdmamode >= 2 && apiomode >= 4) {
             ULONG mask40, new40, mask44, new44;
 
@@ -671,740 +959,39 @@ AtapiDmaInit(
                 return;
             }
         }
-        /* we could set PIO mode timings, but we assume the BIOS did that */
-        goto try_generic_dma;
-
-    case 0x12308086:        /* Intel PIIX */
-        if (wdmamode >= 2 && apiomode >= 4) {
-            ULONG word40;
-
-            GetPciConfig4(0x40, word40);
-            word40 >>= Channel * 16;
-
-            /* Check for timing config usable for DMA on controller */
-            if (!((word40 & 0x3300) == 0x2300 &&
-                  ((word40 >> ((!(DeviceNumber & 1)) ? 0 : 4)) & 1) == 1))
-                break;
-
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                return;
+        break; }
+    case ATA_PROMISE_ID:
+        /***********/
+        /* Promise */
+        /***********/
+        if(ChipType < PRTX) {
+            if (ATAPI_DEVICE(deviceExtension, ldev)) {
+                udmamode =
+                wdmamode = -1;
             }
         }
-        goto try_generic_dma;
-
-    case 0x522910b9:        /* AcerLabs Aladdin IV/V */
-        /* the older Aladdin doesn't support ATAPI DMA on both master & slave */
-        if (deviceExtension->RevID < 0xC2 &&
-            ATAPI_DEVICE(deviceExtension, lChannel*2) &&
-            ATAPI_DEVICE(deviceExtension, lChannel*2 + 1)) {
-            // 2 devices on this channel - NO DMA
-            break;
-        }
-        SetPciConfig4(0x58 + (Channel<<2), 0x00310001);
-        if (udmamode >= 5 && deviceExtension->RevID >= 0xC4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_UDMA5,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                ULONG word54;
-        
-                GetPciConfig4(0x54, word54);
-                ChangePciConfig1(0x4b, a | 0x01);
-                word54 &= ~(0x000f000f << (dev << 2));
-                word54 |= (0x000f0005 << (dev << 2));
-                SetPciConfig4(0x54, word54);
-                ChangePciConfig1(0x53, a | 0x03);
-                deviceExtension->lun[ldev].TransferMode = ATA_UDMA5;
-                return;
-            }
-        }
-        if (udmamode >= 4 && deviceExtension->RevID >= 0xC2) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_UDMA4,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                ULONG word54;
-        
-                GetPciConfig4(0x54, word54);
-                ChangePciConfig1(0x4b, a | 0x01);
-                word54 &= ~(0x000f000f << (dev << 2));
-                word54 |= (0x00080005 << (dev << 2));
-                SetPciConfig4(0x54, word54);
-                ChangePciConfig1(0x53, a | 0x03);
-                deviceExtension->lun[ldev].TransferMode = ATA_UDMA4;
-                return;
-            }
-        }
-        if (udmamode >= 2 && deviceExtension->RevID >= 0x20) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_UDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                ULONG word54;
-        
-                GetPciConfig4(0x54, word54);
-                word54 &= ~(0x000f000f << (dev << 2));
-                word54 |= (0x000a0005 << (dev << 2));
-                SetPciConfig4(0x54, word54);
-                ChangePciConfig1(0x53, a | 0x03);
-                deviceExtension->lun[ldev].TransferMode = ATA_UDMA2;
-                deviceExtension->chan[lChannel].ChannelCtrlFlags |= CTRFLAGS_DMA_RO;
-                return;
-            }
-        }
-
-        /* make sure eventual UDMA mode from the BIOS is disabled */
-        ChangePciConfig2(0x56, a & ~(0x0008 << (dev << 2)) );
-
-        if (wdmamode >= 2 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                ChangePciConfig1(0x53, a | 0x03);
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                deviceExtension->chan[lChannel].ChannelCtrlFlags |= CTRFLAGS_DMA_RO;
-                return;
-            }
-        }
-        ChangePciConfig1(0x53, (a & ~0x01) | 0x02);
-
-        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                            ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-
-        if (!(statusByte & IDE_STATUS_ERROR)) {
-            ULONG word54;
-            ULONG timing;
-
-            GetPciConfig4(0x54, word54);
-
-            switch(ATA_PIO0 + apiomode) {
-            case ATA_PIO0: timing = 0x006d0003;
-            case ATA_PIO1: timing = 0x00580002;
-            case ATA_PIO2: timing = 0x00440001;
-            case ATA_PIO3: timing = 0x00330001;
-            case ATA_PIO4: timing = 0x00310001;
-            default:           timing = 0x006d0003;
-            }
-
-            SetPciConfig4(0x58 + (Channel<<2), timing);
-            word54 &= ~(0x000f000f << (dev << 2));
-            word54 |= (0x00000004 << (dev << 2));
-            SetPciConfig4(0x54, word54);
-            deviceExtension->lun[ldev].TransferMode = ATA_PIO0 + apiomode;
+        if(udmamode > ATA_SA150) {
+            deviceExtension->lun[ldev].TransferMode = udmamode;
             return;
         }
-        break;
-
-    case 0x01bc10de:        /* nVIDIA nForce */
-    case 0x006510de:        /* nVIDIA nForce2 */
-    case 0x74411022:        /* AMD 768 */
-    case 0x74111022:        /* AMD 766 */
-    case 0x74091022:        /* AMD 756 */
-    case 0x05711106:        /* VIA 82C571, 82C586, 82C596, 82C686, 8231, 8233, 8235 */
-        {
-        UCHAR reg = 0x53-(UCHAR)dev;
-
-        if (AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x31471106, 0) ||     /* 8233a */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x31771106, 0)) {     /* 8235 */
-            udmamode = min(udmamode, 6);
-            reg_val = (PUCHAR)&via_modes[3];
-        } else
-        if (AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x06861106, 0x40) ||  /* 82C686b */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x82311106, 0) ||     /* 8231 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x30741106, 0) ||     /* 8233 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x31091106, 0 )) {    /* 8233c */
-            udmamode = min(udmamode, 5);
-            reg_val = (PUCHAR)&via_modes[2];
-        } else
-        if (AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x06861106, 0x11) ||  /* 82C686a */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x05961106, 0x12 )) { /* 82C596b */
-            udmamode = min(udmamode, 4);
-            reg_val = (PUCHAR)&via_modes[1];
-        } else
-        if (AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x06861106, 0)) {     /* 82C686 */
-            udmamode = min(udmamode, 2);
-            reg_val = (PUCHAR)&via_modes[1];
-        } else
-        if (AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x05961106, 0) ||     /* 82C596a */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x05861106, 0) ||     /* 82C586 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber, 
-                         slotNumber, 0x05861106, 0x03)) {  /* 82C586b+ */
-
-            udmamode = min(udmamode, 2);
-            reg_val = (PUCHAR)&via_modes[0];
-        } else
-        if (deviceExtension->DevID == 0x74411022 ||        /* AMD 768 */
-            deviceExtension->DevID == 0x74111022) {        /* AMD 766 */
-            udmamode = min(udmamode, 5);
-            reg_val = (PUCHAR)&via_modes[4];
-        } else
-        if (deviceExtension->DevID == 0x74091022) {        /* AMD 756 */
-            udmamode = min(udmamode, 4);
-            reg_val = (PUCHAR)&via_modes[4];
-        } else
-        if (deviceExtension->DevID == 0x01bc10de) {        /* nVIDIA */
-            udmamode = min(udmamode, 5);
-            reg_val = (PUCHAR)&via_modes[4];
-            reg += 0x10;
-        } else
-        if (deviceExtension->DevID == 0x006510de) {        /* nVIDIA 2 */
-            udmamode = min(udmamode, 6);
-            reg_val = (PUCHAR)&via_modes[4];
-            reg += 0x10;
-        } else
-            udmamode = 0;
-
-        if(udmamode > 0 || wdmamode > 0) {
-            SetPciConfig1(reg-0x08, 0x20);
-        }
-
-        for(i = udmamode; i>=0; i--) {
-            if(!valid_udma[i])
-                continue;
-
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_UDMA0+(UCHAR)i,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                SetPciConfig1(reg, (UCHAR)reg_val[i]);
-                deviceExtension->lun[ldev].TransferMode = ATA_UDMA0+(UCHAR)i;
-                return;
-            }
-        }
-        
-        if (wdmamode >= 2 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                SetPciConfig1(reg, 0xb0);
-                SetPciConfig1(reg-0x08, 0x31);
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                return;
-            }
-        }
-
-        /* try generic DMA */
-        if (!ATAPI_DEVICE(deviceExtension, ldev) &&
-            wdmamode >= 0 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_DMA,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                deviceExtension->lun[ldev].TransferMode = ATA_DMA;
-                return;
-            }
-        }
-        /* set PIO mode timings */
-        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                            ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-        via82c_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
-        deviceExtension->lun[ldev].TransferMode = ATA_PIO0 + apiomode;
-        return;
-    }
-    case 0x55131039:        /* SiS 5591 */
-        if (AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x06301039, 0x30) ||     /* SiS 630 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x06331039, 0) ||        /* SiS 633 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x06351039, 0) ||        /* SiS 635 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x06401039, 0) ||        /* SiS 640 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x06451039, 0) ||        /* SiS 645 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x06501039, 0) ||        /* SiS 650 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x07301039, 0) ||        /* SiS 730 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x07331039, 0) ||        /* SiS 733 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x07351039, 0) ||        /* SiS 735 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x07401039, 0) ||        /* SiS 740 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x07451039, 0) ||        /* SiS 745 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x07501039, 0 )) {       /* SiS 750 */
-
-            UCHAR reg = 0x40 + (UCHAR)(dev << 1);
-            USHORT val;
-            
-            GetPciConfig2(reg, val);
-            val &= 0x0fff;
-
-            if (udmamode >= 5) {
-                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                    ATA_UDMA5,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-                if (!(statusByte & IDE_STATUS_ERROR)) {
-                    SetPciConfig2(reg, val | 0x8000);
-                    deviceExtension->lun[ldev].TransferMode = ATA_UDMA5;
-                    return;
-                }
-            }
-            if (udmamode >= 4) {
-                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                    ATA_UDMA4,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-                if (!(statusByte & IDE_STATUS_ERROR)) {
-                    SetPciConfig2(reg, val | 0x9000);
-                    deviceExtension->lun[ldev].TransferMode = ATA_UDMA4;
-                    return;
-                }
-            }
-            if (udmamode >= 2) {
-                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                    ATA_UDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-                if (!(statusByte & IDE_STATUS_ERROR)) {
-                    SetPciConfig2(reg, val | 0xb000);
-                    deviceExtension->lun[ldev].TransferMode = ATA_UDMA2;
-                    return;
-                }
-            }
-        } else
-        if (AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x05301039, 0) ||        /* SiS 530 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x05401039, 0) ||        /* SiS 540 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x06201039, 0) ||        /* SiS 620 */
-            AtapiFindDev(HwDeviceExtension, PCIConfiguration, SystemIoBusNumber,
-                         slotNumber, 0x06301039, 0 )) {       /* SiS 630 */
-
-            UCHAR reg = 0x40 + (UCHAR)(dev << 1);
-            USHORT val;
-            
-            GetPciConfig2(reg, val);
-            val &= 0x0fff;
-
-            if (udmamode >= 4) {
-                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                    ATA_UDMA4,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-                if (!(statusByte & IDE_STATUS_ERROR)) {
-                    SetPciConfig2(reg, val | 0x9000);
-                    deviceExtension->lun[ldev].TransferMode = ATA_UDMA4;
-                    return;
-                }
-            }
-            if (udmamode >= 2) {
-                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                    ATA_UDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-                if (!(statusByte & IDE_STATUS_ERROR)) {
-                    SetPciConfig2(reg, val | 0xa000);
-                    deviceExtension->lun[ldev].TransferMode = ATA_UDMA2;
-                    return;
-                }
-            }
-        } else if (udmamode >= 2 && deviceExtension->RevID > 0xc1) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_UDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                SetPciConfig2(0x40 + (dev << 1), 0xa301);
-                deviceExtension->lun[ldev].TransferMode = ATA_UDMA2;
-                return;
-            }
-        }
-        if (wdmamode >=2 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                SetPciConfig2(0x40 + (dev << 1), 0x0301);
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                return;
-            }
-        }
-        /* we could set PIO mode timings, but we assume the BIOS did that */
-        goto try_generic_dma;
-
-    case 0x06801095:        /* Sil 0680 ATA133 controller */
-        {
-        static const UCHAR sil_modes[7] = 
-            { 0x00, 0x00, 0x07, 0x00, 0x03, 0x02, 0x01 };
-
-        UCHAR ureg = 0xac + ((UCHAR)DeviceNumber * 0x02) + ((UCHAR)Channel * 0x10);
-        UCHAR uval;
-        UCHAR mreg = Channel ? 0x84 : 0x80;
-        UCHAR mask = DeviceNumber ? 0x30 : 0x03;
-        UCHAR mode;
-
-        GetPciConfig1(ureg, uval);
-        GetPciConfig1(mreg, mode);
-
-        udmamode = min(udmamode, 6);
-
-        /* enable UDMA mode */
-        for(i = udmamode; i>=0; i--) {
-            if(!valid_udma[i])
-                continue;
-
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_UDMA0+(UCHAR)i,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                SetPciConfig1(ureg, (uval & 0x3f) | sil_modes[i]);
-                deviceExtension->lun[ldev].TransferMode = ATA_UDMA0+(UCHAR)i;
-                return;
-            }
-        }
-
-        /* disable UDMA mode and enable WDMA mode */
-        SetPciConfig1(mreg, (mode & ~mask) | (DeviceNumber ? 0x20 : 0x02));
-        if (wdmamode >= 2 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                SetPciConfig2(ureg - 0x4, 0x10c1);
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                return;
-            }
-        }
-
-        /* restore PIO mode */
-        SetPciConfig1(mreg, mode);
-        }
-        /* we could set PIO mode timings, but we assume the BIOS did that */
-        break;
-
-    case 0x06481095:    /* CMD 648 ATA66 controller */
-        udmamode = min(udmamode, 4);
-        /* FALLTHROUGH */
-
-    case 0x06491095:    /* CMD 649 ATA100 controller */
-        {
-        static const UCHAR cmd_modes[2][6] = {
-            { 0x00, 0x00, 0x011, 0x00, 0x15, 0x05 },
-            { 0x00, 0x00, 0x042, 0x00, 0x4a, 0x0a } };
-
-        udmamode = min(udmamode, 5);
-        /* enable UDMA mode */
-        for(i = udmamode; i>=0; i--) {
-            UCHAR umode;
-            if(!valid_udma[i])
-                continue;
-
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_UDMA5,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                GetPciConfig1(Channel ? 0x7b : 0x73, umode);
-                umode &= ~(!(DeviceNumber & 1) ? 0x35 : 0xca);
-                umode |= ( cmd_modes[DeviceNumber & 1][i]);
-                SetPciConfig1(Channel ? 0x7b : 0x73, umode);
-                deviceExtension->lun[ldev].TransferMode = ATA_UDMA5;
-                return;
-            }
-        }
-        /* make sure eventual UDMA mode from the BIOS is disabled */
-        ChangePciConfig1(Channel ? 0x7b : 0x73, a & ~(!(DeviceNumber & 1) ? 0x35 : 0xca));
-        }
-        /* FALLTHROUGH */
-
-    case 0x06461095:    /* CMD 646 ATA controller */
-        if (wdmamode >= 2 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                ULONG offset = (dev < 3) ? (dev << 1) : 7;
-
-                SetPciConfig1(0x54+offset, 0x3f);
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                return;
-            }
-        }
-        /* we could set PIO mode timings, but we assume the BIOS did that */
-        goto try_generic_dma;
-
-    case 0xc6931080:        /* Cypress 82c693 ATA controller */
-        if (wdmamode >= 2 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                SetPciConfig2(Channel ? 0x4e:0x4c, 0x2020);
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                return;
-            }
-        }
-        /* we could set PIO mode timings, but we assume the BIOS did that */
-        goto try_generic_dma;
-
-    case 0x01021078:        /* Cyrix 5530 ATA33 controller */
-        
-        // ConfigInfo->AlignmentMask = 0x0f;        /* DMA engine requires 16 byte alignment */
-        // we have done this durring detection/init 
-        if(!deviceExtension->BaseIoAddressBM[lChannel])
-            break;
-
-        if (udmamode >= 2) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_UDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                cyrix_timing(deviceExtension, dev, ATA_UDMA2);
-                deviceExtension->lun[ldev].TransferMode = ATA_UDMA2;
-                return;
-            }
-        }
-        if (wdmamode >= 2 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                cyrix_timing(deviceExtension, dev, ATA_WDMA2);
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                return;
-            }
-        }
-        /* try generic DMA */
-        if (!ATAPI_DEVICE(deviceExtension, ldev) &&
-            wdmamode >= 0 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_DMA,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                deviceExtension->lun[ldev].TransferMode = ATA_DMA;
-                return;
-            }
-        }
-        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                            ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-
-        cyrix_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
-        deviceExtension->lun[ldev].TransferMode = ATA_PIO0 + apiomode;
-        return;
-
-    case 0x02111166:        /* ServerWorks ROSB4 ATA33 controller */
-
-        udmamode = min(udmamode, 2);
-        /* FALLTHROUGH */
-
-    case 0x02121166:        /* ServerWorks CSB5 ATA66/100 controller */
-        
-        udmamode = min(udmamode, 5);
-        if(deviceExtension->RevID < 0x92) {
-            udmamode = min(udmamode, 4);
-        }
-        
-        if (ATAPI_DEVICE(deviceExtension, ldev)) {
-            // ATAPI doesn't want to work in UDMA
-            // (at least with such settings)
-            udmamode = -1;
-            wdmamode = -1;
-        }
-
-        for(i=udmamode; i>0; i--) {
+        for(i=udmamode; i>=0; i--) {
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                                 (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
             if (!(statusByte & IDE_STATUS_ERROR)) {
-                USHORT reg56;
-
-                ChangePciConfig1(0x54, a | (0x01 << dev));
-                GetPciConfig2(0x56, reg56);
-                reg56 &= ~(0xf << (dev * 4));
-                reg56 |= ((UCHAR)i << (dev * 4));
-                SetPciConfig2(0x56, reg56);
-                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
-                return;
-            }
-        }
-
-        if (wdmamode >= 2 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                //int offset = (Channel * 2) + (DeviceNumber == 0);
-                ULONG offset = dev ^ 0x1;
-                ULONG word44;
-
-                GetPciConfig4(0x44, word44);
-                ChangePciConfig1(0x54, a & ~(0x01 << dev));
-                word44 &= ~(0xff << (offset * 8));
-                word44 |= (0x20 << (offset * 8));
-                SetPciConfig4(0x44, word44);
-//                SetPciConfig4(0x44, 0x20);
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                return;
-            }
-        }
-        /* we could set PIO mode timings, but we assume the BIOS did that */
-        goto try_generic_dma;
-
-    case 0x4d68105a:        /* Promise TX2 ATA100 controllers */
-    case 0x6268105a:        /* Promise TX2 ATA100 controllers */
-
-        udmamode = min(udmamode, 5);
-        /* FALLTHROUGH */
-
-    case 0x4d69105a:        /* Promise TX2 ATA133 controllers */
-    case 0x5275105a:        /* Promise TX2 ATA133 controllers */
-    case 0x6269105a:        /* Promise TX2 ATA133 controllers */
-    case 0x7275105a:        /* Promise TX2 ATA133 controllers */
-
-        if(!deviceExtension->BaseIoAddressBM[lChannel])
-            break;
-
-        udmamode = min(udmamode, 6);
-
-        for(i=udmamode; i>0; i--) {
-            if(!valid_udma[i])
-                continue;
-            if(udmamode > 2)
-                ScsiPortWritePortUchar(&deviceExtension->BaseIoAddressBM[lChannel]->DeviceSpecific0, 0x0b);
-            if ((udmamode <= 2) ||
-                !(ScsiPortReadPortUchar(&deviceExtension->BaseIoAddressBM[lChannel]->DeviceSpecific1) & 0x04)){
-                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                    (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-                if (!(statusByte & IDE_STATUS_ERROR)) {
-                    deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
-                   return;
-                }
-            }
-        }
-        goto try_generic_dma;
-
-    case 0x4d33105a:        /* Promise Ultra/FastTrak 33 controllers */
-
-        udmamode = min(udmamode, 2);
-        /* FALLTHROUGH */
-
-    case 0x0d38105a:        /* Promise FastTrak 66 controllers */
-    case 0x4d38105a:        /* Promise Ultra/FastTrak 66 controllers */
-
-        udmamode = min(udmamode, 4);
-        /* FALLTHROUGH */
-
-    case 0x4d30105a:        /* Promise Ultra/FastTrak 100 controllers */
-    case 0x0d30105a:        /* Promise OEM ATA100 controllers */
-
-        if (ATAPI_DEVICE(deviceExtension, ldev)) {
-            udmamode =
-            wdmamode = -1;
-        } else {
-            udmamode = min(udmamode, 5);
-        }
-        
-        for(i=udmamode; i>=2; i--) {
-
-            if(!valid_udma[i])
-                continue;
-            if(i>2)
-                GetPciConfig4(0x50, reg50);
-            if ((i <= 2) || 
-                !(reg50 & (Channel ? 1<<11 : 1<<10))){
-                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                    (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-                if (!(statusByte & IDE_STATUS_ERROR)) {
-                    promise_timing(deviceExtension, dev, (UCHAR)(ATA_UDMA + i));
-                    deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
-                    return;
-                }
-            }
-        }
-
-        if (wdmamode >= 2 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                promise_timing(deviceExtension, dev, ATA_WDMA2);
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                return;
-            }
-        }
-        /* try generic DMA */
-        if (wdmamode >= 0 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_DMA,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                deviceExtension->lun[ldev].TransferMode = ATA_DMA;
-                return;
-            }
-        }
-        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                            ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-        promise_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
-        deviceExtension->lun[ldev].TransferMode = ATA_PIO0 + apiomode;
-        return;
-
-    case 0x00041103:        /* HighPoint HPT366/368/370/372 controllers */
-    case 0x00051103:        /* HighPoint HPT372 controllers */
-    case 0x00081103:        /* HighPoint HPT374 controllers */
-        
-        if((deviceExtension->DevID == 0x00041103 && deviceExtension->RevID < 0x03)) {
-            udmamode = min(udmamode, 4);
-        } else
-        if((deviceExtension->DevID == 0x00041103 && deviceExtension->RevID < 0x05) ||
-           (deviceExtension->DevID == 0x00051103 && deviceExtension->RevID < 0x01) ||
-           (deviceExtension->DevID == 0x00081103 && deviceExtension->RevID < 0x07)) {
-            udmamode = min(udmamode, 5);
-        } else {
-            udmamode = min(udmamode, 6);
-        }
-
-        if(!hpt_cable80(deviceExtension, Channel)) {
-            udmamode = min(udmamode, 2);
-        }
-
-        if(ATAPI_DEVICE(deviceExtension, ldev)) {
-            udmamode = 
-            wdmamode = -1;
-        }
-
-        for(i=udmamode; i>0; i--) {
-            if(!valid_udma[i])
-                continue;
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                hpt_timing(deviceExtension, dev, (UCHAR)(ATA_UDMA + i));       // ???
+                promise_timing(deviceExtension, dev, (UCHAR)(ATA_UDMA + i));       // ???
                 deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
                 return;
             }
         }
         
-        if (wdmamode >= 2 && apiomode >= 4) {
+        for(i=wdmamode; i>=0; i--) {
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                                (UCHAR)(ATA_WDMA0+i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
             if (!(statusByte & IDE_STATUS_ERROR)) {
-                hpt_timing(deviceExtension, dev, ATA_WDMA2);
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
+                promise_timing(deviceExtension, dev, (UCHAR)(ATA_WDMA0+i));
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA0+i);
                 return;
             }
         }
@@ -1421,152 +1008,295 @@ AtapiDmaInit(
         statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                             IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                             ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-        hpt_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
+        promise_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
         deviceExtension->lun[ldev].TransferMode = ATA_PIO0 + apiomode;
         return;
-
-    case 0x00071191:        /* Acard ATP860R controller */
-    case 0x00061191:        /* Acard ATP860 controller */
-        udmamode = min(udmamode, 4);
-        /* FALLTHROUGH */
-
-    case 0x00091191:        /* Acard ATP865R controller */
-    case 0x00081191:        /* Acard ATP865 controller */
-        {
-        udmamode = min(udmamode, 6);
-        
-        static const UCHAR acard_modes[7] = 
-            { 0x00, 0x00, 0x03, 0x00, 0x05, 0x06, 0x07 };
-        USHORT reg44;
-        UCHAR  reg = 0x40 + (UCHAR)dev;
-        static const UCHAR  reg4x = 0x31;
-        static const UCHAR  reg4a = 0xa6;
-
-        if (ATAPI_DEVICE(deviceExtension, ldev))
-            break;
-
-        for(i=udmamode; i>0; i--) {
-            if(!acard_modes[i])
-                continue;
-
-            //ChangePciConfig1(0x54, a | (0x01 << dev));
-            GetPciConfig2(0x44, reg44);
-            reg44 &= ~(0x000f << (dev << 2));
-            reg44 |= ((USHORT)(acard_modes[i]) << (dev * 4));
-            SetPciConfig2(0x44, reg44);
-            SetPciConfig1(0x4a, reg4a);
-            SetPciConfig1(reg,  reg4x);
-
+        break;
+    case ATA_SERVERWORKS_ID: {
+        /***************/
+        /* ServerWorks */
+        /***************/
+        static const UCHAR sw_wdma_modes[] = { 0x34, 0x22, 0x20 };
+        static const UCHAR sw_pio_modes[] = { 0x5d, 0x47, 0x34, 0x22, 0x20, 0x34 };
+        USHORT reg56;
+        for(i=udmamode; i>=0; i--) {
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                                 (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
             if (!(statusByte & IDE_STATUS_ERROR)) {
+                ChangePciConfig1(0x54, a | (0x01 << dev));
+                GetPciConfig2(0x56, reg56);
+                reg56 &= ~(0xf << (dev * 4));
+                reg56 |= ((UCHAR)i << (dev * 4));
+                SetPciConfig2(0x56, reg56);
+                SetPciConfig4(0x44, 0x20);
                 deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
                 return;
             }
         }
-
-        if (wdmamode >= 2 && apiomode >= 4) {
+        
+        for(i=wdmamode; i>=0; i--) {
             statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                                 IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                                (UCHAR)(ATA_WDMA0+i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
             if (!(statusByte & IDE_STATUS_ERROR)) {
-                GetPciConfig2(0x44, reg44);
-                reg44 &= ~(0x000f << (dev << 2));
-                SetPciConfig2(0x44, reg44);
-                SetPciConfig1(0x4a, reg4a);
-                SetPciConfig1(reg,  reg4x);
+                ULONG offset = dev ^ 0x1;
 
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
+                ChangePciConfig1(0x54, a & ~(0x01 << dev));
+                SetPciConfig4(0x44, sw_wdma_modes[i]);
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA0+i);
                 return;
             }
         }
-        /* we could set PIO mode timings, but we assume the BIOS did that */
-        }
-        break;
-    case 0x00051191:        /* Acard ATP850UF controller */
-        {
-        UCHAR reg54;
-        UCHAR  reg = 0x40 + (UCHAR)dev*2;
-        static const UCHAR  reg4a = 0xa6;
-        static const USHORT reg4x = 0x0301;
-                
-        if (ATAPI_DEVICE(deviceExtension, ldev))
-            break;
-
-        if (udmamode >= 2) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                    ATA_UDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                GetPciConfig1(0x54, reg54);
-                reg54 |= (0x03 << (dev << 1));
-                SetPciConfig1(0x54, reg54);
-                SetPciConfig1(0x4a, reg4a);
-                SetPciConfig2(reg,  reg4x);
-
-                deviceExtension->lun[ldev].TransferMode = ATA_UDMA2;
-                return;
-            }
-        }
-        if (wdmamode >= 2 && apiomode >= 4) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA2,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                GetPciConfig1(0x54, reg54);
-                reg54 &= ~(0x03 << (dev << 1));
-                SetPciConfig1(0x54, reg54);
-                SetPciConfig1(0x4a, reg4a);
-                SetPciConfig2(reg,  reg4x);
-
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA2;
-                return;
-            }
-        }
-        /* we could set PIO mode timings, but we assume the BIOS did that */
-        }
-        break;
-
-    case 0x000116ca:        /* Cenatek Rocket Drive controller */
-
-        if (wdmamode >= 0 &&
-            (ScsiPortReadPortUchar(&deviceExtension->BaseIoAddressBM[lChannel]->Status) & 
-             (DeviceNumber ? BM_STATUS_DRIVE_1_DMA : BM_STATUS_DRIVE_0_DMA)))
-            deviceExtension->lun[ldev].TransferMode = ATA_DMA;
-        else
-            deviceExtension->lun[ldev].TransferMode = ATA_PIO;
+        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                            ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        SetPciConfig4(0x44, sw_pio_modes[apiomode]);
+        deviceExtension->lun[ldev].TransferMode = ATA_PIO0 + apiomode;
         return;
+        break; }
+    case ATA_SILICON_IMAGE_ID: {
+        /********************/
+        /* SiliconImage/CMD */
+        /********************/
+        if(ChipFlags & SII_SETCLK) {
+
+            static const UCHAR sil_modes[7] = 
+                { 0xf, 0xb, 0x7, 0x5, 0x3, 0x2, 0x1 };
+            static const USHORT sil_wdma_modes[3] = 
+                { 0x2208, 0x10c2, 0x10c1 };
+            static const USHORT sil_pio_modes[6] = 
+                { 0x328a, 0x2283, 0x1104, 0x10c3, 0x10c1, 0x10c1 };
+
+            UCHAR ureg = 0xac + ((UCHAR)DeviceNumber * 0x02) + ((UCHAR)Channel * 0x10);
+            UCHAR uval;
+            UCHAR mreg = Channel ? 0x84 : 0x80;
+            UCHAR mask = DeviceNumber ? 0x30 : 0x03;
+            UCHAR mode;
+
+            GetPciConfig1(ureg, uval);
+            GetPciConfig1(mreg, mode);
+
+            /* enable UDMA mode */
+            for(i = udmamode; i>=0; i--) {
+
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    ATA_UDMA0+(UCHAR)i,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                if (!(statusByte & IDE_STATUS_ERROR)) {
+                    SetPciConfig1(mreg, mode | mask);
+                    SetPciConfig1(ureg, (uval & 0x3f) | sil_modes[i]);
+                    deviceExtension->lun[ldev].TransferMode = ATA_UDMA0+(UCHAR)i;
+                    return;
+                }
+            }
+            for(i = wdmamode; i>=0; i--) {
+
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    ATA_WDMA0+(UCHAR)i,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                if (!(statusByte & IDE_STATUS_ERROR)) {
+                    SetPciConfig1(mreg, mode | (mask & 0x22));
+                    SetPciConfig2(ureg - 0x4, sil_wdma_modes[i]);
+                    deviceExtension->lun[ldev].TransferMode = ATA_WDMA0+(UCHAR)i;
+                    return;
+                }
+            }
+            /* restore PIO mode */
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                ATA_PIO0+(UCHAR)apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+
+            SetPciConfig1(mreg, mode | (mask & 0x11));
+            SetPciConfig2(ureg - 0x8, sil_pio_modes[i]);
+            deviceExtension->lun[ldev].TransferMode = ATA_PIO0+(UCHAR)apiomode;
+            return;
+
+        } else {
+
+            static const UCHAR cmd_modes[2][6] = {
+                { 0x31, 0x21, 0x011, 0x25, 0x15, 0x05 },
+                { 0xc2, 0x82, 0x042, 0x8a, 0x4a, 0x0a } };
+            static const UCHAR cmd_wdma_modes[] = { 0x87, 0x32, 0x3f };
+            static const UCHAR cmd_pio_modes[] = { 0xa9, 0x57, 0x44, 0x32, 0x3f };
+            ULONG treg = 0x54 + (dev < 3) ? (dev << 1) : 7;
+
+            udmamode = min(udmamode, 5);
+            /* enable UDMA mode */
+            for(i = udmamode; i>=0; i--) {
+                UCHAR umode;
+
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    ATA_UDMA0+(UCHAR)i,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                if (!(statusByte & IDE_STATUS_ERROR)) {
+                    GetPciConfig1(Channel ? 0x7b : 0x73, umode);
+                    umode &= ~(!(DeviceNumber & 1) ? 0x35 : 0xca);
+                    umode |= ( cmd_modes[DeviceNumber & 1][i]);
+                    SetPciConfig1(Channel ? 0x7b : 0x73, umode);
+                    deviceExtension->lun[ldev].TransferMode = ATA_UDMA5;
+                    return;
+                }
+            }
+            /* make sure eventual UDMA mode from the BIOS is disabled */
+            ChangePciConfig1(Channel ? 0x7b : 0x73, a & ~(!(DeviceNumber & 1) ? 0x35 : 0xca));
+
+            for(i = wdmamode; i>=0; i--) {
+
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    ATA_WDMA0+(UCHAR)i,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                if (!(statusByte & IDE_STATUS_ERROR)) {
+                    SetPciConfig1(treg, cmd_wdma_modes[i]);
+                    ChangePciConfig1(Channel ? 0x7b : 0x73, a & ~(!(DeviceNumber & 1) ? 0x35 : 0xca));
+                    deviceExtension->lun[ldev].TransferMode = ATA_WDMA0+(UCHAR)i;
+                    return;
+                }
+            }
+            /* set PIO mode timings */
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                ATA_PIO0+(UCHAR)apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+
+            SetPciConfig1(treg, cmd_pio_modes[apiomode]);
+            ChangePciConfig1(Channel ? 0x7b : 0x73, a & ~(!(DeviceNumber & 1) ? 0x35 : 0xca));
+            deviceExtension->lun[ldev].TransferMode = ATA_PIO0+(UCHAR)apiomode;
+            return;
+
+        }
+        return;
+        break; }
+    case ATA_SIS_ID: {
+        /*******/
+        /* SiS */
+        /*******/
+        PULONG sis_modes;
+        static const ULONG sis_modes_new133[] =
+                { 0x28269008, 0x0c266008, 0x04263008, 0x0c0a3008, 0x05093008,
+                  0x22196008, 0x0c0a3008, 0x05093008, 0x050939fc, 0x050936ac,
+                  0x0509347c, 0x0509325c, 0x0509323c, 0x0509322c, 0x0509321c};
+        static const ULONG sis_modes_old133[] =
+                { 0x00cb, 0x0067, 0x0044, 0x0033, 0x0031, 0x0044, 0x0033, 0x0031,
+                  0x8f31, 0x8a31, 0x8731, 0x8531, 0x8331, 0x8231, 0x8131 };
+        static const ULONG sis_modes_old[] =
+                { 0x0c0b, 0x0607, 0x0404, 0x0303, 0x0301, 0x0404, 0x0303, 0x0301,
+                  0xf301, 0xd301, 0xb301, 0xa301, 0x9301, 0x8301 };
+        ULONG reg;
+        UCHAR reg57;
+        ULONG reg_size;
+        ULONG offs;
+
+        switch(ChipType) {
+        case SIS133NEW:
+            sis_modes = (PULONG)(&sis_modes_new133[0]);
+            reg_size = 4;
+            GetPciConfig1(0x57, reg57);
+            reg = (reg57 & 0x40 ? 0x70 : 0x40) + (dev * 4);
+            break;
+        case SIS100NEW:
+        case SIS133OLD:
+            sis_modes = (PULONG)(&sis_modes_old133[0]);
+            reg_size = 2;
+            reg = 0x40 + (dev * 4);
+            break;
+        case SIS100OLD:
+        case SIS66:
+        case SIS33:
+            sis_modes = (PULONG)(&sis_modes_old[0]);
+            reg_size = 2;
+            reg = 0x40 + (dev * 4);
+            break;
+        }
+
+        offs = 5+3;
+        for(i=udmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_UDMA + i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                if(reg_size == 4) {
+                    SetPciConfig4(reg, sis_modes[offs+i]);
+                } else {
+                    SetPciConfig2(reg, (USHORT)sis_modes[offs+i]);
+                }
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_UDMA + i);
+                return;
+            }
+        }
+        
+        offs = 5;
+        for(i=wdmamode; i>=0; i--) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_WDMA0+i),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            if (!(statusByte & IDE_STATUS_ERROR)) {
+                if(reg_size == 4) {
+                    SetPciConfig4(reg, sis_modes[offs+i]);
+                } else {
+                    SetPciConfig2(reg, (USHORT)sis_modes[offs+i]);
+                }
+                deviceExtension->lun[ldev].TransferMode = (UCHAR)(ATA_WDMA0+i);
+                return;
+            }
+        }
+        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                            ATA_PIO0 + apiomode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        if(reg_size == 4) {
+            SetPciConfig4(reg, sis_modes[apiomode]);
+        } else {
+            SetPciConfig2(reg, (USHORT)sis_modes[apiomode]);
+        }
+        deviceExtension->lun[ldev].TransferMode = ATA_PIO0 + apiomode;
+        return;
+        break; }
+    case 0x16ca:
+        /* Cenatek Rocket Drive controller */
+        if (wdmamode >= 0 &&
+            (AtapiReadPort1(chan, &deviceExtension->BaseIoAddressBM[lChannel]->Status) & 
+             (DeviceNumber ? BM_STATUS_DRIVE_1_DMA : BM_STATUS_DRIVE_0_DMA))) {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_WDMA0+wdmamode),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            deviceExtension->lun[ldev].TransferMode = ATA_WDMA+wdmamode;
+        } else {
+            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                (UCHAR)(ATA_PIO+apiomode),  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+            deviceExtension->lun[ldev].TransferMode = ATA_PIO+apiomode;
+        }
+        return;
+    }
 
 try_generic_dma:
 
-    default:                /* unknown controller chip */
-        /* better not try generic DMA on ATAPI devices it almost never works */
-        if (ATAPI_DEVICE(deviceExtension, ldev))
-            break;
+    /* unknown controller chip */
 
-        /* if controller says its setup for DMA take the easy way out */
-        /* the downside is we dont know what DMA mode we are in */
-        if ((udmamode >= 0 || /*wdmamode > 1*/ wdmamode >= 0) &&
-             deviceExtension->BaseIoAddressBM[lChannel] &&
-            (ScsiPortReadPortUchar(&deviceExtension->BaseIoAddressBM[lChannel]->Status) &
-             (!(ldev & 1) ? 
-              BM_STATUS_DRIVE_0_DMA : BM_STATUS_DRIVE_1_DMA))) {
-            deviceExtension->lun[ldev].TransferMode = ATA_DMA;
+    /* better not try generic DMA on ATAPI devices it almost never works */
+    if (ATAPI_DEVICE(deviceExtension, ldev)) {
+        udmamode =
+        wdmamode = -1;
+    }
+
+    /* if controller says its setup for DMA take the easy way out */
+    /* the downside is we dont know what DMA mode we are in */
+    if ((udmamode >= 0 || /*wdmamode > 1*/ wdmamode >= 0) &&
+         deviceExtension->BaseIoAddressBM[lChannel] &&
+        (AtapiReadPort1(chan, &deviceExtension->BaseIoAddressBM[lChannel]->Status) &
+         (!(ldev & 1) ? 
+          BM_STATUS_DRIVE_0_DMA : BM_STATUS_DRIVE_1_DMA))) {
+        deviceExtension->lun[ldev].TransferMode = ATA_DMA;
+        return;
+    }
+
+    /* well, we have no support for this, but try anyways */
+    if ((wdmamode >= 0 && apiomode >= 4) && deviceExtension->BaseIoAddressBM[lChannel]) {
+        statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                            IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                            ATA_WDMA + wdmamode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        if (!(statusByte & IDE_STATUS_ERROR)) {
+            deviceExtension->lun[ldev].TransferMode = ATA_WDMA + wdmamode;
             return;
-        }
-
-        /* well, we have no support for this, but try anyways */
-        if ((wdmamode >= 0 && apiomode >= 4) && deviceExtension->BaseIoAddressBM[lChannel]) {
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
-                                IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                                ATA_WDMA + wdmamode,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-            if (!(statusByte & IDE_STATUS_ERROR)) {
-                deviceExtension->lun[ldev].TransferMode = ATA_WDMA + wdmamode;
-                return;
-            }
         }
     }
     statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
@@ -1578,15 +1308,18 @@ try_generic_dma:
         deviceExtension->lun[ldev].TransferMode = ATA_PIO;
     }
     return;
-}
+} // end AtapiDmaInit()
+
 
 VOID
-cyrix_timing (
+cyrix_timing(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN ULONG dev,               // physical device number (0-3)
     IN CHAR  mode
     )
 {
+//    ASSERT(dev/2 >= deviceExtension->Channel);
+//    PHW_CHANNEL chan = &(deviceExtension->chan[dev/2-deviceExtension->Channel]);
     ULONG reg20 = 0x0000e132;
     ULONG reg24 = 0x00017771;
 
@@ -1600,15 +1333,15 @@ cyrix_timing (
     case ATA_PIO3:        reg20 = 0x00032010; break;
     case ATA_PIO4:
     case ATA_PIO5:        reg20 = 0x00040010; break;
-    case ATA_WDMA2:        reg24 = 0x00002020; break;
-    case ATA_UDMA2:        reg24 = 0x00911030; break;
+    case ATA_WDMA2:       reg24 = 0x00002020; break;
+    case ATA_UDMA2:       reg24 = 0x00911030; break;
     }
-    ScsiPortWritePortUlong((PULONG)((PUCHAR)(deviceExtension->BaseIoAddressBM_0) + (dev*8)) + 0x20, reg20);
-    ScsiPortWritePortUlong((PULONG)((PUCHAR)(deviceExtension->BaseIoAddressBM_0) + (dev*8)) + 0x24, reg24);
-}
+    AtapiWritePort4(NULL, (PULONG)((PUCHAR)(deviceExtension->BaseIoAddressBM_0) + (dev*8)) + 0x20, reg20);
+    AtapiWritePort4(NULL, (PULONG)((PUCHAR)(deviceExtension->BaseIoAddressBM_0) + (dev*8)) + 0x24, reg24);
+} // cyrix_timing()
  
 VOID
-promise_timing (
+promise_timing(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN ULONG dev,               // physical device number (0-3)
     IN CHAR  mode
@@ -1618,75 +1351,60 @@ promise_timing (
     ULONG slotNumber = deviceExtension->slotNumber;
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
 
-    ULONG timing = 0;
+    ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
+    ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
 
-    struct promise_timing {
-        UCHAR  pa:4;
-        UCHAR  prefetch:1;
-        UCHAR  iordy:1;
-        UCHAR  errdy:1;
-        UCHAR  syncin:1;
-        UCHAR  pb:5;
-        UCHAR  mb:3;
-        UCHAR  mc:4;
-        UCHAR  dmaw:1;
-        UCHAR  dmar:1;
-        UCHAR  iordyp:1;
-        UCHAR  dmarqp:1;
-        UCHAR  reserved:8;
-    } *t = (struct promise_timing*)&timing;
+    ULONG timing = 0;
 
     if(mode == ATA_PIO5)
         mode = ATA_PIO4;
 
-    t->iordy = 1;
-    t->iordyp = 1;
-    if (mode >= ATA_DMA) {
-        t->prefetch = 1;
-        t->errdy = 1;
-        t->syncin = 1;
-    }
-
-    switch(deviceExtension->DevID) {
-    case 0x4d33105a:  /* Promise Ultra/Fasttrak 33 */
+    switch(ChipType) {
+    case PROLD:
         switch (mode) {
         default:
-        case ATA_PIO0:  t->pa =  9; t->pb = 19; t->mb = 7; t->mc = 15; break;
-        case ATA_PIO1:  t->pa =  5; t->pb = 12; t->mb = 7; t->mc = 15; break;
-        case ATA_PIO2:  t->pa =  3; t->pb =  8; t->mb = 7; t->mc = 15; break;
-        case ATA_PIO3:  t->pa =  2; t->pb =  6; t->mb = 7; t->mc = 15; break;
-        case ATA_PIO4:
-        case ATA_PIO5:  t->pa =  1; t->pb =  4; t->mb = 7; t->mc = 15; break;
-        case ATA_WDMA2: t->pa =  3; t->pb =  7; t->mb = 3; t->mc =  3; break;
-        case ATA_UDMA2: t->pa =  3; t->pb =  7; t->mb = 1; t->mc =  1; break;
+        case ATA_PIO0:  timing = 0x004ff329; break;
+        case ATA_PIO1:  timing = 0x004fec25; break;
+        case ATA_PIO2:  timing = 0x004fe823; break;
+        case ATA_PIO3:  timing = 0x004fe622; break;
+        case ATA_PIO4:  timing = 0x004fe421; break;
+        case ATA_WDMA0: timing = 0x004567f3; break;
+        case ATA_WDMA1: timing = 0x004467f3; break;
+        case ATA_WDMA2: timing = 0x004367f3; break;
+        case ATA_UDMA0: timing = 0x004367f3; break;
+        case ATA_UDMA1: timing = 0x004247f3; break;
+        case ATA_UDMA2: timing = 0x004127f3; break;
         }
         break;
 
-    case 0x0d38105a:  /* Promise Fasttrak 66 */
-    case 0x4d38105a:  /* Promise Ultra/Fasttrak 66 */
-    case 0x0d30105a:  /* Promise OEM ATA 100 */
-    case 0x4d30105a:  /* Promise Ultra/Fasttrak 100 */
+    case PRNEW:
         switch (mode) {
         default:
-        case ATA_PIO0:  t->pa = 15; t->pb = 31; t->mb = 7; t->mc = 15; break;
-        case ATA_PIO1:  t->pa = 10; t->pb = 24; t->mb = 7; t->mc = 15; break;
-        case ATA_PIO2:  t->pa =  6; t->pb = 16; t->mb = 7; t->mc = 15; break;
-        case ATA_PIO3:  t->pa =  4; t->pb = 12; t->mb = 7; t->mc = 15; break;
-        case ATA_PIO4:
-        case ATA_PIO5:  t->pa =  2; t->pb =  8; t->mb = 7; t->mc = 15; break;
-        case ATA_WDMA2: t->pa =  6; t->pb = 14; t->mb = 6; t->mc =  6; break;
-        case ATA_UDMA2: t->pa =  6; t->pb = 14; t->mb = 2; t->mc =  2; break;
-        case ATA_UDMA4: t->pa =  3; t->pb =  7; t->mb = 1; t->mc =  1; break;
-        case ATA_UDMA5: t->pa =  3; t->pb =  7; t->mb = 1; t->mc =  1; break;
+        case ATA_PIO0:  timing = 0x004fff2f; break;
+        case ATA_PIO1:  timing = 0x004ff82a; break;
+        case ATA_PIO2:  timing = 0x004ff026; break;
+        case ATA_PIO3:  timing = 0x004fec24; break;
+        case ATA_PIO4:  timing = 0x004fe822; break;
+        case ATA_WDMA0: timing = 0x004acef6; break;
+        case ATA_WDMA1: timing = 0x0048cef6; break;
+        case ATA_WDMA2: timing = 0x0046cef6; break;
+        case ATA_UDMA0: timing = 0x0046cef6; break;
+        case ATA_UDMA1: timing = 0x00448ef6; break;
+        case ATA_UDMA2: timing = 0x00436ef6; break;
+        case ATA_UDMA3: timing = 0x00424ef6; break;
+        case ATA_UDMA4: timing = 0x004127f3; break;
+        case ATA_UDMA5: timing = 0x004127f3; break;
         }
         break;
+    default:
+        return;
     }
     SetPciConfig4(0x60 + (dev<<2), timing);
-}
+} // end promise_timing()
 
 
 VOID
-hpt_timing (
+hpt_timing(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN ULONG dev,               // physical device number (0-3)
     IN CHAR  mode
@@ -1695,62 +1413,81 @@ hpt_timing (
     PVOID HwDeviceExtension = (PVOID)deviceExtension;
     ULONG slotNumber = deviceExtension->slotNumber;
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
+
+    ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
+    ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
 
     ULONG timing;
 
     if(mode == ATA_PIO5)
         mode = ATA_PIO4;
 
-    if (deviceExtension->RevID == 0x00081103 &&
-            deviceExtension->RevID >= 0x07) {
+    switch(ChipType) {
+    case HPT374:
+
         switch (mode) {                                                /* HPT374 */
-        case ATA_PIO0:        timing = 0x0ac1f48a; break;
-        case ATA_PIO1:        timing = 0x0ac1f465; break;
-        case ATA_PIO2:        timing = 0x0a81f454; break;
-        case ATA_PIO3:        timing = 0x0a81f443; break;
-        case ATA_PIO4:        timing = 0x0a81f442; break;
+        case ATA_PIO0:  timing = 0x0ac1f48a; break;
+        case ATA_PIO1:  timing = 0x0ac1f465; break;
+        case ATA_PIO2:  timing = 0x0a81f454; break;
+        case ATA_PIO3:  timing = 0x0a81f443; break;
+        case ATA_PIO4:  timing = 0x0a81f442; break;
+        case ATA_WDMA0: timing = 0x228082ea; break;
+        case ATA_WDMA1: timing = 0x22808254; break;
         case ATA_WDMA2: timing = 0x22808242; break;
+        case ATA_UDMA0: timing = 0x121882ea; break;
+        case ATA_UDMA1: timing = 0x12148254; break;
         case ATA_UDMA2: timing = 0x120c8242; break;
+        case ATA_UDMA3: timing = 0x128c8242; break;
         case ATA_UDMA4: timing = 0x12ac8242; break;
         case ATA_UDMA5: timing = 0x12848242; break;
-        case ATA_UDMA6: timing = 0x12808242; break;
+        case ATA_UDMA6: timing = 0x12448242; break;
         default:        timing = 0x0d029d5e;
         }
-    }
-    else if ((deviceExtension->RevID == 0x00041103 &&
-                  deviceExtension->RevID >= 0x05) ||
-             (deviceExtension->RevID == 0x00051103 &&
-                  deviceExtension->RevID >= 0x01)) {
+        break;
+
+    case HPT372:
+
         switch (mode) {                                                /* HPT372 */
-        case ATA_PIO0:        timing = 0x0d029d5e; break;
-        case ATA_PIO1:        timing = 0x0d029d26; break;
-        case ATA_PIO2:        timing = 0x0c829ca6; break;
-        case ATA_PIO3:        timing = 0x0c829c84; break;
-        case ATA_PIO4:        timing = 0x0c829c62; break;
+        case ATA_PIO0:  timing = 0x0d029d5e; break;
+        case ATA_PIO1:  timing = 0x0d029d26; break;
+        case ATA_PIO2:  timing = 0x0c829ca6; break;
+        case ATA_PIO3:  timing = 0x0c829c84; break;
+        case ATA_PIO4:  timing = 0x0c829c62; break;
+        case ATA_WDMA0: timing = 0x2c82922e; break;
+        case ATA_WDMA1: timing = 0x2c829266; break;
         case ATA_WDMA2: timing = 0x2c829262; break;
+        case ATA_UDMA0: timing = 0x1c82dc62; break;
+        case ATA_UDMA1: timing = 0x1c9adc62; break;
         case ATA_UDMA2: timing = 0x1c91dc62; break;
+        case ATA_UDMA3: timing = 0x1c8edc62; break;
         case ATA_UDMA4: timing = 0x1c8ddc62; break;
         case ATA_UDMA5: timing = 0x1c6ddc62; break;
         case ATA_UDMA6: timing = 0x1c81dc62; break;
         default:        timing = 0x0d029d5e;
         }
-    }
-    else if (deviceExtension->RevID == 0x00041103 &&
-                 deviceExtension->RevID >= 0x03) {
+        break;
+
+    case HPT370:
+
         switch (mode) {                                                /* HPT370 */
-        case ATA_PIO0:        timing = 0x06914e57; break;
-        case ATA_PIO1:        timing = 0x06914e43; break;
-        case ATA_PIO2:        timing = 0x06514e33; break;
-        case ATA_PIO3:        timing = 0x06514e22; break;
-        case ATA_PIO4:        timing = 0x06514e21; break;
+        case ATA_PIO0:  timing = 0x06914e57; break;
+        case ATA_PIO1:  timing = 0x06914e43; break;
+        case ATA_PIO2:  timing = 0x06514e33; break;
+        case ATA_PIO3:  timing = 0x06514e22; break;
+        case ATA_PIO4:  timing = 0x06514e21; break;
+        case ATA_WDMA0: timing = 0x26514e97; break;
+        case ATA_WDMA1: timing = 0x26514e33; break;
         case ATA_WDMA2: timing = 0x26514e21; break;
+        case ATA_UDMA0: timing = 0x16514e31; break;
+        case ATA_UDMA1: timing = 0x164d4e31; break;
         case ATA_UDMA2: timing = 0x16494e31; break;
+        case ATA_UDMA3: timing = 0x166d4e31; break;
         case ATA_UDMA4: timing = 0x16454e31; break;
         case ATA_UDMA5: timing = 0x16454e31; break;
         default:        timing = 0x06514e57;
         }
-    }
-    else {                                                        /* HPT36[68] */
+
+    case HPT366: {
         UCHAR reg41;
 
         GetPciConfig1(0x41 + (dev << 2), reg41);
@@ -1763,10 +1500,10 @@ hpt_timing (
             case ATA_PIO2:        timing = 0x40ca8542; break;
             case ATA_PIO3:        timing = 0x40ca8532; break;
             case ATA_PIO4:        timing = 0x40ca8521; break;
-            case ATA_WDMA2:        timing = 0x20ca8521; break;
-            case ATA_UDMA2:        timing = 0x10cf8521; break;
-            case ATA_UDMA4:        timing = 0x10c98521; break;
-            default:                timing = 0x01208585;
+            case ATA_WDMA2:       timing = 0x20ca8521; break;
+            case ATA_UDMA2:       timing = 0x10cf8521; break;
+            case ATA_UDMA4:       timing = 0x10c98521; break;
+            default:              timing = 0x01208585;
             }
             break;
         default:
@@ -1777,10 +1514,15 @@ hpt_timing (
             case ATA_PIO2:        timing = 0x40d0a753; break;
             case ATA_PIO3:        timing = 0x40c8a742; break;
             case ATA_PIO4:        timing = 0x40c8a731; break;
-            case ATA_WDMA2:        timing = 0x20c8a731; break;
-            case ATA_UDMA2:        timing = 0x10caa731; break;
-            case ATA_UDMA4:        timing = 0x10c9a731; break;
-            default:                timing = 0x0120a7a7;
+            case ATA_WDMA0:       timing = 0x20c8a797; break;
+            case ATA_WDMA1:       timing = 0x20c8a732; break;
+            case ATA_WDMA2:       timing = 0x20c8a731; break;
+            case ATA_UDMA0:       timing = 0x10c8a731; break;
+            case ATA_UDMA1:       timing = 0x10cba731; break;
+            case ATA_UDMA2:       timing = 0x10caa731; break;
+            case ATA_UDMA3:       timing = 0x10cfa731; break;
+            case ATA_UDMA4:       timing = 0x10c9a731; break;
+            default:              timing = 0x0120a7a7;
             }
             break;
         case 0xd9:        /* 40Mhz */
@@ -1790,22 +1532,23 @@ hpt_timing (
             case ATA_PIO2:        timing = 0x4010d997; break;
             case ATA_PIO3:        timing = 0x4010d974; break;
             case ATA_PIO4:        timing = 0x4008d963; break;
-            case ATA_WDMA2:        timing = 0x2008d943; break;
-            case ATA_UDMA2:        timing = 0x100bd943; break;
-            case ATA_UDMA4:        timing = 0x100fd943; break;
-            default:                timing = 0x0120d9d9;
+            case ATA_WDMA2:       timing = 0x2008d943; break;
+            case ATA_UDMA2:       timing = 0x100bd943; break;
+            case ATA_UDMA4:       timing = 0x100fd943; break;
+            default:              timing = 0x0120d9d9;
             }
         }
+        break; }
     }
 
     SetPciConfig4(0x40 + (dev<<2), timing);
-}
+} // end hpt_timing()
 
 
 #define FIT(v,min,max) (((v)>(max)?(max):(v))<(min)?(min):(v))
 
 VOID
-via82c_timing (
+via82c_timing(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN ULONG dev,               // physical device number (0-3)
     IN CHAR  mode
@@ -1851,35 +1594,5 @@ via82c_timing (
 
     /* PIO active & recover */
     SetPciConfig1(0x4b-dev, (FIT(active - 1, 0, 0xf) << 4) | FIT(recover - 1, 0, 0xf) );
-}
+} // end via82c_timing()
 
-ULONG
-hpt_cable80(
-    IN PHW_DEVICE_EXTENSION deviceExtension,
-    IN ULONG channel               // physical channel number (0-1)
-    )
-{
-    PVOID HwDeviceExtension = (PVOID)deviceExtension;
-    ULONG slotNumber = deviceExtension->slotNumber;
-    ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
-
-    UCHAR reg, val, res;
-    PCI_SLOT_NUMBER slotData;
-
-    slotData.u.AsULONG = deviceExtension->slotNumber;
-
-    if(deviceExtension->DevID == 0x00081103 && slotData.u.bits.FunctionNumber == 1)  {
-        reg = channel ? 0x57 : 0x53;
-        GetPciConfig1(reg, val);
-        SetPciConfig1(reg, val | 0x80);
-    }
-    else {
-        reg = 0x5b;
-        GetPciConfig1(reg, val);
-        SetPciConfig1(reg, val & 0xfe);
-    }
-    GetPciConfig1(0x5a, res);
-    res = res & (channel ? 0x01 : 0x02);
-    SetPciConfig1(reg, val);
-    return !res;
-}

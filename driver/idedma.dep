@@ -18,6 +18,15 @@
 	".\srb.h"\
 	".\bsmaster.h"\
 	
+.\id_init.cpp : \
+	".\tools.h"\
+	".\atapi.h"\
+	".\bm_devs.h"\
+	".\ntddscsi.h"\
+	".\scsi.h"\
+	".\srb.h"\
+	".\bsmaster.h"\
+	
 .\id_probe.cpp : \
 	".\tools.h"\
 	".\atapi.h"\

@@ -158,11 +158,13 @@ BuildDevList()
                 if(Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[0],
                                      buf_out.pciData.VendorID,
                                      buf_out.pciData.DeviceID,
+                                     0,
                                      NUM_BUSMASTER_ADAPTERS) != -1)
                     continue;
                 if(Ata_is_dev_listed(&NewBusMasterAdapters[0],
                                      buf_out.pciData.VendorID,
                                      buf_out.pciData.DeviceID,
+                                     0,
                                      NewBusmasterCount) != -1)
                     continue;
                 if(!Ata_is_supported_dev(&buf_out.pciData))

@@ -93,14 +93,17 @@ typedef struct _PORT_CONFIGURATION_INFORMATION {
     ULONG DmaPort2;
     DMA_WIDTH DmaWidth2;
     DMA_SPEED DmaSpeed2;
+
+} PORT_CONFIGURATION_INFORMATION, *PPORT_CONFIGURATION_INFORMATION;
+
+typedef struct _PORT_CONFIGURATION_INFORMATION_NT {
     // Fields added to allow for the miniport
     // to update these sizes based on requirements
     // for large transfers ( > 64K);
     ULONG DeviceExtensionSize;
     ULONG SpecificLuExtensionSize;
     ULONG SrbExtensionSize;
-
-} PORT_CONFIGURATION_INFORMATION, *PPORT_CONFIGURATION_INFORMATION;
+} PORT_CONFIGURATION_INFORMATION_NT, *PPORT_CONFIGURATION_INFORMATION_NT;
 
 typedef struct _PORT_CONFIGURATION_INFORMATION_2K {
     // Used to determine whether the system and/or the miniport support 
@@ -118,6 +121,7 @@ typedef struct _PORT_CONFIGURATION_INFORMATION_2K {
 
 typedef struct _PORT_CONFIGURATION_INFORMATION_COMMON {
     PORT_CONFIGURATION_INFORMATION     comm;
+    PORT_CONFIGURATION_INFORMATION_NT  nt4;
     PORT_CONFIGURATION_INFORMATION_2K  w2k;
 } PORT_CONFIGURATION_INFORMATION_COMMON, *PPORT_CONFIGURATION_INFORMATION_COMMON;
 

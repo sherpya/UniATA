@@ -202,6 +202,14 @@ typedef struct _ATA_REQ {
 #define REORDER_COST_DENIED            (REORDER_COST_MAX - 3)
 #define REORDER_COST_RESELECT          (REORDER_COST_MAX/4)
 
+#define REORDER_COST_SWITCH_RW_CD      (REORDER_COST_MAX/8)
+#define REORDER_MCOST_SWITCH_RW_CD     (0)
+#define REORDER_MCOST_SEEK_BACK_CD     (16)
+
+#define REORDER_COST_SWITCH_RW_HDD     (0)
+#define REORDER_MCOST_SWITCH_RW_HDD    (4)
+#define REORDER_MCOST_SEEK_BACK_HDD    (2)
+
 /*typedef struct _ATA_QUEUE {
     struct _ATA_REQ*    head_req; // index
     struct _ATA_REQ*    tail_req; // index
@@ -234,13 +242,15 @@ typedef struct _HW_CHANNEL {
     UCHAR               ReturningMediaStatus;
 
     BOOLEAN             CopyDmaBuffer;
-
-    UCHAR               Padding0[2];
+    BOOLEAN             MemIo;
+    UCHAR               Padding0[1];
 
     MECHANICAL_STATUS_INFORMATION_HEADER MechStatusData;
     SENSE_DATA          MechStatusSense;
     ULONG               MechStatusRetryCount;
     SCSI_REQUEST_BLOCK  InternalSrb;
+
+    ULONG               MaxTransferMode; // may differ from Controller's value due to 40-pin cable
 
     ULONG               ChannelCtrlFlags;
     ULONG               ResetInProgress; // flag
@@ -279,6 +289,12 @@ typedef struct _HW_CHANNEL {
 //    PBM_DMA_ENTRY dma_tab;//[PAGE_SIZE/sizeof(BM_DMA_ENTRY)];	/* DMA transfer table */
 //    ULONG dma_base;
 
+    ULONG BaseMemAddress;
+    ULONG BaseMemAddressOffset;
+    ULONG RegTranslation[sizeof(IDE_REGISTERS_1) +
+                         sizeof(IDE_REGISTERS_2) +
+                         sizeof(IDE_BUSMASTER_REGISTERS)];
+
 } HW_CHANNEL, *PHW_CHANNEL;
 
 #define CTRFLAGS_DMA_ACTIVE             0x01
@@ -287,6 +303,7 @@ typedef struct _HW_CHANNEL {
 #define CTRFLAGS_INTR_DISABLED          0x08
 #define CTRFLAGS_DPC_REQ                0x10
 #define CTRFLAGS_ENABLE_INTR_REQ        0x20
+#define CTRFLAGS_LBA48                  0x40
 
 // Logical unit extension
 typedef struct _HW_LU_EXTENSION {
@@ -305,6 +322,9 @@ typedef struct _HW_LU_EXTENSION {
     LONGLONG       ReadCmdCost;
     LONGLONG       WriteCmdCost;
     LONGLONG       OtherCmdCost;
+    LONGLONG       RwSwitchCost;
+    LONGLONG       RwSwitchMCost;
+    LONGLONG       SeekBackMCost;
     //
     PATA_REQ       first_req;
     PATA_REQ       last_req;
@@ -320,7 +340,7 @@ typedef struct _HW_LU_EXTENSION {
 #endif//IO_STATISTICS
 } HW_LU_EXTENSION, *PHW_LU_EXTENSION;
 
-#define IDE_MAX_CHAN          2
+#define IDE_MAX_CHAN          8
 #define IDE_MAX_LUN_PER_CHAN  2
 #define IDE_MAX_LUN           (IDE_MAX_CHAN*IDE_MAX_LUN_PER_CHAN)
 
@@ -335,6 +355,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     // with so many broken PCI IDE controllers being sold, we have
     // to support them.
     ULONG NumberChannels;
+    ULONG FirstChannelToCheck;
     HW_LU_EXTENSION lun[IDE_MAX_LUN];
     HW_CHANNEL chan[IDE_MAX_CHAN];
     UCHAR LastInterruptedChannel;
@@ -359,18 +380,30 @@ typedef struct _HW_DEVICE_EXTENSION {
 
     PIDE_BUSMASTER_REGISTERS  BaseIoAddressBM_0;
     PIDE_BUSMASTER_REGISTERS  BaseIoAddressBM[IDE_MAX_CHAN];
+
+    // Device identification
     ULONG DevID;
     ULONG RevID;
-    ULONG Channel;
     ULONG slotNumber;
     ULONG SystemIoBusNumber;
     ULONG DevIndex;
+
+    ULONG InitMethod; // vendor specific
+
+    ULONG Channel;
+
     ULONG HbaCtrlFlags;
     BOOLEAN simplexOnly;
-//    BOOLEAN ActiveDpc;
+    BOOLEAN MemIo;
+    BOOLEAN UnknownDev;
+    UCHAR Padding0[1];
     LONG  ReCheckIntr;
-//    KIRQL QueueNewIrql;
+
+    ULONG MaxTransferMode;
+    ULONG HwFlags;
     INTERFACE_TYPE OrigAdapterInterfaceType;
+
+    ULONG BaseMemAddress;
 
 } HW_DEVICE_EXTENSION, *PHW_DEVICE_EXTENSION;
 
@@ -406,12 +439,14 @@ typedef struct _ISR2_DEVICE_EXTENSION {
 #define         ATA_WDMA2               0x22
 
 #define         ATA_UDMA                0x40
-#define         ATA_UDMA0               0x40
-#define         ATA_UDMA1               0x41
-#define         ATA_UDMA2               0x42
-#define         ATA_UDMA4               0x44
-#define         ATA_UDMA5               0x45
-#define         ATA_UDMA6               0x46
+#define         ATA_UDMA0               0x40 // ATA-16
+#define         ATA_UDMA1               0x41 // ATA-25                     
+#define         ATA_UDMA2               0x42 // ATA-33                     
+#define         ATA_UDMA3               0x43 // ATA-44
+#define         ATA_UDMA4               0x44 // ATA-66                     
+#define         ATA_UDMA5               0x45 // ATA-100                    
+#define         ATA_UDMA6               0x46 // ATA-133                    
+#define         ATA_UDMA7               0x47 // ATA-166
 
 #define         ATA_SA150               0x80
 
@@ -462,6 +497,16 @@ ScsiPortGetBusDataByOffset(
     IN PVOID  Buffer,
     IN ULONG  Offset,
     IN ULONG  Length
+    );
+
+extern ULONG
+AtapiFindListedDev(
+    PBUSMASTER_CONTROLLER_INFORMATION BusMasterAdapters,
+    ULONG     lim,
+    IN PVOID  HwDeviceExtension,
+    IN ULONG  BusNumber,
+    IN ULONG  SlotNumber,
+    OUT PCI_SLOT_NUMBER* _slotData // optional
     );
 
 extern ULONG
@@ -546,6 +591,33 @@ AtapiInterrupt2(
     );
 
 extern PDRIVER_OBJECT SavedDriverObject;
+
+extern BOOLEAN
+AtapiChipDetect(
+    IN PVOID HwDeviceExtension,
+    IN PPCI_COMMON_CONFIG pciData, // optional
+    IN ULONG DeviceNumber,
+    IN OUT PPORT_CONFIGURATION_INFORMATION ConfigInfo,
+    IN BOOLEAN* simplexOnly
+    );
+
+extern BOOLEAN
+AtapiChipInit(
+    IN PVOID HwDeviceExtension,
+    IN ULONG DeviceNumber,
+    IN ULONG c
+    );
+
+extern ULONG
+AtapiGetIoRange(
+    IN PVOID HwDeviceExtension,
+    IN PPORT_CONFIGURATION_INFORMATION ConfigInfo,
+    IN PPCI_COMMON_CONFIG pciData,
+    IN ULONG SystemIoBusNumber,
+    IN ULONG rid,
+    IN ULONG offset,
+    IN ULONG length //range id
+    );
 
 /****************** 1 *****************/
 #define GetPciConfig1(offs, op) {                                \
@@ -646,6 +718,83 @@ extern PDRIVER_OBJECT SavedDriverObject;
                     ScsiPortGetPhysicalAddress(hwde, srb, phaddr, plen)))
 #endif //USE_OWN_DMA
 
+VOID
+AtapiWritePort4(
+    IN PHW_CHANNEL chan,
+    IN PULONG port,
+    IN ULONG data
+    );
+
+VOID
+AtapiWritePort2(
+    IN PHW_CHANNEL chan,
+    IN PUSHORT port,
+    IN USHORT data
+    );
+
+VOID
+AtapiWritePort1(
+    IN PHW_CHANNEL chan,
+    IN PUCHAR port,
+    IN UCHAR data
+    );
+
+ULONG
+__fastcall
+AtapiReadPort4(
+    IN PHW_CHANNEL chan,
+    IN PULONG port
+    );
+
+USHORT
+__fastcall
+AtapiReadPort2(
+    IN PHW_CHANNEL chan,
+    IN PUSHORT port
+    );
+
+UCHAR
+__fastcall
+AtapiReadPort1(
+    IN PHW_CHANNEL chan,
+    IN PUCHAR port
+    );
+
+VOID
+__fastcall
+AtapiWriteBuffer4(
+    IN PHW_CHANNEL chan,
+    IN PULONG _port,
+    IN PVOID Buffer,
+    IN ULONG Count
+    );
+
+VOID
+__fastcall
+AtapiWriteBuffer2(
+    IN PHW_CHANNEL chan,
+    IN PUSHORT _port,
+    IN PVOID Buffer,
+    IN ULONG Count
+    );
+
+VOID
+__fastcall
+AtapiReadBuffer4(
+    IN PHW_CHANNEL chan,
+    IN PULONG _port,
+    IN PVOID Buffer,
+    IN ULONG Count
+    );
+
+VOID
+__fastcall
+AtapiReadBuffer2(
+    IN PHW_CHANNEL chan,
+    IN PUSHORT _port,
+    IN PVOID Buffer,
+    IN ULONG Count
+    );
 
 /*#define GET_CHANNEL(Srb)  (Srb->TargetId >> 1)
 #define GET_LDEV(Srb)  (Srb->TargetId)

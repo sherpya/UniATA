@@ -346,11 +346,18 @@ typedef union _ATAPI_REGISTERS_1 {
         UCHAR Status;
     } i;
 
+    IDE_REGISTERS_1 ide;
+
 } ATAPI_REGISTERS_1, *PATAPI_REGISTERS_1;
 
-typedef struct _ATAPI_REGISTERS_2 {
-    UCHAR AlternateStatus;
-    UCHAR DriveAddress;
+typedef union _ATAPI_REGISTERS_2 {
+    struct {
+        UCHAR AlternateStatus;
+        UCHAR DriveAddress;
+    };
+
+    IDE_REGISTERS_2 ide;
+
 } ATAPI_REGISTERS_2, *PATAPI_REGISTERS_2;
 
 //
@@ -695,149 +702,101 @@ NATIVE_MODE_CONTROLLER_INFORMATION const NativeModeAdapters[] = {
 // Beautification macros
 //
 
-#define GetStatus(BaseIoAddress, Status) \
-    Status = ScsiPortReadPortUchar(&((BaseIoAddress)->AlternateStatus));
+#define GetStatus(chan, BaseIoAddress, Status) \
+    Status = AtapiReadPort1(chan, &((BaseIoAddress)->AlternateStatus));
 
-#define GetBaseStatus(BaseIoAddress, pStatus) \
-    pStatus = ScsiPortReadPortUchar(&((BaseIoAddress)->i.Status));
+#define GetBaseStatus(chan, BaseIoAddress, pStatus) \
+    pStatus = AtapiReadPort1(chan, &((BaseIoAddress)->i.Status));
 
-#define WriteCommand(BaseIoAddress, _Command) \
-    ScsiPortWritePortUchar(&((BaseIoAddress)->o.Command), _Command);
-
-
-#define SelectDrive(BaseIoAddress, unit) \
-    ScsiPortWritePortUchar(&((BaseIoAddress)->o.DriveSelect), (unit) ? IDE_DRIVE_SELECT_2 : IDE_DRIVE_SELECT_1);
+#define WriteCommand(chan, BaseIoAddress, _Command) \
+    AtapiWritePort1(chan, &((BaseIoAddress)->o.Command), _Command);
 
 
-#define ReadBuffer(BaseIoAddress, Buffer, Count) \
-    ScsiPortReadPortBufferUshort((PUSHORT)&((BaseIoAddress)->i.Data), \
+#define SelectDrive(chan, BaseIoAddress, unit) \
+    AtapiWritePort1(chan, &((BaseIoAddress)->o.DriveSelect), (unit) ? IDE_DRIVE_SELECT_2 : IDE_DRIVE_SELECT_1);
+
+
+#define ReadBuffer(chan, BaseIoAddress, Buffer, Count) \
+    AtapiReadBuffer2(chan, (PUSHORT)&((BaseIoAddress)->i.Data), \
                                  Buffer, \
                                  Count);
 
-#define WriteBuffer(BaseIoAddress, Buffer, Count) \
-    ScsiPortWritePortBufferUshort((PUSHORT)&((BaseIoAddress)->o.Data), \
+#define WriteBuffer(chan, BaseIoAddress, Buffer, Count) \
+    AtapiWriteBuffer2(chan, (PUSHORT)&((BaseIoAddress)->o.Data), \
                                   Buffer, \
                                   Count);
 
-#define ReadBuffer2(BaseIoAddress, Buffer, Count) \
-    ScsiPortReadPortBufferUlong((PULONG)&((BaseIoAddress)->i.Data), \
+#define ReadBuffer2(chan, BaseIoAddress, Buffer, Count) \
+    AtapiReadBuffer4(chan, (PULONG)&((BaseIoAddress)->i.Data), \
                              Buffer, \
                              Count);
 
-#define WriteBuffer2(BaseIoAddress, Buffer, Count) \
-    ScsiPortWritePortBufferUlong((PULONG)&BaseIoAddress->o.Data, \
+#define WriteBuffer2(chan, BaseIoAddress, Buffer, Count) \
+    AtapiWriteBuffer4(chan, (PULONG)&BaseIoAddress->o.Data, \
                               Buffer, \
                               Count);
 
-#define WaitOnBusy(BaseIoAddress, Status) \
-{ \
-    ULONG i; \
-    for (i=0; i<200; i++) { \
-        GetStatus(BaseIoAddress, Status); \
-        if (Status & IDE_STATUS_BUSY) { \
-            ScsiPortStallExecution(10); \
-            continue; \
-        } else { \
-            break; \
-        } \
-    } \
-}
+UCHAR
+__fastcall
+WaitOnBusy(
+    IN struct _HW_CHANNEL*   chan,
+    PIDE_REGISTERS_2 BaseIoAddress
+    );
 
-#define WaitOnBusyLong(BaseIoAddress, Status) \
-{ \
-    ULONG i; \
-    for (i=0; i<20000; i++) { \
-        GetStatus(BaseIoAddress, Status); \
-        if (Status & IDE_STATUS_BUSY) { \
-            ScsiPortStallExecution(10); \
-            continue; \
-        } else { \
-            break; \
-        } \
-    } \
-}
+UCHAR
+__fastcall
+WaitOnBusyLong(
+    IN struct _HW_CHANNEL*   chan,
+    PIDE_REGISTERS_2 BaseIoAddress
+    );
 
-#define WaitOnBaseBusy(BaseIoAddress, Status) \
-{ \
-    ULONG i; \
-    for (i=0; i<200; i++) { \
-        GetBaseStatus(BaseIoAddress, Status); \
-        if (Status & IDE_STATUS_BUSY) { \
-            ScsiPortStallExecution(10); \
-            continue; \
-        } else { \
-            break; \
-        } \
-    } \
-}
+UCHAR
+__fastcall
+WaitOnBaseBusy(
+    IN struct _HW_CHANNEL*   chan,
+    PIDE_REGISTERS_1 BaseIoAddress
+    );
 
-#define WaitOnBaseBusyLong(BaseIoAddress, Status) \
-{ \
-    ULONG i; \
-    for (i=0; i<20000; i++) { \
-        GetBaseStatus(BaseIoAddress, Status); \
-        if (Status & IDE_STATUS_BUSY) { \
-            ScsiPortStallExecution(10); \
-            continue; \
-        } else { \
-            break; \
-        } \
-    } \
-}
+UCHAR
+__fastcall
+WaitOnBaseBusyLong(
+    IN struct _HW_CHANNEL*   chan,
+    PIDE_REGISTERS_1 BaseIoAddress
+    );
 
-#define WaitForDrq(BaseIoAddress, Status) \
-{ \
-    ULONG i; \
-    for (i=0; i<1000; i++) { \
-        GetStatus(BaseIoAddress, Status); \
-        if (Status & IDE_STATUS_BUSY) { \
-            ScsiPortStallExecution(10); \
-        } else if (Status & IDE_STATUS_DRQ) { \
-            break; \
-        } else { \
-            ScsiPortStallExecution(10); \
-        } \
-    } \
-}
+UCHAR
+__fastcall
+WaitForDrq(
+    IN struct _HW_CHANNEL*   chan,
+    PIDE_REGISTERS_2 BaseIoAddress
+    );
 
+UCHAR
+__fastcall
+WaitShortForDrq(
+    IN struct _HW_CHANNEL*   chan,
+    PIDE_REGISTERS_2 BaseIoAddress
+    );
 
-#define WaitShortForDrq(BaseIoAddress, Status) \
-{ \
-    ULONG i; \
-    for (i=0; i<2; i++) { \
-        GetStatus(BaseIoAddress, Status); \
-        if (Status & IDE_STATUS_BUSY) { \
-            ScsiPortStallExecution(10); \
-        } else if (Status & IDE_STATUS_DRQ) { \
-            break; \
-        } else { \
-            ScsiPortStallExecution(10); \
-        } \
-    } \
-}
-
-#define AtapiSoftReset(BaseIoAddress,DeviceNumber) \
-{\
-    SelectDrive(BaseIoAddress,DeviceNumber); \
-    ScsiPortStallExecution(10000);\
-    ScsiPortWritePortUchar(&BaseIoAddress->o.Command, IDE_COMMAND_ATAPI_RESET); \
-    ScsiPortStallExecution(100000);\
-    SelectDrive(BaseIoAddress,DeviceNumber); \
-    /*WaitOnBusy( ((PIDE_REGISTERS_2)((PUCHAR)BaseIoAddress + 0x206)), statusByte);*/ \
-    /*ScsiPortStallExecution(500);*/\
-}
+VOID
+__fastcall
+AtapiSoftReset(
+    IN struct _HW_CHANNEL*   chan,
+    PIDE_REGISTERS_1 BaseIoAddress,
+    ULONG            DeviceNumber
+    );
 
 /*#define IdeHardReset(BaseIoAddress,result) \
 {\
     UCHAR statusByte;\
     ULONG i;\
     SelectDrive(BaseIoAddress,DeviceNumber); \
-    ScsiPortWritePortUchar(&BaseIoAddress->AlternateStatus,/*IDE_DC_DISABLE_INTERRUPTS | *//*IDE_DC_RESET_CONTROLLER );\
+    AtapiWritePort1(&BaseIoAddress->AlternateStatus,/*IDE_DC_DISABLE_INTERRUPTS | *//*IDE_DC_RESET_CONTROLLER );\
 /*    ScsiPortStallExecution(50 * 1000);\
-    ScsiPortWritePortUchar(&BaseIoAddress->AlternateStatus,IDE_DC_REENABLE_CONTROLLER);\
+    AtapiWritePort1(&BaseIoAddress->AlternateStatus,IDE_DC_REENABLE_CONTROLLER);\
     /* 5 seconds for reset */ \
 /*    for (i = 0; i < 1000 * (1+11); i++) {\
-        statusByte = ScsiPortReadPortUchar(&BaseIoAddress->AlternateStatus);\
+        statusByte = AtapiReadPort1(&BaseIoAddress->AlternateStatus);\
         if (statusByte != IDE_STATUS_IDLE && statusByte != IDE_STATUS_SUCCESS) {\
             ScsiPortStallExecution((i<1000) ? 5 : 500);\
         } else {\
@@ -1068,8 +1027,16 @@ AtapiDisableInterrupts(
     );
 
 extern ULONG
+AtapiRegCheckDevValue(
+    IN PVOID HwDeviceExtension,
+    IN PWSTR Name,
+    IN ULONG Default
+    );
+
+extern ULONG
 AtapiRegCheckParameterValue(
     IN PVOID HwDeviceExtension,
+    IN PWSTR PathSuffix,
     IN PWSTR Name,
     IN ULONG Default
     );

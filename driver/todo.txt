@@ -229,8 +229,23 @@
 140.assign queueing priority for each device
 141.assign BusMaster io-range to 1st channel only.                     (26e)
 142.do not change bus type to PCI for legacy ISA-PCI controllers under  ...
-    NT4
+    NT4                                                                (28 )
 143.implement Device/Vendor/Rev. filtering via registry keys
-144.implement transfer mode control IOCTLs
+144.implement transfer mode control IOCTLs                             (28 )
 145.set max. transfer length > 64k.
-146.
+146.implement fix for miss-aligned user buffer
+147.set chip-specific init/operation flags only once during             ...
+    initialization and use them in future. Do not perform multiple      ...
+    bus scans and other detections.                                    (29a)
+148.fix bug with miss-functioning Enable/Disable interrupt for
+    secondary channel                                                  (28 )
+149.add serial-ATA support                                             (29a)
+150.add support for new controllers (SiS, Promise)                     (29a)
+151.fix detection/init algorithms in order to avoid usage of            ...
+    non-generic code for unknown chips                                 (29a)
+152.add support for >2 channels                                        (29a)
+153.improve Intr-detection loop. Start each time from next channel      ...
+    for load-balance                                                   (29a)
+154.add support for machines with >4G physical memory
+155.add FreeBSD software RAID support
+156.
