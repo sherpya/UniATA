@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2004 Alexander A. Telyatnikov (Alter)
+Copyright (c) 2002-2005 Alexander A. Telyatnikov (Alter)
 
 Module Name:
     id_dma.cpp
@@ -38,7 +38,7 @@ Revision History:
     Optimized VIA/AMD/nVidia init part
     Optimized Promise TX2 init part
     Optimized Intel init part
-         by Alex A. Telyatnikov (Alter) (c) 2002-2004
+         by Alex A. Telyatnikov (Alter) (c) 2002-2005
 
 
 --*/
@@ -889,14 +889,14 @@ set_new_acard:
         BOOLEAN udma_ok = FALSE;
         ULONG  idx = 0;
         ULONG  reg40;
-        USHORT reg44;
+        UCHAR  reg44;
         USHORT reg48;
         USHORT reg4a;
         USHORT reg54;
         ULONG  mask40 = 0;
         ULONG  new40  = 0;
-        USHORT mask44 = 0;
-        USHORT new44  = 0;
+        UCHAR  mask44 = 0;
+        UCHAR  new44  = 0;
         UCHAR  intel_timings[] = { 0x00, 0x00, 0x10, 0x21, 0x23, 0x10, 0x21, 0x23,
     		                   0x23, 0x23, 0x23, 0x23, 0x23, 0x23 };
         
@@ -926,16 +926,15 @@ set_new_acard:
             GetPciConfig2(0x4a, reg4a);
         }
         GetPciConfig2(0x54, reg54);
-        if(udmamode >= 0) {
-             // enable the write buffer to be used in a split (ping/pong) manner.
-             reg54 |= 0x400;
-        } else {
-            reg54 &= ~0x400;
-        }
+//        if(udmamode >= 0) {
+            // enable the write buffer to be used in a split (ping/pong) manner.
+            reg54 |= 0x400;
+//        } else {
+//            reg54 &= ~0x400;
+//        }
 
 //        reg40 &= ~0x00ff00ff;
 //        reg40 |= 0x40774077;
-        mask40 = 0x00ff;
 
         for(i=udmamode; i>=0; i--) {
             if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, lun, ATA_UDMA0 + i)) {
@@ -989,10 +988,12 @@ set_new_acard:
         }
 
         GetPciConfig4(0x40, reg40);
-        GetPciConfig2(0x44, reg44);
+        GetPciConfig1(0x44, reg44);
+
+        mask40 = 0x000000ff;
 
         if(!(DeviceNumber & 1)) {
-            mask40 |= 0x3300;
+            mask40 |= 0x00003300;
             new40 = ((USHORT)(intel_timings[idx]) << 8);
             //mask44 = 0x00; // already done on init
             //new44  = 0x00;
@@ -1001,7 +1002,7 @@ set_new_acard:
             new44 = ((intel_timings[idx] & 0x30) >> 2) |
                      (intel_timings[idx] & 0x03);
         }
-        new40 |= 0x4077;
+        new40 |= 0x00004077;
 
         if (Channel) {
             mask40 <<= 16;

@@ -498,8 +498,8 @@ main (
     int b_dev=-1, d_dev=-1, l_dev=0;
     int mode=-1;
 
-    printf("Console ATA control utility for Windows NT/2000 with UniATA installed\n"
-           "Copyright (c) Alexander A. Telyatnikov, 2003-2004\n");
+    printf("Console ATA control utility for Windows NT/2000/XP with UniATA installed\n"
+           "Copyright (c) Alexander A. Telyatnikov, 2003-2005\n");
 
     for(i=1; i<argc; i++) {
         if(!argv[i])

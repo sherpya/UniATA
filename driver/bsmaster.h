@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2004 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2005 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     bsmaster.h

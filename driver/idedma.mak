@@ -183,7 +183,7 @@ CPP_PROJ=/nologo /Gz /MTd /W3 /GX /Z7 /Od $(DDKINC) /D_DEBUG /DDBG /DWIN32 /D_WI
 
 MTL_PROJ=/nologo /D "_DEBUG" /mktyplib203 /win32 
 
-LINK32_FLAGS=$(BaseDir)\Lib\i386\Checked\ntoskrnl.lib $(BaseDir)\Lib\i386\Checked\int64.lib $(BaseDir)\Lib\i386\Checked\Hal.lib $(BaseDir)\Lib\i386\Checked\Ntdll.lib $(BaseDir)\Lib\i386\Checked\ScsiPort.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /map:"$(INTDIR)\IdeDma.map" /debug /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /pdbtype:sept /driver /subsystem:native,4.00 
+LINK32_FLAGS=$(BaseDir)\Lib\i386\Checked\ntoskrnl.lib $(BaseDir)\Lib\i386\Checked\int64.lib $(BaseDir)\Lib\i386\Checked\Hal.lib $(BaseDir)\Lib\i386\Checked\Ntdll.lib $(BaseDir)\Lib\i386\Checked\ScsiPort.lib PostDbgMesgK.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /map:"$(INTDIR)\IdeDma.map" /debug /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /pdbtype:sept /driver /subsystem:native,4.00 
 
 !ENDIF 
 

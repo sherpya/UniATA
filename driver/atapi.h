@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2004 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2005 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     atapi.h
@@ -56,6 +56,7 @@ extern "C" {
 
 #ifdef _DEBUG
 
+//#define USE_DBGPRINT_LOGGER
 //#define SCSI_PORT_DBG_PRINT
 
 #ifndef _DBGNT_
@@ -63,6 +64,14 @@ extern "C" {
 #ifdef KdPrint
 #undef KdPrint
 #endif
+
+#ifdef USE_DBGPRINT_LOGGER
+#include "PostDbgMesg.h"
+#define DbgPrint             DbgDump_Printf
+#define Connect_DbgPrint()   {DbgDump_SetAutoReconnect(TRUE); DbgDump_Reconnect();}
+#else // USE_DBGPRINT_LOGGER
+#define Connect_DbgPrint()   {;}
+#endif // USE_DBGPRINT_LOGGER
 
 #ifdef SCSI_PORT_DBG_PRINT
 
@@ -81,21 +90,23 @@ ScsiDebugPrint(
 
 #else // SCSI_PORT_DBG_PRINT
 
+#ifndef USE_DBGPRINT_LOGGER
 ULONG
 _cdecl
 DbgPrint(
     PCH Format,
     ...
     );
-
+#endif // USE_DBGPRINT_LOGGER
 
 #define PRINT_PREFIX
 
 // Note, that using DbgPrint on raised IRQL will crash w2k
 // tis will not happen immediately, so we shall see some logs
-//#define LOG_ON_RAISED_IRQL_W2K    TRUE
-#define LOG_ON_RAISED_IRQL_W2K    FALSE
-#define KdPrint2(_x_) {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){DbgPrint("%x: ", PsGetCurrentThread()) ; DbgPrint _x_ ; }}
+#define LOG_ON_RAISED_IRQL_W2K    TRUE
+//#define LOG_ON_RAISED_IRQL_W2K    FALSE
+
+#define KdPrint2(_x_) {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; }}
 #define KdPrint(_x_)  {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; }}
 /*
 #define PRINT_PREFIX_PTR ((PCHAR)&__tmp__kdprint__buff__)
@@ -123,6 +134,7 @@ DbgPrint(
 
 #define KdPrint2(_x_)
 #define KdPrint(_x_)
+#define Connect_DbgPrint()   {;}
 
 #endif // _DEBUG
 
