@@ -1,3 +1,5 @@
+; Copyright (c) 2002-2004 UniATA group
+
 [Version]
 Signature="$Windows NT$"
 Provider=%ALTERWARE%

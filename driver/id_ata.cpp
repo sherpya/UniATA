@@ -60,6 +60,7 @@ extern "C" {
 
 };
 #include "stddef.h"
+#include "stdarg.h"
 
 #include "atapi.h"               // includes scsi.h
 #include "ntdddisk.h"
@@ -858,6 +859,18 @@ AtapiQueueRequest(
     PHW_LU_EXTENSION LunExt = chan->lun[GET_LDEV(Srb) & 1];
     AtaReq->Srb = Srb;
 
+/*
+#ifdef _DEBUG
+    if(!LunExt) {
+        PrintNtConsole("q: chan = %#x, dev %#x\n", chan, GET_LDEV(Srb));
+        int i;
+        for(i=0; i<1000; i++) {
+            ScsiPortStallExecution(5*1000);
+        }
+        return;
+    }
+#endif //_DEBUG
+*/
     // check if queue is empty
     if(LunExt->queue_depth) {
         AtaReq->ttl = (UCHAR)(max(LunExt->queue_depth, MIN_REQ_TTL));
@@ -5294,7 +5307,7 @@ Return Value:
 
 --*/
 
-#ifdef DBG
+#ifdef _DEBUG
 ULONG check_point = 0;
 #define SetCheckPoint(cp)  { check_point = (cp) ; }
 #else
@@ -5852,7 +5865,7 @@ AtapiStartIo(
     )
 {
     return AtapiStartIo__(HwDeviceExtension, Srb, TRUE);
-}
+} // end AtapiStartIo()
 
 BOOLEAN
 AtapiStartIo__(
@@ -5883,6 +5896,11 @@ AtapiStartIo__(
                              Srb->Function, 
                              TopLevel, 0x80000001);
 */
+    if(TopLevel && Srb && Srb->SrbExtension) {
+        KdPrint2((PRINT_PREFIX "TopLevel\n"));
+        RtlZeroMemory(Srb->SrbExtension, sizeof(ATA_REQ));
+    }
+
     do {
 
         lChannel = GET_CHANNEL(Srb);
@@ -5903,6 +5921,7 @@ AtapiStartIo__(
            ldev >= deviceExtension->NumberChannels*2 ||
            lChannel > deviceExtension->NumberChannels) {
 
+reject_srb:
             //if(!CheckDevice(HwDeviceExtension, lChannel, ldev & 1, FALSE)) {
                 KdPrint2((PRINT_PREFIX 
                            "AtapiStartIo: SRB rejected\n"));
@@ -5912,6 +5931,25 @@ AtapiStartIo__(
                 goto complete_req;
             //}
         }
+
+#ifdef _DEBUG
+        if(!(chan->lun[ldev & 1])) {
+            PrintNtConsole("de = %#x, chan = %#x , dev %#x, nchan %#x\n",
+                deviceExtension,
+                chan, ldev & 1,
+                deviceExtension->NumberChannels);
+            PrintNtConsole("lchan = %#x, ldev %#x, cdev %#x, lun0 %#x\n",
+                lChannel, ldev, GET_CDEV(Srb), deviceExtension->chan[0].lun[0]);
+            PrintNtConsole("Function %#x, PATH:LUN:TID = %#x:%#x:%#x\n",
+                       Srb->Function, Srb->PathId, Srb->Lun, Srb->TargetId);
+            int i;
+            for(i=0; i<1000; i++) {
+                ScsiPortStallExecution(3*1000);
+            }
+            goto reject_srb;
+        }
+#endif //_DEBUG
+        ASSERT(chan->lun[ldev & 1]);
 
         // Determine which function.
         switch (Srb->Function) {
@@ -5928,11 +5966,6 @@ AtapiStartIo__(
                     status = SRB_STATUS_SELECTION_TIMEOUT;
                     break;
                 //}
-            }
-
-            if(TopLevel) {
-                KdPrint2((PRINT_PREFIX "TopLevel\n"));
-                RtlZeroMemory(Srb->SrbExtension, sizeof(ATA_REQ));
             }
 
             PostReq = FALSE;
@@ -5964,6 +5997,7 @@ AtapiStartIo__(
                 // Insert requests AFTER they have been initialized on
                 // CMD_ACTION_PREPARE stage
                 // we should not check TopLevel here (it is always TRUE)
+                ASSERT(chan->lun[GET_LDEV(Srb) & 1]);
                 AtapiQueueRequest(chan, Srb);
 
                 KdPrint2((PRINT_PREFIX "AtapiStartIo: Already have %d request(s)!\n", chan->queue_depth));
@@ -5976,6 +6010,7 @@ AtapiStartIo__(
                     AtaReq = (PATA_REQ)(Srb->SrbExtension);
                     KdPrint2((PRINT_PREFIX "TopLevel (3), AtaReq %#x\n", AtaReq));
                     ASSERT(!AtaReq->Flags);
+                    ASSERT(chan->lun[GET_LDEV(Srb) & 1]);
                     AtapiQueueRequest(chan, Srb);
 //                    AtaReq = (PATA_REQ)(Srb->SrbExtension);
                     ASSERT(!AtaReq->Flags);
@@ -6124,6 +6159,7 @@ AtapiStartIo__(
 
             KdPrint2((PRINT_PREFIX "AtapiStartIo: SRB_FUNCTION_IO_CONTROL\n"));
             if(TopLevel) {
+                ASSERT(chan->lun[GET_LDEV(Srb) & 1]);
                 AtapiQueueRequest(chan, Srb);
                 AtaReq = (PATA_REQ)(Srb->SrbExtension);
                 AtaReq->ReqState = REQ_STATE_QUEUED;
@@ -6894,4 +6930,47 @@ AtapiAdapterControl(
     return ScsiAdapterControlSuccess;
 } // end AtapiAdapterControl()
 
+#ifdef _DEBUG
+extern "C"
+NTHALAPI
+VOID
+HalDisplayString (
+    PUCHAR String
+    );
+
+extern "C"
+VOID
+PrintNtConsole(
+    PCHAR DebugMessage,
+    ...
+    )
+{
+    int len;
+    UCHAR dbg_print_tmp_buff[1024];
+//    UNICODE_STRING msgBuff;
+    va_list ap;
+    va_start(ap, DebugMessage);
+
+
+//    if(was_enter) {
+//        strcpy(&dbg_print_tmp_buff[0], NT_DBG_PREFIX);
+//        len = _vsnprintf(&dbg_print_tmp_buff[sizeof(NT_DBG_PREFIX)-1], 2047-sizeof(NT_DBG_PREFIX), DebugMessage, ap);
+//    } else {
+        len = _vsnprintf((PCHAR)&dbg_print_tmp_buff[0], 511, DebugMessage, ap);
+//    }
+    dbg_print_tmp_buff[511] = 0;
+/*    if(len > 0 &&
+       (dbg_print_tmp_buff[len-1] == '\n' ||
+        dbg_print_tmp_buff[len-1] == '\r') ) {
+        was_enter = TRUE;
+    } else {
+        was_enter = FALSE;
+    }
+*/
+    HalDisplayString(dbg_print_tmp_buff);
+
+    va_end(ap);
+
+} // end PrintNtConsole()
+#endif //_DEBUG
 

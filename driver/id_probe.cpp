@@ -970,10 +970,12 @@ AtapiFindBusMasterController(
 
     for (; channel < (BMList[i].channel + deviceExtension->NumberChannels); channel++, c++) {
 
-        KdPrint2((PRINT_PREFIX "Channel %#x\n",channel));
+        KdPrint2((PRINT_PREFIX "de %#x, Channel %#x\n",deviceExtension, channel));
+        //PrintNtConsole("de %#x, Channel %#x, nchan %#x\n",deviceExtension, channel, deviceExtension->NumberChannels);
         chan = &deviceExtension->chan[c];
 
         KdPrint2((PRINT_PREFIX "chan = %#x\n", chan));
+        //PrintNtConsole("chan = %#x, c=%#x\n", chan, c);
         chan->DeviceExtension = deviceExtension;
         chan->lChannel        = c;
         chan->lun[0] = &(deviceExtension->lun[c*2+0]);
@@ -1190,6 +1192,7 @@ exit_findbm:
     }
 
     KdPrint2((PRINT_PREFIX "return SP_RETURN_FOUND\n"));
+    //PrintNtConsole("return SP_RETURN_FOUND, de %#x, c0.lun0 %#x\n", deviceExtension, deviceExtension->chan[0].lun[0]);
     return SP_RETURN_FOUND;
 
 } // end AtapiFindBusMasterController()
@@ -1273,6 +1276,8 @@ AtapiConnectIntr2(
     Isr2DevExt = (PISR2_DEVICE_EXTENSION)(BMList[i].Isr2DevObj->DeviceExtension);
     Isr2DevExt->HwDeviceExtension = deviceExtension;
     Isr2DevExt->DevIndex = i;
+
+    KdPrint2((PRINT_PREFIX "isr2_de %#x\n", Isr2DevExt));
 
 //            deviceExtension->QueueNewIrql = BMList[i].Isr2Irql;
     

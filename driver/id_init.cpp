@@ -508,25 +508,25 @@ for_ugly_chips:
         }
         break; }
 
-    case ATA_SIS_ID:
+    case ATA_SIS_ID: {
         //if(ChipType != SIS_SOUTH) {
         if(!(ChipFlags & SIS_BASE)) {
             KdPrint2((PRINT_PREFIX "Found SIS_SOUTH\n"));
+            //PrintNtConsole("Found SIS_SOUTH\n");
             break;
         }
         // Make some additional checks
         KdPrint2((PRINT_PREFIX "ChipType == SIS_BASE\n"));
         ChangePciConfig1(0x57, (a & 0x7f));
         GetPciConfig4(0x00, tmp32);
-        if(tmp32 == ATA_SIS5513) {
-            // generic SiS33
-            KdPrint2((PRINT_PREFIX "Generic SiS DMA\n"));
-        } else
         if(tmp32 == ATA_SIS5518) {
             ChipType = SIS133NEW;
             deviceExtension->HwFlags = (deviceExtension->HwFlags & ~CHIPTYPE_MASK) | SIS133NEW;
             deviceExtension->MaxTransferMode = ATA_UDMA6;
             KdPrint2((PRINT_PREFIX "AtapiChipInit: SiS 962/963 DMA %#x controller\n", deviceExtension->MaxTransferMode));
+            //PrintNtConsole("AtapiChipInit: SiS 962/963 DMA %#x controller\n", deviceExtension->MaxTransferMode);
+            // Restore device ID
+            ChangePciConfig1(0x57, (a | 0x80));
         } else {
             static BUSMASTER_CONTROLLER_INFORMATION const SiSSouthAdapters[] = {
                 PCI_DEV_HW_SPEC_BM( 0008, 1039, 0x10, -1, "SiS 961", 0 ),
@@ -536,23 +536,31 @@ for_ugly_chips:
             // Save settings
             GetPciConfig1(0x4a, tmp8);
             ChangePciConfig1(0x4a, (a | 0x10));
-            if(tmp32 == ATA_SIS5517) {
+            if(tmp32 == ATA_SIS5513 ||
+               tmp32 == ATA_SIS5517) {
                 i = AtapiFindListedDev((BUSMASTER_CONTROLLER_INFORMATION*)&SiSSouthAdapters[0],
                      -1, HwDeviceExtension, SystemIoBusNumber, -1, NULL); 
                 if(i != -1) {
                     deviceExtension->HwFlags = (deviceExtension->HwFlags & ~CHIPTYPE_MASK) | SIS133OLD;
                     deviceExtension->MaxTransferMode = ATA_UDMA6;
                 } else {
-                    deviceExtension->HwFlags = (deviceExtension->HwFlags & ~CHIPTYPE_MASK) | SIS100NEW;
-                    deviceExtension->MaxTransferMode = ATA_UDMA5;
+                    // SiS-South not found
+                    if(tmp32 == ATA_SIS5517) {
+                        deviceExtension->HwFlags = (deviceExtension->HwFlags & ~CHIPTYPE_MASK) | SIS100NEW;
+                        deviceExtension->MaxTransferMode = ATA_UDMA5;
+                    } else {
+                        // generic SiS33
+                        KdPrint2((PRINT_PREFIX "Generic SiS DMA\n"));
+                    }
                 }
             }
             // Restore settings
             SetPciConfig1(0x4a, tmp8);
             KdPrint2((PRINT_PREFIX "AtapiChipInit: SiS 961 DMA %#x controller\n", deviceExtension->MaxTransferMode));
+            //PrintNtConsole("AtapiChipInit: SiS 961 DMA %#x controller\n", deviceExtension->MaxTransferMode);
         }
         //ChangePciConfig1(0x57, (a | 0x80));
-        break;
+        break; }
 
     case 0x1078:
         /* Cyrix 5530 ATA33 controller */

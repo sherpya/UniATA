@@ -1,3 +1,5 @@
+; Copyright (c) 2002-2004 UniATA group
+
 [version]
 Signature="$WINDOWS NT$"
 Class=SCSIAdapter
