@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=hdc
 CatalogFile=uniata.cat
-DriverVer=18/12/2004,0.30.2.0
+DriverVer=31/01/2005,0.30.8.0
 
 ;
 ; Source file information
@@ -125,7 +125,7 @@ ExcludeFromSelect = *
 %PCI\VEN_1166&DEV_0212&REV_92.DeviceDesc%=uniata_Inst, PCI\VEN_1166&DEV_0212&REV_92
 %PCI\VEN_1166&DEV_0212.DeviceDesc%=uniata_Inst, PCI\VEN_1166&DEV_0212
 %PCI\VEN_1166&DEV_0213.DeviceDesc%=uniata_Inst, PCI\VEN_1166&DEV_0213
-%PCI\VEN_1166&DEV_0213.DeviceDesc%=uniata_Inst, PCI\VEN_1166&DEV_0213
+%PCI\VEN_1166&DEV_0217.DeviceDesc%=uniata_Inst, PCI\VEN_1166&DEV_0217
 %PCI\VEN_1095&DEV_3114.DeviceDesc%=uniata_Inst, PCI\VEN_1095&DEV_3114
 %PCI\VEN_1095&DEV_3512&REV_02.DeviceDesc%=uniata_Inst, PCI\VEN_1095&DEV_3512&REV_02
 %PCI\VEN_1095&DEV_3112&REV_02.DeviceDesc%=uniata_Inst, PCI\VEN_1095&DEV_3112&REV_02
@@ -165,7 +165,7 @@ ExcludeFromSelect = *
 HKLM, system\currentcontrolset\services\pciide, "Start", %REG_DWORD%, 0x00000004
 
 [uniata_Inst]
-AddReg = RegUninstall,DISABLE_PCIIDE
+AddReg = DISABLE_PCIIDE
 CopyFiles = uniata_Inst.Miniport
 
 ;
@@ -225,7 +225,7 @@ PCI\VEN_1022&DEV_7469.DeviceDesc="AMD 8111 ATA-133 controller  (SCSI)"
 ;PCI\VEN_1103&DEV_0008&REV_07.DeviceDesc="HighPoint HPT374 ATA-133 controller (SCSI)"
 PCI\VEN_8086&DEV_1230.DeviceDesc="Intel PIIX IDE DMA controller  (SCSI)"
 PCI\VEN_8086&DEV_7010.DeviceDesc="Intel PIIX3 IDE DMA controller  (SCSI)"
-PCI\VEN_8086&DEV_7111.DeviceDesc="Intel PIIX4 ATA-33 controller  (SCSI)"
+PCI\VEN_8086&DEV_7111.DeviceDesc="Intel PIIX4 ATA-44 controller  (SCSI)"
 PCI\VEN_8086&DEV_7199.DeviceDesc="Intel PIIX4 ATA-33 controller  (SCSI)"
 PCI\VEN_8086&DEV_84ca.DeviceDesc="Intel PIIX4 ATA-33 controller  (SCSI)"
 PCI\VEN_8086&DEV_7601.DeviceDesc="Intel ICH0 ATA-33 controller  (SCSI)"
@@ -282,7 +282,7 @@ PCI\VEN_1166&DEV_0211.DeviceDesc="ServerWorks ROSB4 ATA-33 controller  (SCSI)"
 PCI\VEN_1166&DEV_0212&REV_92.DeviceDesc="ServerWorks CSB5 ATA-100 controller (SCSI)"
 PCI\VEN_1166&DEV_0212.DeviceDesc="ServerWorks CSB5 ATA-66 controller  (SCSI)"
 PCI\VEN_1166&DEV_0213.DeviceDesc="ServerWorks CSB6 ATA-100 controller  (SCSI)"
-PCI\VEN_1166&DEV_0213.DeviceDesc="ServerWorks CSB6 ATA-66 controller  (SCSI)"
+PCI\VEN_1166&DEV_0217.DeviceDesc="ServerWorks CSB6 ATA-66 controller  (SCSI)"
 PCI\VEN_1095&DEV_3114.DeviceDesc="SiI 3114 Serial ATA controller  (SCSI)"
 PCI\VEN_1095&DEV_3512&REV_02.DeviceDesc="SiI 3512 Serial ATA controller (SCSI)"
 PCI\VEN_1095&DEV_3112&REV_02.DeviceDesc="SiI 3112 Serial ATA controller (SCSI)"
@@ -321,6 +321,11 @@ ALTERWARE = "AlterWare"
 ;
 ; Non-Localizable Strings
 ;
+HDCClassName            = "SCSI/RAID controllers"
+SPSVCINST_ASSOCSERVICE = 0x00000002
+SERVICE_KERNEL_DRIVER  = 1
+SERVICE_BOOT_START     = 0
+SERVICE_ERROR_NORMAL   = 1
 
 REG_SZ         = 0x00000000
 REG_MULTI_SZ   = 0x00010000

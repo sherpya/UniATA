@@ -62,6 +62,8 @@ Revision History:
 
 #define USE_OWN_DMA
 
+#define UNIATA_DUMP_ATAPI
+
 //#define UNI_CPU_OPTIMIZATION
 
 #define QUEUE_STATISTICS

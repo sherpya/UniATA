@@ -18,10 +18,11 @@ void print_help() {
 //           "  h         hide device from SCSI bus\n"
            "  m [MODE]  set i/o mode for device or revert to default\n"
            "            available MODEs are PIO, PIO0-PIO5, DMA, WDMA0-WDMA2,\n"
-           "              UDMA33/66/100/133, UDMA0-UDMA5\n"
-//           "  r [XXX]   lock SCSI bus for device removal for XXX seconds or\n"
+           "              UDMA33/44/66/100/133, UDMA0-UDMA5\n"
+//           "  d [XXX]   lock SCSI bus for device removal for XXX seconds or\n"
 //           "            for %d seconds if no lock timeout specified.\n"
 //           "            can be used with -h, -m or standalone.\n"
+           "  r         reset device\n"
            "Examples:\n"
            "  atactl -l\n"
            "    will list all scsi buses and all connected devices\n"
@@ -30,7 +31,7 @@ void print_help() {
 //           "  atactl -h -r 30 c1:b0:d0:l0 \n"
 //           "    will hide Master (d0:l0) device on secondary (c1:b0) IDE channel"
 //           "    and lock i/o on this channel for 30 seconds to ensure safity"
-//           "    of removal precess"
+//           "    of removal process"
            "",
            DEFAULT_REMOVAL_LOCK_TIMEOUT
            );
@@ -41,6 +42,7 @@ void print_help() {
 #define CMD_ATA_FIND  0x02
 #define CMD_ATA_HIDE  0x03
 #define CMD_ATA_MODE  0x04
+#define CMD_ATA_RESET 0x05
 
 HANDLE
 ata_open_dev(
@@ -212,6 +214,8 @@ ata_str_to_mode(
         return ATA_SA150;
     if(!_stricmp(str, "UDMA33"))
         return ATA_UDMA2;
+    if(!_stricmp(str, "UDMA44"))
+        return ATA_UDMA3;
     if(!_stricmp(str, "UDMA66"))
         return ATA_UDMA4;
     if(!_stricmp(str, "UDMA100"))
@@ -228,6 +232,8 @@ ata_str_to_mode(
         return ATA_UDMA6;
     if(!_stricmp(str, "ATA-33"))
         return ATA_UDMA2;
+    if(!_stricmp(str, "ATA-44"))
+        return ATA_UDMA3;
     if(!_stricmp(str, "ATA-66"))
         return ATA_UDMA4;
     if(!_stricmp(str, "ATA-100"))
@@ -472,6 +478,40 @@ ata_mode(
     return TRUE;
 } // end ata_list()
 
+BOOLEAN
+ata_reset(
+    int bus_id,
+    int dev_id,
+    int mode
+    )
+{
+    char dev_name[64];
+    HANDLE h;
+    ULONG status;
+    ULONG returned;
+    SCSI_ADDRESS addr;
+
+    if(dev_id == -1) {
+        return FALSE;
+    }
+    sprintf(dev_name, "\\\\.\\Scsi%d:", bus_id);
+    h = ata_open_dev(dev_name);
+    if(!h)
+        return FALSE;
+    addr.PortNumber = bus_id;
+    addr.PathId   = (UCHAR)(dev_id >> 16);
+    addr.TargetId = (UCHAR)(dev_id >> 8);
+    addr.Lun      = (UCHAR)(dev_id);
+
+    status = ata_send_ioctl(h, &addr, "-UNIATA-",
+                            IOCTL_SCSI_MINIPORT_UNIATA_RESET_DEVICE,
+                            NULL, 0,
+                            NULL, 0,
+                            &returned);
+    ata_close_dev(h);
+    return TRUE;
+} // end ata_reset()
+
 int
 ata_num_to_x_dev(
     char a
@@ -569,12 +609,19 @@ main (
                 j = strlen(argv[i])-1;
                 break;
             case 'r' :
+                if(cmd) {
+                    print_help();
+                }
+                cmd = CMD_ATA_RESET;
+                break;
+/*
+            case 'r' :
                 if(cmd && cmd != CMD_ATA_MODE && cmd != CMD_ATA_HIDE) {
                     print_help();
                 }
                 lock = DEFAULT_REMOVAL_LOCK_TIMEOUT;
                 break;
-
+*/
             case '?' :
             default:
                 print_help();
@@ -591,6 +638,9 @@ main (
     } else
     if(cmd == CMD_ATA_MODE) {
         ata_mode(bus_id, dev_id, mode);
+    } else
+    if(cmd == CMD_ATA_RESET) {
+        ata_reset(bus_id, dev_id, mode);
     } else {
         print_help();
     }

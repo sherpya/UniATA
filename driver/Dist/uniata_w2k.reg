@@ -15,3 +15,9 @@ REGEDIT4
 
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\PciIde]
 "Start"=dword:00000004
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\PciIdex]
+"Start"=dword:00000004
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\atapi]
+"Start"=dword:00000004

@@ -79,11 +79,11 @@ Installation steps:
 8.  Next
 9.  enter path to .INF file for new driver
     If this is usual onboard IDE controller, use
-        C:\temp\uniata\Release_Dist\uata2kh.inf
+        C:\temp\uniata\Release_Dist\uata_2kh.inf
             or for UniATA versions below v29a
         C:\temp\uniata\Release_Dist\uniata2kh.inf
     If this is IDE RAID controller or additional PCI IDE controller, use
-        C:\temp\uniata\Release_Dist\uata2k.inf
+        C:\temp\uniata\Release_Dist\uata_2k.inf
             or for UniATA versions below v29a
         C:\temp\uniata\Release_Dist\uniata2k.inf
 10. OK

@@ -26,7 +26,7 @@ Notes:
   and Secondary channels to disappear from Device Manager.
 
   In order to install UniATA for some newer controller, you can add
-  entries in device list in uata2k.inf (for RAID) or uata2kh.inf (for IDE)
+  entries in device list in uata2k.inf (for RAID) or uata_2kh.inf (for IDE)
   with help of rebuild_inf.bat.
   Just run this batch file to rebuild .INF file.
 
@@ -76,9 +76,9 @@ Installation steps:
 9.  Have Disk
 10.  enter path to .INF file for new driver
     If this is usual onboard IDE controller, use
-        C:\temp\uniata\Release_Dist\uata2kh.inf
+        C:\temp\uniata\Release_Dist\uata_2kh.inf
     If this is IDE RAID controller or additional PCI IDE controller, use
-        C:\temp\uniata\Release_Dist\uata2k.inf
+        C:\temp\uniata\Release_Dist\uata_2k.inf
 11. OK
 
 12. chose in the list of available drivers the following line:

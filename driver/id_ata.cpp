@@ -3808,7 +3808,7 @@ continue_err:
         KdPrint2((PRINT_PREFIX "AtapiInterrupt: Intr on DRQ %x\n",
             LunExt->DeviceFlags & DFLAGS_INT_DRQ));
 
-        for (k = 0; k < 500; k++) {
+        for (k = atapiDev ? 90 : 0; k < 100; k++) {
             GetStatus(chan, baseIoAddress2,statusByte);
             if (!(statusByte & IDE_STATUS_DRQ)) {
 /*                if(!InDpc) {
@@ -4225,6 +4225,55 @@ IntrPrepareResetController:
         } else {
             status = SRB_STATUS_SUCCESS;
         }
+
+#ifdef UNIATA_DUMP_ATAPI
+        if(srb &&
+           srb->SrbFlags & SRB_FLAGS_DATA_IN) {
+            UCHAR                   ScsiCommand;
+            PCDB                    Cdb;
+            PCHAR                   CdbData;
+            PCHAR                   ModeSelectData;
+            ULONG                   CdbDataLen;
+            PSCSI_REQUEST_BLOCK     Srb = srb;
+
+            Cdb = (PCDB)(Srb->Cdb);
+            ScsiCommand = Cdb->CDB6.OperationCode;
+            CdbData = (PCHAR)(Srb->DataBuffer);
+            CdbDataLen = Srb->DataTransferLength;
+
+            if(CdbDataLen > 0x1000) {
+                CdbDataLen = 0x1000;
+            }
+
+            KdPrint(("--\n"));
+            KdPrint2(("VendorID+DeviceID/Rev %#x/%#x\n", deviceExtension->DevID, deviceExtension->RevID));
+            KdPrint2(("P:T:D=%d:%d:%d\n",
+                                      Srb->PathId,
+                                      Srb->TargetId,
+                                      Srb->Lun));
+            KdPrint(("Complete SCSI Command %2.2x\n", ScsiCommand));
+            KdDump(Cdb, 16);
+
+            if(ScsiCommand == SCSIOP_MODE_SENSE) {
+                KdPrint(("ModeSense 6\n"));
+                PMODE_PARAMETER_HEADER ParamHdr = (PMODE_PARAMETER_HEADER)CdbData;
+                ModeSelectData = CdbData+4;
+                KdDump(CdbData, CdbDataLen);
+            } else
+            if(ScsiCommand == SCSIOP_MODE_SENSE10) {
+                KdPrint(("ModeSense 10\n"));
+                PMODE_PARAMETER_HEADER ParamHdr = (PMODE_PARAMETER_HEADER)CdbData;
+                ModeSelectData = CdbData+8;
+                KdDump(CdbData, CdbDataLen);
+            } else {
+                if(srb->SrbFlags & SRB_FLAGS_DATA_IN) {
+                    KdPrint(("Read buffer from device:\n"));
+                    KdDump(CdbData, CdbDataLen);
+                }
+            }
+            KdPrint(("--\n"));
+        }
+#endif //UNIATA_DUMP_ATAPI
 
 CompleteRequest:
 
@@ -5118,6 +5167,70 @@ AtapiSendCommand(
     KdPrint2((PRINT_PREFIX "AtapiSendCommand: req state %#x\n", AtaReq->ReqState));
     if(AtaReq->ReqState < REQ_STATE_PREPARE_TO_TRANSFER)
         AtaReq->ReqState = REQ_STATE_PREPARE_TO_TRANSFER;
+
+#ifdef UNIATA_DUMP_ATAPI
+    if(CmdAction & CMD_ACTION_PREPARE) {
+        UCHAR                   ScsiCommand;
+        PCDB                    Cdb;
+        PCHAR                   CdbData;
+        PCHAR                   ModeSelectData;
+        ULONG                   CdbDataLen;
+
+        Cdb = (PCDB)(Srb->Cdb);
+        ScsiCommand = Cdb->CDB6.OperationCode;
+        CdbData = (PCHAR)(Srb->DataBuffer);
+        CdbDataLen = Srb->DataTransferLength;
+
+        if(CdbDataLen > 0x1000) {
+            CdbDataLen = 0x1000;
+        }
+
+        KdPrint(("--\n"));
+        KdPrint2(("VendorID+DeviceID/Rev %#x/%#x\n", deviceExtension->DevID, deviceExtension->RevID));
+        KdPrint2(("P:T:D=%d:%d:%d\n",
+                                  Srb->PathId,
+                                  Srb->TargetId,
+                                  Srb->Lun));
+        KdPrint(("SCSI Command %2.2x\n", ScsiCommand));
+        KdDump(Cdb, 16);
+
+        if(ScsiCommand == SCSIOP_WRITE_CD) {
+            KdPrint(("Write10, LBA %2.2x%2.2x%2.2x%2.2x\n",
+                     Cdb->WRITE_CD.LBA[0],
+                     Cdb->WRITE_CD.LBA[1],
+                     Cdb->WRITE_CD.LBA[2],
+                     Cdb->WRITE_CD.LBA[3]
+                     ));
+        } else
+        if(ScsiCommand == SCSIOP_WRITE12) {
+            KdPrint(("Write12, LBA %2.2x%2.2x%2.2x%2.2x\n",
+                     Cdb->CDB12READWRITE.LBA[0],
+                     Cdb->CDB12READWRITE.LBA[1],
+                     Cdb->CDB12READWRITE.LBA[2],
+                     Cdb->CDB12READWRITE.LBA[3]
+                     ));
+        } else
+        if(ScsiCommand == SCSIOP_MODE_SELECT) {
+            KdPrint(("ModeSelect 6\n"));
+            PMODE_PARAMETER_HEADER ParamHdr = (PMODE_PARAMETER_HEADER)CdbData;
+            ModeSelectData = CdbData+4;
+            KdDump(CdbData, CdbDataLen);
+        } else
+        if(ScsiCommand == SCSIOP_MODE_SELECT10) {
+            KdPrint(("ModeSelect 10\n"));
+            PMODE_PARAMETER_HEADER ParamHdr = (PMODE_PARAMETER_HEADER)CdbData;
+            ModeSelectData = CdbData+8;
+            KdDump(CdbData, CdbDataLen);
+        } else {
+            if(Srb->SrbFlags & SRB_FLAGS_DATA_OUT) {
+                KdPrint(("Send buffer to device:\n"));
+                KdDump(CdbData, CdbDataLen);
+            }
+        }
+        KdPrint(("--\n"));
+    }
+#endif //UNIATA_DUMP_ATAPI
+
 
     if(CmdAction == CMD_ACTION_PREPARE) {
         KdPrint2((PRINT_PREFIX "AtapiSendCommand: CMD_ACTION_PREPARE\n"));
@@ -6311,9 +6424,57 @@ reject_srb:
             break;
 
         case SRB_FUNCTION_SHUTDOWN:
+
+            KdPrint2((PRINT_PREFIX "AtapiStartIo: Shutdown\n"));
+            if(!(deviceExtension->lun[ldev].DeviceFlags & DFLAGS_DEVICE_PRESENT)) {
+                goto reject_srb;
+            }
+            AtapiDisableInterrupts(deviceExtension, lChannel);
+            status = AtaCommand(deviceExtension, ldev & 1, GET_CHANNEL(Srb),
+                       IDE_COMMAND_FLUSH_CACHE, 0, 0, 0, 0, 0, ATA_WAIT_INTR);
+            if (status & IDE_STATUS_DRQ) {
+            } else {
+                status = SRB_STATUS_SELECTION_TIMEOUT;
+            }
+
+            // If supported & allowed, reset write cacheing
+            if(deviceExtension->lun[ldev].DeviceFlags & DFLAGS_WCACHE_ENABLED) {
+
+                // Disable write cache
+                status = AtaCommand(deviceExtension, ldev & 1, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    0, ATA_C_F_DIS_WCACHE, ATA_WAIT_BASE_READY);
+                // Check for errors.
+                if (status & IDE_STATUS_ERROR) {
+                    KdPrint2((PRINT_PREFIX 
+                                "AtapiHwInitialize: Disable write cacheing on Device %d failed\n",
+                                ldev));
+                }
+                deviceExtension->lun[ldev].DeviceFlags &= ~DFLAGS_WCACHE_ENABLED;
+
+                // Re-enable write cache
+                status = AtaCommand(deviceExtension, ldev & 1, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    0, ATA_C_F_ENAB_WCACHE, ATA_WAIT_BASE_READY);
+                // Check for errors.
+                if (status & IDE_STATUS_ERROR) {
+                    KdPrint2((PRINT_PREFIX 
+                                "AtapiHwInitialize: Enable write cacheing on Device %d failed\n",
+                                ldev));
+                    deviceExtension->lun[ldev].DeviceFlags &= ~DFLAGS_WCACHE_ENABLED;
+                } else {
+                    deviceExtension->lun[ldev].DeviceFlags |= DFLAGS_WCACHE_ENABLED;
+                }
+            }
+
+            AtapiEnableInterrupts(deviceExtension, lChannel);
+            status = SRB_STATUS_SUCCESS;
+
+            break;
+
         case SRB_FUNCTION_FLUSH:
 
-            KdPrint2((PRINT_PREFIX "AtapiStartIo: Shutdown/Flush (do nothing)\n"));
+            KdPrint2((PRINT_PREFIX "AtapiStartIo: Flush (do nothing)\n"));
             status = SRB_STATUS_SUCCESS;
             break;
 
@@ -6491,6 +6652,19 @@ reject_srb:
                 PUNIATA_CTL AtaCtl = (PUNIATA_CTL)(Srb->DataBuffer);
                 ULONG ldev = GET_LDEV2(AtaCtl->addr.PathId, AtaCtl->addr.TargetId, 0);
                 PHW_LU_EXTENSION lun = &(deviceExtension->lun[ldev]);
+                //chan = &(deviceExtension->chan[lChannel]);
+
+                if(AtaCtl->addr.Lun ||
+                   ldev >= deviceExtension->NumberChannels*2 ||
+                   AtaCtl->addr.PathId > deviceExtension->NumberChannels) {
+
+                    KdPrint2((PRINT_PREFIX 
+                               "AtapiStartIo: IOCTL SRB rejected\n"));
+                    // Indicate no device found at this address.
+                    KdPrint2((PRINT_PREFIX "SRB_STATUS_SELECTION_TIMEOUT\n"));
+                    status = SRB_STATUS_SELECTION_TIMEOUT;
+                    break;
+                }
 
                 KdPrint2((PRINT_PREFIX "AtapiStartIo: -UNIATA- %#x, ldev %#x\n", AtaCtl->hdr.ControlCode, ldev));
 
@@ -6576,6 +6750,17 @@ reject_srb:
                     AtaCtl->AdapterInfo.ChanInfoValid = FALSE;
 
                     RtlZeroMemory(&AtaCtl->AdapterInfo.Chan, sizeof(AtaCtl->AdapterInfo.Chan));
+
+                    status = SRB_STATUS_SUCCESS;
+                    break;
+                }
+                case IOCTL_SCSI_MINIPORT_UNIATA_RESET_DEVICE: {
+
+                    KdPrint2((PRINT_PREFIX "AtapiStartIo: Reset device\n"));
+
+                    AtapiSoftReset(&(deviceExtension->chan[AtaCtl->addr.PathId]),
+                                   deviceExtension->BaseIoAddress1[AtaCtl->addr.PathId], ldev & 1);
+                    lun->DeviceFlags |= DFLAGS_REINIT_DMA;  // force PIO/DMA reinit
 
                     status = SRB_STATUS_SUCCESS;
                     break;

@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=SCSIAdapter
 CatalogFile=uniata.cat
-DriverVer=18/12/2004,0.30.2.0
+DriverVer=31/01/2005,0.30.8.0
 
 ;
 ; Source file information
@@ -55,7 +55,7 @@ ExcludeFromSelect = *
 HKLM, system\currentcontrolset\services\pciide, "Start", %REG_DWORD%, 0x00000004
 
 [uniata_Inst]
-AddReg = RegUninstall,DISABLE_PCIIDE
+AddReg = DISABLE_PCIIDE
 CopyFiles = uniata_Inst.Miniport
 
 ;
@@ -101,6 +101,11 @@ ALTERWARE = "AlterWare"
 ;
 ; Non-Localizable Strings
 ;
+HDCClassName            = "IDE ATA/ATAPI controllers"
+SPSVCINST_ASSOCSERVICE = 0x00000002
+SERVICE_KERNEL_DRIVER  = 1
+SERVICE_BOOT_START     = 0
+SERVICE_ERROR_NORMAL   = 1
 
 REG_SZ         = 0x00000000
 REG_MULTI_SZ   = 0x00010000
