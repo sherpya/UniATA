@@ -166,7 +166,17 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_NVIDIA_ID		0x10de
 #define ATA_NFORCE1		0x01bc10de
 #define ATA_NFORCE2		0x006510de
+#define ATA_NFORCE2_MCP		0x008510de
 #define ATA_NFORCE3		0x00d510de
+#define ATA_NFORCE3_PRO		0x00e510de
+#define ATA_NFORCE3_PRO_S1	0x00e310de
+#define ATA_NFORCE3_PRO_S2	0x00ee10de
+#define ATA_NFORCE3_MCP		0x003510de
+#define ATA_NFORCE3_MCP_S1	0x003610de
+#define ATA_NFORCE3_MCP_S2	0x003e10de
+#define ATA_NFORCE4		0x005310de
+#define ATA_NFORCE4_S1		0x005410de
+#define ATA_NFORCE4_S2		0x005510de
 
 #define ATA_PROMISE_ID		0x105a
 #define ATA_PDC20246		0x4d33105a
@@ -340,6 +350,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define SIS33		8
 
 #define SIS_BASE        0x0100
+#define SIS_SOUTH       0x0200
 
 #define VIA33		0
 #define VIA66		1
@@ -414,7 +425,11 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
 
     PCI_DEV_HW_SPEC_BM( 01bc, 10de, 0x00, ATA_UDMA5, "nVidia nForce"    , AMDNVIDIA | AMDBUG                      ),
     PCI_DEV_HW_SPEC_BM( 0065, 10de, 0x00, ATA_UDMA6, "nVidia nForce2"   , AMDNVIDIA | AMDBUG                      ),
+    PCI_DEV_HW_SPEC_BM( 0085, 10de, 0x00, ATA_UDMA6, "nVidia nForce2 MCP",AMDNVIDIA                               ),
     PCI_DEV_HW_SPEC_BM( 00d5, 10de, 0x00, ATA_UDMA6, "nVidia nForce3"   , AMDNVIDIA                               ),
+    PCI_DEV_HW_SPEC_BM( 00e5, 10de, 0x00, ATA_UDMA6, "nVidia nForce3 Pro",AMDNVIDIA                               ),
+    PCI_DEV_HW_SPEC_BM( 0035, 10de, 0x00, ATA_UDMA6, "nVidia nForce3 MCP",AMDNVIDIA                               ),
+    PCI_DEV_HW_SPEC_BM( 0053, 10de, 0x00, ATA_UDMA6, "nVidia nForce4"   , AMDNVIDIA                               ),
 
     PCI_DEV_HW_SPEC_BM( 0502, 100b, 0x00, ATA_UDMA2, "National Geode SC1100", 0                                   ),
 

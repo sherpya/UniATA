@@ -45,14 +45,14 @@ building:
 Release/Debug version of UniATA without build_inf.exe
 -----------------------------------------------------
 
-nmake CFG="IdeDma - Win32 Release" NO_BUILD_INF=1
-nmake CFG="IdeDma - Win32 Debug" NO_BUILD_INF=1
+nmake CFG="UniATA - Win32 Release" NO_BUILD_INF=1
+nmake CFG="UniATA - Win32 Debug" NO_BUILD_INF=1
 
 Release/Debug version of UniATA with build_inf.exe
 --------------------------------------------------
 
-nmake CFG="IdeDma - Win32 Release"
-nmake CFG="IdeDma - Win32 Debug"
+nmake CFG="UniATA - Win32 Release"
+nmake CFG="UniATA - Win32 Debug"
 
 Build all and pack source tree to archive
 -----------------------------------------

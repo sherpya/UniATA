@@ -539,6 +539,15 @@ AtapiDmaInit(
             if(deviceExtension->lun[ldev].IdentifyData.SataCapabilities != 0x0000 &&
                deviceExtension->lun[ldev].IdentifyData.SataCapabilities != 0xffff) {
                 //udmamode = min(udmamode, 6);
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
+                                    IDE_COMMAND_SET_FEATURES, 0, 0, 0,
+                                    ATA_UDMA6,  ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                if (!(statusByte & IDE_STATUS_ERROR)) {
+                    deviceExtension->lun[ldev].TransferMode = ATA_UDMA6;
+                    return;
+                }
+                udmamode = min(udmamode, 5);
+
             } else {
                 udmamode = min(udmamode, 5);
             }
@@ -627,6 +636,7 @@ set_new_acard:
                 }
             }
         }
+        /* Use GENERIC PIO */
         break; }
     case ATA_ACER_LABS_ID: {
         /************************/
@@ -691,6 +701,7 @@ set_new_acard:
                 return;
             }
         }
+        return;
         break; }
     case ATA_AMD_ID:
     case ATA_NVIDIA_ID:
@@ -791,6 +802,7 @@ set_new_acard:
                   cyr_piotiming[apiomode]);
             return;
         }
+        return;
 
         break; }
     case ATA_NATIONAL_ID: {
@@ -837,7 +849,7 @@ set_new_acard:
             SetPciConfig4(0x40 + (dev * 8), nat_piotiming[i]);
             return;
         }
-
+        /* Use GENERIC PIO */
         break; }
     case ATA_CYPRESS_ID:
         /***********/
@@ -853,6 +865,8 @@ set_new_acard:
                 return;
             }
         }
+        /* Use GENERIC PIO */
+        break;
     case ATA_HIGHPOINT_ID: {
         /********************/
         /* High Point (HPT) */
@@ -1017,6 +1031,7 @@ set_new_acard:
         SetPciConfig4(0x40, (reg40 & ~mask40) | new40);
         SetPciConfig1(0x44, (reg44 & ~mask44) | new44);
 
+        return;
         break; }
     case ATA_PROMISE_ID:
         /***********/

@@ -6780,7 +6780,7 @@ AtapiRegCheckParameterValue(
     paramPath.Buffer = (PUSHORT)ExAllocatePool(NonPagedPool, paramPath.MaximumLength);
     if(!paramPath.Buffer) {
         KdPrint(("AtapiCheckRegValue: couldn't allocate paramPath\n"));
-        return FALSE;
+        return Default;
     }
 
     RtlZeroMemory(paramPath.Buffer, paramPath.MaximumLength);
