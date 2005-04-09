@@ -1033,12 +1033,17 @@ AtapiRemoveRequest(
 {
     if(!Srb)
         return;
+    if(!chan)
+        return;
 
     PATA_REQ AtaReq = (PATA_REQ)(Srb->SrbExtension);
     //PHW_DEVICE_EXTENSION deviceExtension = chan->DeviceExtension;
 
     ULONG cdev = GET_LDEV(Srb) & 1;
     PHW_LU_EXTENSION LunExt = chan->lun[cdev];
+
+    if(!LunExt)
+        return;
 
     ASSERT(chan->queue_depth ==
             (chan->lun[0]->queue_depth + chan->lun[1]->queue_depth));
@@ -1113,7 +1118,7 @@ AtapiGetCurRequest(
     )
 {
 //    if(!chan->lun[]->queue_depth) {
-    if(!chan->cur_req) {
+    if(!chan || !chan->cur_req) {
         return NULL;
     }
 
@@ -6444,6 +6449,10 @@ AtapiStartIo__(
            ldev >= deviceExtension->NumberChannels*2 ||
            lChannel >= deviceExtension->NumberChannels) {
 
+           if(lChannel >= deviceExtension->NumberChannels) {
+               chan = NULL;
+           }
+
 reject_srb:
             //if(!CheckDevice(HwDeviceExtension, lChannel, ldev & 1, FALSE)) {
                 KdPrint2((PRINT_PREFIX 
@@ -7064,6 +7073,9 @@ complete_req:
                     // we should do nothing here
                     Srb = NULL;
                 }
+            }
+            if(!chan) {
+                ASSERT(TopLevel);
             }
         }
 
