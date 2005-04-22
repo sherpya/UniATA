@@ -333,6 +333,12 @@ typedef struct _HW_CHANNEL {
 #define CTRFLAGS_LBA48                  0x0040
 #define CTRFLAGS_DSC_BSY                0x0080
 
+#define GEOM_AUTO                       0xffffffff
+#define GEOM_STD                        0x0000
+#define GEOM_UNIATA                     0x0001
+#define GEOM_ORIG                       0x0002
+#define GEOM_MANUAL                     0x0003
+
 // Logical unit extension
 typedef struct _HW_LU_EXTENSION {
     IDENTIFY_DATA2 IdentifyData;
@@ -365,6 +371,7 @@ typedef struct _HW_LU_EXTENSION {
     ULONG          LunSelectWaitCount;
 
     // tuning options
+    ULONG          opt_GeomType;
     ULONG          opt_MaxTransferMode;
     ULONG          opt_PreferedTransferMode;
     BOOLEAN        opt_ReadCacheEnable;

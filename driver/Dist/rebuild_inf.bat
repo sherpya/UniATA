@@ -7,7 +7,8 @@ srchrep -src ";DEVLIST" -dest "%%DeviceDesc%%"  uata_nt4.inf > nul
 srchrep -src ";DEVNAMELIST" -dest "DeviceDesc"  uata_nt4.inf > nul
 srchrep -src "%%EDITION%%" -dest " (Win NT4)"   uata_nt4.inf > nul
 srchrep -src "uata_2k.inf" -dest "uata_nt4.inf" uata_nt4.inf > nul
-srchrep -src "%%CLASSNAME%%" -dest "IDE ATA/ATAPI"   uata_nt4.inf > nul
+srchrep -src "%%CLASSNAME%%" -dest "IDE ATA/ATAPI"       uata_nt4.inf > nul
+srchrep -src "System Bus Extender" -dest "SCSI miniport" uata_nt4.inf > nul
 
 srchrep -src "%%EDITION%%" -dest " (Win 2000)"       uata_2k.inf  > nul
 copy uata_2k.inf uata_2kh.inf

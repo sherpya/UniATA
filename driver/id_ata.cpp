@@ -156,6 +156,12 @@ AtapiAdapterControl(
     IN PVOID Parameters
     );
 
+/*
+1) PsGetVersion
+2) InterlockedExchangeAdd
+3) InterlockedCompareExchange
+*/
+
 VOID
 AtapiWritePort4(
     IN PHW_CHANNEL chan,
@@ -990,7 +996,7 @@ AtapiQueueRequest(
 
         AtaReq1 = AtaReq;
         while(AtaReq1 = AtaReq1->next_req) {
-            ASSERT(AtaReq1->ttl);
+            //ASSERT(AtaReq1->ttl);
             AtaReq1->ttl--;
         }
 
@@ -1011,14 +1017,14 @@ AtapiQueueRequest(
     }
 
 #ifdef QUEUE_STATISTICS
-    ASSERT(LunExt->queue_depth);
+    //ASSERT(LunExt->queue_depth);
     chan->QueueStat[min(MAX_QUEUE_STAT, LunExt->queue_depth)-1]++;
 #endif //QUEUE_STATISTICS
-
+/*
     ASSERT(chan->queue_depth ==
             (chan->lun[0]->queue_depth + chan->lun[1]->queue_depth));
     ASSERT(!chan->queue_depth || chan->cur_req);
-
+*/
     return;
 } // end AtapiQueueRequest()
 
@@ -1044,11 +1050,11 @@ AtapiRemoveRequest(
 
     if(!LunExt)
         return;
-
+/*
     ASSERT(chan->queue_depth ==
             (chan->lun[0]->queue_depth + chan->lun[1]->queue_depth));
     ASSERT(!chan->queue_depth || chan->cur_req);
-
+*/
     // check if queue for the device is empty
     if(!LunExt->queue_depth)
         return;
@@ -1100,11 +1106,11 @@ AtapiRemoveRequest(
 
 //    chan->first_req->prev_req = NULL;
     AtaReq->ReqState = REQ_STATE_NONE;
-
+/*
     ASSERT(chan->queue_depth ==
             (chan->lun[0]->queue_depth + chan->lun[1]->queue_depth));
     ASSERT(!chan->queue_depth || chan->cur_req);
-
+*/
     return;
 } // end AtapiRemoveRequest()
 
@@ -1555,6 +1561,7 @@ IssueIdentify(
         ULONGLONG NumOfSectors=0;
         ULONGLONG NativeNumOfSectors=0;
         ULONGLONG cylinders=0;
+        ULONGLONG tmp_cylinders=0;
         // Read very-old-style drive geometry
         KdPrint2((PRINT_PREFIX "CHS %#x:%#x:%#x\n", 
                 deviceExtension->FullIdentifyData.NumberOfCylinders,
@@ -1718,30 +1725,71 @@ IssueIdentify(
                 }
             }
         }
+
         // fill IdentifyData with bogus geometry
-        while ((cylinders > 0xffff) && (deviceExtension->FullIdentifyData.SectorsPerTrack < 0x80)) {
-            cylinders /= 2;
-            KdPrint2((PRINT_PREFIX "cylinders /= 2\n"));
-            deviceExtension->FullIdentifyData.SectorsPerTrack *= 2;
-            deviceExtension->FullIdentifyData.CurrentSectorsPerTrack *= 2;
+        KdPrint2((PRINT_PREFIX "requested LunExt->GeomType=%x\n", LunExt->opt_GeomType));
+        tmp_cylinders = NumOfSectors / (deviceExtension->FullIdentifyData.CurrentSectorsPerTrack *
+                                        deviceExtension->FullIdentifyData.NumberOfCurrentHeads);
+        KdPrint2((PRINT_PREFIX "tmp_cylinders = %#I64x\n", tmp_cylinders));
+        if((tmp_cylinders < 0xffff) || (LunExt->opt_GeomType == GEOM_ORIG)) {
+            // ok, we can keep original values
+            if(LunExt->opt_GeomType == GEOM_AUTO) {
+                LunExt->opt_GeomType = GEOM_ORIG;
+            }
+        } else {
+            tmp_cylinders = NumOfSectors / (255*63);
+            if(tmp_cylinders < 0xffff) {
+                // we can use generic values for H/S for generic geometry approach
+                if(LunExt->opt_GeomType == GEOM_AUTO) {
+                    LunExt->opt_GeomType = GEOM_STD;
+                }
+            } else {
+                // we should use UNIATA geometry approach
+                if(LunExt->opt_GeomType == GEOM_AUTO) {
+                    LunExt->opt_GeomType = GEOM_UNIATA;
+                }
+            }
         }
-        while ((cylinders > 0xffff) && (deviceExtension->FullIdentifyData.NumberOfHeads < 0x80)) {
-            cylinders /= 2;
-            KdPrint2((PRINT_PREFIX "cylinders /= 2 (2)\n"));
-            deviceExtension->FullIdentifyData.NumberOfHeads *= 2;
-            deviceExtension->FullIdentifyData.NumberOfCurrentHeads *= 2;
-        }
-        while ((cylinders > 0xffff) && (deviceExtension->FullIdentifyData.SectorsPerTrack < 0x8000)) {
-            cylinders /= 2;
-            KdPrint2((PRINT_PREFIX "cylinders /= 2 (3)\n"));
-            deviceExtension->FullIdentifyData.SectorsPerTrack *= 2;
-            deviceExtension->FullIdentifyData.CurrentSectorsPerTrack *= 2;
-        }
-        while ((cylinders > 0xffff) && (deviceExtension->FullIdentifyData.NumberOfHeads < 0x8000)) {
-            cylinders /= 2;
-            KdPrint2((PRINT_PREFIX "cylinders /= 2 (4)\n"));
-            deviceExtension->FullIdentifyData.NumberOfHeads *= 2;
-            deviceExtension->FullIdentifyData.NumberOfCurrentHeads *= 2;
+        KdPrint2((PRINT_PREFIX "final LunExt->opt_GeomType=%x\n", LunExt->opt_GeomType));
+
+        if(LunExt->opt_GeomType == GEOM_STD) {
+            deviceExtension->FullIdentifyData.CurrentSectorsPerTrack =
+            deviceExtension->FullIdentifyData.SectorsPerTrack = 255;
+
+            deviceExtension->FullIdentifyData.NumberOfCurrentHeads =
+            deviceExtension->FullIdentifyData.NumberOfHeads   = 63;
+
+            cylinders = NumOfSectors / (255*63);
+            KdPrint2((PRINT_PREFIX "Use GEOM_STD, CHS=%x/%x/%x\n", cylinders, 255, 63));
+        } else
+        if(LunExt->opt_GeomType == GEOM_UNIATA) {
+            while ((cylinders > 0xffff) && (deviceExtension->FullIdentifyData.SectorsPerTrack < 0x80)) {
+                cylinders /= 2;
+                KdPrint2((PRINT_PREFIX "cylinders /= 2\n"));
+                deviceExtension->FullIdentifyData.SectorsPerTrack *= 2;
+                deviceExtension->FullIdentifyData.CurrentSectorsPerTrack *= 2;
+            }
+            while ((cylinders > 0xffff) && (deviceExtension->FullIdentifyData.NumberOfHeads < 0x80)) {
+                cylinders /= 2;
+                KdPrint2((PRINT_PREFIX "cylinders /= 2 (2)\n"));
+                deviceExtension->FullIdentifyData.NumberOfHeads *= 2;
+                deviceExtension->FullIdentifyData.NumberOfCurrentHeads *= 2;
+            }
+            while ((cylinders > 0xffff) && (deviceExtension->FullIdentifyData.SectorsPerTrack < 0x8000)) {
+                cylinders /= 2;
+                KdPrint2((PRINT_PREFIX "cylinders /= 2 (3)\n"));
+                deviceExtension->FullIdentifyData.SectorsPerTrack *= 2;
+                deviceExtension->FullIdentifyData.CurrentSectorsPerTrack *= 2;
+            }
+            while ((cylinders > 0xffff) && (deviceExtension->FullIdentifyData.NumberOfHeads < 0x8000)) {
+                cylinders /= 2;
+                KdPrint2((PRINT_PREFIX "cylinders /= 2 (4)\n"));
+                deviceExtension->FullIdentifyData.NumberOfHeads *= 2;
+                deviceExtension->FullIdentifyData.NumberOfCurrentHeads *= 2;
+            }
+            KdPrint2((PRINT_PREFIX "Use GEOM_UNIATA, CHS=%x/%x/%x\n", cylinders,
+                deviceExtension->FullIdentifyData.NumberOfCurrentHeads,
+                deviceExtension->FullIdentifyData.CurrentSectorsPerTrack));
         }
         deviceExtension->FullIdentifyData.NumberOfCurrentCylinders =
         deviceExtension->FullIdentifyData.NumberOfCylinders = (USHORT)cylinders;
@@ -3060,7 +3108,7 @@ ReturnEnableIntr:
         ScsiPortNotification(CallDisableInterrupts, HwDeviceExtension,
                              AtapiEnableInterrupts__);
     } else {
-        ASSERT(!deviceExtension->simplexOnly);
+        //ASSERT(!deviceExtension->simplexOnly);
     }
 
 ReturnCallback:
@@ -3075,7 +3123,7 @@ ReturnCallback:
         if((ULONG)InterlockedCompareExchange((PVOID*)&(chan->CheckIntr),
                                       (PVOID)CHECK_INTR_ACTIVE,
                                       (PVOID)CHECK_INTR_DETECTED) == CHECK_INTR_DETECTED) {
-            ASSERT(!deviceExtension->simplexOnly);
+            //ASSERT(!deviceExtension->simplexOnly);
             if(!AtapiInterrupt__(HwDeviceExtension, (UCHAR)c)) {
                 InterlockedExchange(&(chan->CheckIntr), CHECK_INTR_IDLE);
             }
@@ -3344,7 +3392,7 @@ AtapiEnableInterrupts__(
                                           (PVOID)CHECK_INTR_DETECTED) != CHECK_INTR_DETECTED) {
                 continue;
             }
-            ASSERT(!deviceExtension->simplexOnly);
+            //ASSERT(!deviceExtension->simplexOnly);
             if(!AtapiInterrupt__(HwDeviceExtension, (UCHAR)c)) {
                 InterlockedExchange(&(chan->CheckIntr), CHECK_INTR_IDLE);
             }
@@ -3441,6 +3489,8 @@ AtapiCheckInterrupt__(
     if(chan->ChannelCtrlFlags & CTRFLAGS_DMA_ACTIVE) {
         DmaTransfer = TRUE;
         KdPrint2((PRINT_PREFIX "  cntrlr %#x, lch %#x DmaTransfer = TRUE\n", deviceExtension->DevIndex, c));
+    } else {
+        KdPrint2((PRINT_PREFIX "  cntrlr %#x, lch %#x DmaTransfer = FALSE\n", deviceExtension->DevIndex, c));
     }
 
     lChannel = c;
@@ -3450,8 +3500,10 @@ AtapiCheckInterrupt__(
     baseIoAddress2 =    (PATAPI_REGISTERS_2)deviceExtension->BaseIoAddress2[lChannel];
 
     // do controller-specific interrupt servicing staff
-    if(deviceExtension->UnknownDev)
+    if(deviceExtension->UnknownDev) {
+        KdPrint2((PRINT_PREFIX "  UnknownDev\n"));
         goto check_unknown;
+    }
 
     switch(VendorID) {
     case ATA_INTEL_ID:
@@ -3471,6 +3523,7 @@ AtapiCheckInterrupt__(
                     KdPrint2((PRINT_PREFIX "  prevent ICH4 unexpected intr, base status %#x\n", statusByte));
                 }
             }
+            KdPrint2((PRINT_PREFIX "  intel unexpected\n"));
             return FALSE;
         }
         if(ChipFlags & ICH4_FIX) {
@@ -3485,8 +3538,10 @@ AtapiCheckInterrupt__(
         if (!DmaTransfer)
             break;
         if (((dma_status = GetDmaStatus(deviceExtension, lChannel)) &
-            (BM_STATUS_ACTIVE | BM_STATUS_INTR)) != BM_STATUS_INTR)
+            (BM_STATUS_ACTIVE | BM_STATUS_INTR)) != BM_STATUS_INTR) {
+            KdPrint2((PRINT_PREFIX "  HP unexpected\n"));
             return FALSE;
+        }
         //AtapiWritePort1(chan, &(deviceExtension->BaseIoAddressBM[lChannel]->Status), dma_status | BM_STATUS_INTR);
         AtapiWritePort1(chan, &(deviceExtension->BaseIoAddressBM[lChannel]->Status), dma_status & ~BM_STATUS_ERR);
         goto skip_dma_stat_check;
@@ -3499,16 +3554,20 @@ AtapiCheckInterrupt__(
             if (!DmaTransfer)
                 break;
             if (!(status & 
-                  ((Channel) ? 0x00004000 : 0x00000400)))
+                  ((Channel) ? 0x00004000 : 0x00000400))) {
+                KdPrint2((PRINT_PREFIX "  Promise old/new unexpected\n"));
                 return FALSE;
+            }
             break;
         case PRTX:
             AtapiWritePort1(chan, (PUCHAR)(&deviceExtension->BaseIoAddressBM[lChannel]->DeviceSpecific0), 0x0b);
             status = AtapiReadPort1(chan, (PUCHAR)(&deviceExtension->BaseIoAddressBM[lChannel]->DeviceSpecific1));
             if (!DmaTransfer)
                 break;
-            if(!(status & 0x20))
+            if(!(status & 0x20)) {
+                KdPrint2((PRINT_PREFIX "  Promise tx unexpected\n"));
                 return FALSE;
+            }
             break;
         case PRMIO:
             status = AtapiReadPort4(chan, (PULONG)(deviceExtension->BaseMemAddress)+0x0040);
@@ -3518,9 +3577,11 @@ AtapiCheckInterrupt__(
             }
             if(pr_status & (0x11 << Channel)) {
                 // TODO: reset channel
+                KdPrint2((PRINT_PREFIX "  Promise mio unexpected + reset req\n"));
                 return FALSE;
             }
             if(!(status & (0x01 << Channel))) {
+                KdPrint2((PRINT_PREFIX "  Promise mio unexpected\n"));
                 return FALSE;
             }
             AtapiWritePort4(chan, (PULONG)&(deviceExtension->BaseIoAddressBM[lChannel]->DeviceSpecific0), 0x00000001);
@@ -3533,12 +3594,15 @@ AtapiCheckInterrupt__(
             dma_status = AtapiReadPort1(chan,
                      &(deviceExtension->BaseIoAddressBM[lChannel]->DeviceSpecific0));
             if(!(dma_status & 0x08)) {
+                KdPrint2((PRINT_PREFIX "  Sii mio unexpected\n"));
                 return FALSE;
             }
             if (!DmaTransfer)
                 break;
-            if (!((dma_status = GetDmaStatus(deviceExtension, lChannel)) & BM_STATUS_INTR))
+            if (!((dma_status = GetDmaStatus(deviceExtension, lChannel)) & BM_STATUS_INTR)) {
+                KdPrint2((PRINT_PREFIX "  Sii mio unexpected (2)\n"));
                 return FALSE;
+            }
             AtapiWritePort1(chan, &(deviceExtension->BaseIoAddressBM[lChannel]->Status), dma_status & ~BM_STATUS_ERR);
             goto skip_dma_stat_check;
 
@@ -3563,8 +3627,10 @@ AtapiCheckInterrupt__(
         if (!DmaTransfer)
             break;
         dma_status = GetDmaStatus(deviceExtension, lChannel);
-        if (!((dma_status = GetDmaStatus(deviceExtension, lChannel)) & BM_STATUS_INTR))
+        if (!((dma_status = GetDmaStatus(deviceExtension, lChannel)) & BM_STATUS_INTR)) {
+            KdPrint2((PRINT_PREFIX "  Acard unexpected\n"));
             return FALSE;
+        }
         AtapiWritePort1(chan, &(deviceExtension->BaseIoAddressBM[lChannel]->Status), dma_status | BM_STATUS_INTR);
         AtapiStallExecution(1);
         AtapiWritePort1(chan, &(deviceExtension->BaseIoAddressBM[lChannel]->Command),
@@ -3572,6 +3638,7 @@ AtapiCheckInterrupt__(
         goto skip_dma_stat_check;
     }
 check_unknown:
+    KdPrint2((PRINT_PREFIX "  perform generic check\n"));
     if (DmaTransfer) {
         if (!((dma_status = GetDmaStatus(deviceExtension, lChannel)) & BM_STATUS_INTR)) {
             KdPrint2((PRINT_PREFIX "  DmaTransfer + !BM_STATUS_INTR\n"));
@@ -3584,6 +3651,7 @@ skip_dma_stat_check:
 
     /* if drive is busy it didn't interrupt */
     /* the exception is DCS + BSY state of ATAPI dvices */
+    KdPrint2((PRINT_PREFIX "  getting status...\n"));
     GetStatus(chan, baseIoAddress2, statusByte);
     KdPrint2((PRINT_PREFIX "  status %#x\n", statusByte));
     if (statusByte & IDE_STATUS_BUSY) {
@@ -3668,7 +3736,7 @@ skip_dma_stat_check:
             PSCSI_REQUEST_BLOCK srb = AtapiGetCurRequest(chan);
             PATA_REQ AtaReq = srb ? (PATA_REQ)(srb->SrbExtension) : NULL;
 
-            ASSERT(AtaReq);
+            //ASSERT(AtaReq);
 
             KdPrint2((PRINT_PREFIX "  set REQ_STATE_EARLY_INTR.\n"));
             if(AtaReq) {
@@ -3691,8 +3759,9 @@ skip_dma_stat_check:
         KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__: ATAPI int reason %x\n", interruptReason));
         return OurInterrupt;
     }
-    ASSERT(!chan->queue_depth || chan->cur_req);
+    //ASSERT(!chan->queue_depth || chan->cur_req);
 
+    KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__: exit with TRUE\n"));
     return TRUE;
 
 } // end AtapiCheckInterrupt__()
@@ -3737,7 +3806,7 @@ AtapiInterrupt__(
     KdPrint2((PRINT_PREFIX "AtapiInterrupt:\n"));
     if(InDpc) {
         KdPrint2((PRINT_PREFIX "  InDpc = TRUE\n"));
-        ASSERT((chan->ChannelCtrlFlags & CTRFLAGS_INTR_DISABLED));
+        //ASSERT((chan->ChannelCtrlFlags & CTRFLAGS_INTR_DISABLED));
     }
 
     UCHAR PathId;
@@ -4243,7 +4312,7 @@ IntrPrepareResetController:
         }
 
         if (DmaTransfer && (chan->ChannelCtrlFlags & CTRFLAGS_DMA_OPERATION)) {
-            ASSERT(AtaReq->WordsLeft == wordCount);
+            //ASSERT(AtaReq->WordsLeft == wordCount);
             AtaReq->WordsLeft = 0;
             status = SRB_STATUS_SUCCESS;
             chan->ChannelCtrlFlags &= ~CTRFLAGS_DMA_OPERATION;
@@ -4333,7 +4402,7 @@ IntrPrepareResetController:
         }
 
         if (DmaTransfer && (chan->ChannelCtrlFlags & CTRFLAGS_DMA_OPERATION)) {
-            ASSERT(AtaReq->WordsLeft == wordCount);
+            //ASSERT(AtaReq->WordsLeft == wordCount);
             AtaReq->WordsLeft = 0;
             status = SRB_STATUS_SUCCESS;
             chan->ChannelCtrlFlags &= ~CTRFLAGS_DMA_OPERATION;
@@ -5050,7 +5119,7 @@ IdeReadWrite(
         AtaReq->DataBuffer = (PUSHORT)Srb->DataBuffer;
 
         MOV_SWP_DW2DD(AtaReq->bcount, ((PCDB)Srb->Cdb)->CDB10.TransferBlocks);
-        ASSERT(Srb->DataTransferLength == AtaReq->bcount * DEV_BSIZE);
+        //ASSERT(Srb->DataTransferLength == AtaReq->bcount * DEV_BSIZE);
         AtaReq->WordsLeft = min(Srb->DataTransferLength,
                                 AtaReq->bcount * DEV_BSIZE) / 2;
 
@@ -6435,8 +6504,8 @@ AtapiStartIo__(
         chan = &(deviceExtension->chan[lChannel]);
         ldev = GET_LDEV(Srb);
 
-        ASSERT(deviceExtension);
-        ASSERT(chan);
+        //ASSERT(deviceExtension);
+        //ASSERT(chan);
 
         KdPrint2((PRINT_PREFIX 
                    "** AtapiStartIo: Function %#x, PATH:LUN:TID = %#x:%#x:%#x\n",
@@ -6481,7 +6550,7 @@ reject_srb:
             goto reject_srb;
         }
 #endif //_DEBUG
-        ASSERT(chan->lun[ldev & 1]);
+        //ASSERT(chan->lun[ldev & 1]);
 
         // Determine which function.
         switch (Srb->Function) {
@@ -6529,7 +6598,7 @@ reject_srb:
                 // Insert requests AFTER they have been initialized on
                 // CMD_ACTION_PREPARE stage
                 // we should not check TopLevel here (it is always TRUE)
-                ASSERT(chan->lun[GET_LDEV(Srb) & 1]);
+                //ASSERT(chan->lun[GET_LDEV(Srb) & 1]);
                 AtapiQueueRequest(chan, Srb);
 
                 KdPrint2((PRINT_PREFIX "AtapiStartIo: Already have %d request(s)!\n", chan->queue_depth));
@@ -6541,13 +6610,13 @@ reject_srb:
                     KdPrint2((PRINT_PREFIX "TopLevel (2), srb %#x\n", Srb));
                     AtaReq = (PATA_REQ)(Srb->SrbExtension);
                     KdPrint2((PRINT_PREFIX "TopLevel (3), AtaReq %#x\n", AtaReq));
-                    ASSERT(!AtaReq->Flags);
-                    ASSERT(chan->lun[GET_LDEV(Srb) & 1]);
+                    //ASSERT(!AtaReq->Flags);
+                    //ASSERT(chan->lun[GET_LDEV(Srb) & 1]);
                     AtapiQueueRequest(chan, Srb);
 //                    AtaReq = (PATA_REQ)(Srb->SrbExtension);
-                    ASSERT(!AtaReq->Flags);
+                    //ASSERT(!AtaReq->Flags);
                     AtaReq->ReqState = REQ_STATE_QUEUED;
-                    ASSERT(!AtaReq->Flags);
+                    //ASSERT(!AtaReq->Flags);
                 }
                 if (deviceExtension->lun[ldev].DeviceFlags & DFLAGS_ATAPI_DEVICE) {
                     KdPrint2((PRINT_PREFIX "Try ATAPI send\n"));
@@ -6755,7 +6824,7 @@ reject_srb:
 
             KdPrint2((PRINT_PREFIX "AtapiStartIo: SRB_FUNCTION_IO_CONTROL\n"));
             if(TopLevel) {
-                ASSERT(chan->lun[GET_LDEV(Srb) & 1]);
+                //ASSERT(chan->lun[GET_LDEV(Srb) & 1]);
                 AtapiQueueRequest(chan, Srb);
                 AtaReq = (PATA_REQ)(Srb->SrbExtension);
                 AtaReq->ReqState = REQ_STATE_QUEUED;
@@ -7075,7 +7144,7 @@ complete_req:
                 }
             }
             if(!chan) {
-                ASSERT(TopLevel);
+                //ASSERT(TopLevel);
             }
         }
 

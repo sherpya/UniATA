@@ -54,6 +54,7 @@ INTDIR=.\Debug
 OutDir=$(OUTDIR)
 BaseDir=$(BASEDIR)
 DistDir=$(OUTDIR)_Dist
+SymDir=$(OUTDIR)_sym
 # End Custom Macros
 
 TargetPath=$(OUTDIR)\IdeDma.sys
@@ -122,6 +123,7 @@ PKG : "BusMaster_v$(VER).rar"
 	rar a -s -mdD -m5 BusMaster_v$(VER).rar @pkg_files.dist
 	rar a -s -mdD -m5 BusMaster_v$(VER)_Dbg.rar Debug_Dist
 	rar a -s -mdD -m5 BusMaster_v$(VER)_src.rar @pkg_files.src
+	rar a -s -mdD -m5 BusMaster_v$(VER)_sym.rar Release_sym
 
 CLEAN :
 	-@erase $(LINK32_OBJS)
@@ -160,7 +162,7 @@ CPP_PROJ=/nologo /Gz /MT /W3 /GX /O2 $(DDKINC) /DNDEBUG /DWIN32 /D_WINDOWS /D_MB
 
 MTL_PROJ=/nologo /D "NDEBUG" /mktyplib203 /win32 
 	
-LINK32_FLAGS=$(BaseDir)\Lib\i386\Free\ntoskrnl.lib $(BaseDir)\Lib\i386\Free\int64.lib $(BaseDir)\Lib\i386\Free\Hal.lib $(BaseDir)\Lib\i386\Free\Ntdll.lib $(BaseDir)\Lib\i386\Free\ScsiPort.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /driver /subsystem:native 
+LINK32_FLAGS=$(BaseDir)\Lib\i386\Free\ntoskrnl.lib $(BaseDir)\Lib\i386\Free\int64.lib $(BaseDir)\Lib\i386\Free\Hal.lib $(BaseDir)\Lib\i386\Free\Ntdll.lib $(BaseDir)\Lib\i386\Free\ScsiPort.lib /nologo /entry:"DriverEntry" /incremental:no /debug /pdb:"$(OUTDIR)\IdeDma.pdb" /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /driver /pdbtype:sept /subsystem:native /opt:ref /opt:icf
 #LINK32_FLAGS=$(BaseDir)\Lib\i386\Free\ntoskrnl.lib $(BaseDir)\Lib\i386\Free\int64.lib $(BaseDir)\Lib\i386\Checked\Hal.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /driver /subsystem:native 
 
 !ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
@@ -199,6 +201,11 @@ LINK32_FLAGS=$(BaseDir)\Lib\i386\Checked\ntoskrnl.lib $(BaseDir)\Lib\i386\Checke
 	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDma.sys 
 	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDmb.sys 
 	copy $(TargetPath) $(DistDir)\uniata.sys
+!IF  "$(CFG)" == "UniATA - Win32 Release"
+	copy $(OutDir)\idedma.pdb  $(SymDir)\uniata.pdb
+!ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
+	copy $(OutDir)\idedma.pdb  $(DistDir)\uniata.pdb
+!ENDIF 
 	cd Dist
 	call rebuild_inf.bat $(VER)
 	cd ..

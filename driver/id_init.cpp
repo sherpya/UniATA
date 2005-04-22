@@ -819,6 +819,12 @@ UniAtaReadLunConfig(
     tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, ldev, L"PreferedTransferMode", 0xffffffff);
     LunExt->opt_PreferedTransferMode = tmp32;
 
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, ldev, L"GeomType", 0xffffffff);
+    if(tmp32 > 2) {
+        tmp32 = 0xffffffff;
+    }
+    LunExt->opt_GeomType = tmp32;
+
     return;
 } // end UniAtaReadLunConfig()
 
