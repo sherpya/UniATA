@@ -1,6 +1,7 @@
 # UniATA Dependency File, included by idedma.mak
 
 .\id_ata.cpp : \
+	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
 	".\bm_devs.h"\
@@ -9,8 +10,10 @@
 	".\srb.h"\
 	".\uata_ctl.h"\
 	".\bsmaster.h"\
+	".\uniata_ver.h"\
 	
 .\id_dma.cpp : \
+	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
 	".\bm_devs.h"\
@@ -21,6 +24,7 @@
 	".\bsmaster.h"\
 	
 .\id_init.cpp : \
+	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
 	".\bm_devs.h"\
@@ -31,6 +35,7 @@
 	".\bsmaster.h"\
 	
 .\id_probe.cpp : \
+	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
 	".\bm_devs.h"\

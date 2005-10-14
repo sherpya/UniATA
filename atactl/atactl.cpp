@@ -1,4 +1,5 @@
 #include <windows.h>
+#include <WinIoCtl.h>
 #include <stdio.h>
 //#include <ntdddisk.h>
 #include <ntddscsi.h>
@@ -6,6 +7,7 @@
 #include "..\driver\bm_devs.h"
 #include "..\driver\uata_ctl.h"
 #include "..\driver\tools.h"
+#include "..\driver\uniata_ver.h"
 
 #define DEFAULT_REMOVAL_LOCK_TIMEOUT 20
 
@@ -131,22 +133,37 @@ ata_send_ioctl(
     ULONG status;
     PUNIATA_CTL AtaCtl;
     ULONG data_len = max(inBufferLength, outBufferLength);
-    ULONG len = data_len + offsetof(UNIATA_CTL, RawData);
+    ULONG len;
 
+    if(addr) {
+        len = data_len + offsetof(UNIATA_CTL, RawData);
+    } else {
+        len = data_len + sizeof(AtaCtl->hdr);
+    }
     AtaCtl = (PUNIATA_CTL)GlobalAlloc(GMEM_FIXED, len);
     AtaCtl->hdr.HeaderLength = sizeof(SRB_IO_CONTROL);
-    AtaCtl->hdr.Length = data_len + offsetof(UNIATA_CTL, RawData) - sizeof(AtaCtl->hdr);
+    if(addr) {
+        AtaCtl->hdr.Length = data_len + offsetof(UNIATA_CTL, RawData) - sizeof(AtaCtl->hdr);
+    } else {
+        AtaCtl->hdr.Length = data_len;
+    }
 
-    memcpy(&AtaCtl->hdr.Signature, "-UNIATA-", 8);
+    memcpy(&AtaCtl->hdr.Signature, Signature, 8);
 
     AtaCtl->hdr.Timeout = 10000;
     AtaCtl->hdr.ControlCode = Ioctl;
     
-    AtaCtl->addr = *addr;
-    AtaCtl->addr.Length = sizeof(AtaCtl->addr);
+    if(addr) {
+        AtaCtl->addr = *addr;
+        AtaCtl->addr.Length = sizeof(AtaCtl->addr);
+    }
 
     if(inBuffer && inBufferLength) {
-        memcpy(&AtaCtl->RawData, inBuffer, inBufferLength);
+        if(addr) {
+            memcpy(&AtaCtl->RawData, inBuffer, inBufferLength);
+        } else {
+            memcpy(&AtaCtl->addr, inBuffer, inBufferLength);
+        }
     }
 
     status = DeviceIoControl(h,
@@ -159,7 +176,11 @@ ata_send_ioctl(
                              FALSE);
 
     if(outBuffer && outBufferLength) {
-        memcpy(outBuffer, &AtaCtl->RawData, outBufferLength);
+        if(addr) {
+            memcpy(outBuffer, &AtaCtl->RawData, outBufferLength);
+        } else {
+            memcpy(outBuffer, &AtaCtl->addr, outBufferLength);
+        }
     }
     GlobalFree(AtaCtl);
 
@@ -172,6 +193,64 @@ ata_send_ioctl(
 
 IO_SCSI_CAPABILITIES g_capabilities;
 UCHAR g_inquiry_buffer[2048];
+
+int
+ata_cur_mode_from_ident(
+    PIDENTIFY_DATA ident
+    )
+{
+    if(ident->SataEnable && ident->SataEnable != 0xffff) {
+        return ATA_SA150;
+    }
+
+    if (ident->UdmaModesValid) {
+        if (ident->UltraDMAActive & 0x40)
+            return ATA_UDMA0+6;
+        if (ident->UltraDMAActive & 0x20)
+            return ATA_UDMA0+5;
+        if (ident->UltraDMAActive & 0x10)
+            return ATA_UDMA0+4;
+        if (ident->UltraDMAActive & 0x08)
+            return ATA_UDMA0+3;
+        if (ident->UltraDMAActive & 0x04)
+            return ATA_UDMA0+2;
+        if (ident->UltraDMAActive & 0x02)
+            return ATA_UDMA0+1;
+        if (ident->UltraDMAActive & 0x01)
+            return ATA_UDMA0+0;
+    }
+
+    if (ident->MultiWordDMAActive & 0x04)
+        return ATA_WDMA0+2;
+    if (ident->MultiWordDMAActive & 0x02)
+        return ATA_WDMA0+1;
+    if (ident->MultiWordDMAActive & 0x01)
+        return ATA_WDMA0+0;
+
+    if (ident->SingleWordDMAActive & 0x04)
+        return ATA_SDMA0+2;
+    if (ident->SingleWordDMAActive & 0x02)
+        return ATA_SDMA0+1;
+    if (ident->SingleWordDMAActive & 0x01)
+        return ATA_SDMA0+0;
+
+    if (ident->PioTimingsValid) {
+        if (ident->AdvancedPIOModes & AdvancedPIOModes_5)
+            return ATA_PIO0+5;
+        if (ident->AdvancedPIOModes & AdvancedPIOModes_4)
+            return ATA_PIO0+4;
+        if (ident->AdvancedPIOModes & AdvancedPIOModes_3) 
+            return ATA_PIO0+3;
+    }        
+    if (ident->PioCycleTimingMode == 2)
+        return ATA_PIO0+2;
+    if (ident->PioCycleTimingMode == 1)
+        return ATA_PIO0+1;
+    if (ident->PioCycleTimingMode == 0)
+        return ATA_PIO0+0;
+
+    return ATA_PIO;
+} // end ata_cur_mode_from_ident()
 
 void
 ata_mode_to_str(
@@ -298,12 +377,18 @@ ata_check_unit(
     ULONG i;
     int l_dev_id;
     GETTRANSFERMODE IoMode;
+    PSENDCMDOUTPARAMS pout;
+    PIDENTIFY_DATA   ident;
+    char buff[sizeof(SENDCMDOUTPARAMS)+sizeof(IDENTIFY_DATA)];
     char mode_str[12];
     ULONG bus_id = (dev_id >> 24) & 0xff;
 
     if(dev_id != -1) {
         dev_id &= 0x00ffffff;
     }
+
+    pout = (PSENDCMDOUTPARAMS)buff;
+    ident = (PIDENTIFY_DATA)&(pout->bBuffer);
 
     status = DeviceIoControl(h,
                              IOCTL_SCSI_GET_INQUIRY_DATA,
@@ -362,8 +447,25 @@ ata_check_unit(
                                         &IoMode, sizeof(IoMode),
                                         &returned);
                 if(status) {
-                    ata_mode_to_str(mode_str, IoMode.CurrentMode);
+                    ata_mode_to_str(mode_str, max(IoMode.CurrentMode, IoMode.MaxMode));
                     printf(" %.12s ", mode_str);
+                } else {
+                    SENDCMDINPARAMS pin;
+
+                    memset(&pin, 0, sizeof(pin));
+                    memset(buff, 0, sizeof(buff));
+                    pin.irDriveRegs.bCommandReg = ID_CMD;
+                    pin.bDriveNumber = inquiryData->TargetId;
+
+                    status = ata_send_ioctl(h, NULL, "SCSIDISK",
+                                            IOCTL_SCSI_MINIPORT_IDENTIFY,
+                                            &pin, sizeof(pin),
+                                            buff, sizeof(buff),
+                                            &returned);
+                    if(status) {
+                        ata_mode_to_str(mode_str, ata_cur_mode_from_ident(ident));
+                        printf(" %.12s ", mode_str);
+                    }
                 }
                 printf("\n");
             }
@@ -532,7 +634,8 @@ main (
     int mode=-1;
 
     printf("Console ATA control utility for Windows NT/2000/XP with UniATA installed\n"
-           "Copyright (c) Alexander A. Telyatnikov, 2003-2005\n");
+           "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2005\n"
+           "Home site: http://alter.org.ua\n");
 
     for(i=1; i<argc; i++) {
         if(!argv[i])

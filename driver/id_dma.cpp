@@ -161,12 +161,20 @@ AtapiDmaSetup(
     PATA_REQ AtaReq = (PATA_REQ)(Srb->SrbExtension);
 
     KdPrint2((PRINT_PREFIX "AtapiDmaSetup: mode %#x\n", deviceExtension->lun[lChannel*2+DeviceNumber].TransferMode ));
+    if(deviceExtension->lun[lChannel*2+DeviceNumber].TransferMode < ATA_DMA) {
+        KdPrint2((PRINT_PREFIX "AtapiDmaSetup: Not DMA mode, assume this is just preparation\n" ));
+        //return FALSE;
+    }
     if(!count) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: count=0\n" ));
         return FALSE;
     }
     if(count > deviceExtension->MaximumDmaTransferLength) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: deviceExtension->MaximumDmaTransferLength > count\n" ));
+        return FALSE;
+    }
+    if((ULONG)data & deviceExtension->AlignmentMask) {
+        KdPrint2((PRINT_PREFIX "AtapiDmaSetup: unaligned data: %#x (%#x)\n", data, deviceExtension->AlignmentMask));
         return FALSE;
     }
 
@@ -180,6 +188,7 @@ AtapiDmaSetup(
 
     dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, Srb, data, &dma_count);
     if(!dma_count || ((LONG)(dma_base) == -1)) {
+        AtaReq->dma_base = NULL;
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: No 1st block\n" ));
         return FALSE;
     }
@@ -193,11 +202,13 @@ AtapiDmaSetup(
         AtaReq->dma_tab[i].count = (dma_count & 0xffff);
         i++; 
         if (i >= ATA_DMA_ENTRIES) {
+            AtaReq->dma_base = NULL;
             KdPrint2((PRINT_PREFIX "too many segments in DMA table\n" ));
             return FALSE;
         }
         dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, Srb, data, &dma_count);
         if(!dma_count || ((LONG)(dma_base) == -1)) {
+            AtaReq->dma_base = NULL;
             KdPrint2((PRINT_PREFIX "AtapiDmaSetup: No NEXT block\n" ));
             return FALSE;
         }
@@ -299,6 +310,11 @@ AtapiDmaStart(
     KdPrint2((PRINT_PREFIX "AtapiDmaStart: %s on %#x:%#x\n", 
         (Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? "read" : "write",
         lChannel, DeviceNumber ));
+
+    if(!AtaReq->dma_base) {
+        KdPrint2((PRINT_PREFIX "AtapiDmaStart: *** !AtaReq->dma_base\n"));
+        return;
+    }
 
     // set flag
     chan->ChannelCtrlFlags |= CTRFLAGS_DMA_ACTIVE;
@@ -421,6 +437,17 @@ AtapiDmaReinit(
 {
     PHW_LU_EXTENSION LunExt = &(deviceExtension->lun[ldev]);
 
+    if(!(AtaReq->Flags & REQ_FLAG_DMA_OPERATION)) {
+        KdPrint2((PRINT_PREFIX 
+                    "AtapiDmaReinit: !(AtaReq->Flags & REQ_FLAG_DMA_OPERATION), fall to PIO on Device %d\n", ldev & 1));
+        goto limit_pio;
+    }
+    if(!AtaReq->dma_base) {
+        KdPrint2((PRINT_PREFIX 
+                    "AtapiDmaReinit: no PRD, fall to PIO on Device %d\n", ldev & 1));
+        goto limit_pio;
+    }
+
     if((deviceExtension->HbaCtrlFlags & HBAFLAGS_DMA_DISABLED_LBA48) &&
        (AtaReq->lba >= ATA_MAX_LBA28) &&
        (LunExt->TransferMode > ATA_PIO5) ) {
@@ -436,10 +463,14 @@ AtapiDmaReinit(
         if(AtaReq->lba >= ATA_MAX_LBA28) {
 limit_lba48:
             LunExt->DeviceFlags |= REQ_FLAG_FORCE_DOWNRATE_LBA48;
-            AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
-                         (CHAR)AtaPioMode(&(LunExt->IdentifyData)), 
-                         -1,
-                         -1 );
+limit_pio:
+            // do not make extra work if we already use PIO
+            if(LunExt->TransferMode >= ATA_DMA) {
+                AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
+                             (CHAR)AtaPioMode(&(LunExt->IdentifyData)), 
+                             -1,
+                             -1 );
+            }
         } else {
             AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
                          (CHAR)AtaPioMode(&(LunExt->IdentifyData)), 
@@ -530,7 +561,7 @@ AtapiDmaInit(
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     ULONG Channel = deviceExtension->Channel + lChannel;
     PHW_CHANNEL chan = &deviceExtension->chan[lChannel];
-    LONG statusByte = 0;
+    //LONG statusByte = 0;
     ULONG dev = Channel*2 + DeviceNumber;
     ULONG ldev = lChannel*2 + DeviceNumber;
     ULONG slotNumber = deviceExtension->slotNumber;
@@ -539,12 +570,12 @@ AtapiDmaInit(
     PHW_LU_EXTENSION LunExt = &(deviceExtension->lun[ldev]);
 
     ULONG VendorID  =  deviceExtension->DevID        & 0xffff;
-    ULONG DeviceID  = (deviceExtension->DevID >> 16) & 0xffff;
-    ULONG RevID     =  deviceExtension->RevID;
+    //ULONG DeviceID  = (deviceExtension->DevID >> 16) & 0xffff;
+    //ULONG RevID     =  deviceExtension->RevID;
     ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
     ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
 
-    UCHAR *reg_val = NULL;
+    //UCHAR *reg_val = NULL;
 
     LunExt->DeviceFlags &= ~DFLAGS_REINIT_DMA;
     /* set our most pessimistic default mode */
@@ -758,7 +789,7 @@ set_new_acard:
             { 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0, 0x00 },        /* ATA100 */
             { 0xf7, 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0 },        /* VIA ATA133 */
             { 0xc2, 0xc1, 0xc0, 0xc4, 0xc5, 0xc6, 0xc7 }};       /* AMD/nVIDIA */
-        static const via_pio[] =
+			static const UCHAR via_pio[] =
             { 0xa8, 0x65, 0x42, 0x22, 0x20, 0x42, 0x22, 0x20,
               0x20, 0x20, 0x20, 0x20, 0x20, 0x20 };
         const UCHAR *reg_val = NULL;
@@ -1518,7 +1549,7 @@ promise_timing(
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
 
     ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
-    ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
+    //ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
 
     ULONG timing = 0;
 
@@ -1581,7 +1612,7 @@ hpt_timing(
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
 
     ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
-    ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
+    //ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
 
     ULONG timing;
 
@@ -1606,7 +1637,7 @@ hpt_timing(
         case ATA_UDMA3: timing = 0x128c8242; break;
         case ATA_UDMA4: timing = 0x12ac8242; break;
         case ATA_UDMA5: timing = 0x12848242; break;
-        case ATA_UDMA6: timing = 0x12448242; break;
+        case ATA_UDMA6: timing = 0x12808242; break;
         default:        timing = 0x0d029d5e;
         }
         break;
@@ -1622,13 +1653,13 @@ hpt_timing(
         case ATA_WDMA0: timing = 0x2c82922e; break;
         case ATA_WDMA1: timing = 0x2c829266; break;
         case ATA_WDMA2: timing = 0x2c829262; break;
-        case ATA_UDMA0: timing = 0x1c82dc62; break;
-        case ATA_UDMA1: timing = 0x1c9adc62; break;
-        case ATA_UDMA2: timing = 0x1c91dc62; break;
-        case ATA_UDMA3: timing = 0x1c8edc62; break;
-        case ATA_UDMA4: timing = 0x1c8ddc62; break;
-        case ATA_UDMA5: timing = 0x1c6ddc62; break;
-        case ATA_UDMA6: timing = 0x1c81dc62; break;
+        case ATA_UDMA0: timing = 0x1c829c62; break;
+        case ATA_UDMA1: timing = 0x1c9a9c62; break;
+        case ATA_UDMA2: timing = 0x1c929c62; break;
+        case ATA_UDMA3: timing = 0x1c8e9c62; break;
+        case ATA_UDMA4: timing = 0x1c8a9c62; break;
+        case ATA_UDMA5: timing = 0x1c8a9c62; break;
+        case ATA_UDMA6: timing = 0x1c869c62; break;
         default:        timing = 0x0d029d5e;
         }
         break;
@@ -1652,12 +1683,12 @@ hpt_timing(
         case ATA_UDMA5: timing = 0x16454e31; break;
         default:        timing = 0x06514e57;
         }
-
+        
     case HPT366: {
         UCHAR reg41;
-
+        
         GetPciConfig1(0x41 + (dev << 2), reg41);
-
+        
         switch (reg41) {
         case 0x85:        /* 25Mhz */
             switch (mode) {

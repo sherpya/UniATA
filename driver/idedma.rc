@@ -1,9 +1,10 @@
 #include <windows.h>
 
 #include <ntverp.h>
+#include "uniata_ver.h"
 
 #undef  VERSION
-#define VERSION                     "0.%VER%"
+#define VERSION                     "0." UNIATA_VER_STR
 #define VER_FILETYPE                VFT_DRV
 #define VER_FILESUBTYPE             VFT2_DRV_SYSTEM
 #undef  VER_COMPANYNAME_STR

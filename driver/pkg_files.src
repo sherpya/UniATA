@@ -5,6 +5,7 @@
 ..\driver\bm_devs.h
 ..\driver\bsmaster.h
 ..\driver\build.mak
+..\driver\config.h
 ..\driver\id_ata.cpp
 ..\driver\id_dma.cpp
 ..\driver\id_init.cpp
@@ -13,7 +14,9 @@
 ..\driver\idedma.dep
 ..\driver\idedma.mak
 ..\driver\idedma.rc
-..\driver\idedma.rc_
+..\driver\idedma.rc
+..\driver\uniata_ver.h
+..\driver\uniata_ver.h_
 ..\driver\idedma.reg
 ..\driver\idedmb.reg
 ..\driver\*.BAT

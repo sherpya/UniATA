@@ -48,16 +48,14 @@ Revision History:
 extern "C" {
 #endif //__cplusplus
 
+#include "config.h"
+
 #include "scsi.h"
 #include "stdio.h"
 #include "string.h"
 
-// IDE register definition
-
 #ifdef _DEBUG
 
-//#define USE_DBGPRINT_LOGGER
-//#define SCSI_PORT_DBG_PRINT
 
 #ifndef _DBGNT_
 
@@ -77,6 +75,7 @@ extern "C" {
 
 SCSIPORT_API
 VOID
+DDKCDECLAPI
 ScsiDebugPrint(
     ULONG DebugPrintLevel,
     PCCHAR DebugMessage,
@@ -103,7 +102,7 @@ DbgPrint(
 
 // Note, that using DbgPrint on raised IRQL will crash w2k
 // tis will not happen immediately, so we shall see some logs
-#define LOG_ON_RAISED_IRQL_W2K    TRUE
+//#define LOG_ON_RAISED_IRQL_W2K    TRUE
 //#define LOG_ON_RAISED_IRQL_W2K    FALSE
 
 #define KdPrint2(_x_) {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; if(g_LogToDisplay){ PrintNtConsole _x_ ;} }}
@@ -141,6 +140,8 @@ DbgPrint(
 #define AtapiStallExecution(dt)  ScsiPortStallExecution(dt)
 
 #endif // _DEBUG
+
+// IDE register definition
 
 #pragma pack(push, 1)
 
@@ -276,7 +277,9 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_COMMAND_READ_DMA         0xC8
 #define IDE_COMMAND_WRITE_DMA        0xCA
 #define IDE_COMMAND_WRITE_DMA_Q      0xCC
-#define IDE_COMMAND_GET_MEDIA_STATUS      0xDA
+#define IDE_COMMAND_GET_MEDIA_STATUS 0xDA
+#define IDE_COMMAND_DOOR_LOCK        0xDE
+#define IDE_COMMAND_DOOR_UNLOCK      0xDF
 #define IDE_COMMAND_STANDBY_IMMED    0xE0 // flush and spin down
 #define IDE_COMMAND_STANDBY          0xE2 // flush and spin down and enable autopowerdown timer
 #define IDE_COMMAND_SLEEP            0xE6 // flush, spin down and deactivate interface
@@ -289,6 +292,8 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
                                                  IDE_COMMAND_ENABLE_MEDIA_STATUS */
 #define IDE_COMMAND_READ_NATIVE_SIZE 0xF8
 #define IDE_COMMAND_SET_NATIVE_SIZE  0xF9
+
+#define SCSIOP_ATA_PASSTHROUGH       0xCC // 
 
 //
 // IDE status definitions
@@ -776,49 +781,49 @@ NATIVE_MODE_CONTROLLER_INFORMATION const NativeModeAdapters[] = {
                               Count);
 
 UCHAR
-__fastcall
+DDKFASTAPI
 WaitOnBusy(
     IN struct _HW_CHANNEL*   chan,
     PIDE_REGISTERS_2 BaseIoAddress
     );
 
 UCHAR
-__fastcall
+DDKFASTAPI
 WaitOnBusyLong(
     IN struct _HW_CHANNEL*   chan,
     PIDE_REGISTERS_2 BaseIoAddress
     );
 
 UCHAR
-__fastcall
+DDKFASTAPI
 WaitOnBaseBusy(
     IN struct _HW_CHANNEL*   chan,
     PIDE_REGISTERS_1 BaseIoAddress
     );
 
 UCHAR
-__fastcall
+DDKFASTAPI
 WaitOnBaseBusyLong(
     IN struct _HW_CHANNEL*   chan,
     PIDE_REGISTERS_1 BaseIoAddress
     );
 
 UCHAR
-__fastcall
+DDKFASTAPI
 WaitForDrq(
     IN struct _HW_CHANNEL*   chan,
     PIDE_REGISTERS_2 BaseIoAddress
     );
 
 UCHAR
-__fastcall
+DDKFASTAPI
 WaitShortForDrq(
     IN struct _HW_CHANNEL*   chan,
     PIDE_REGISTERS_2 BaseIoAddress
     );
 
 VOID
-__fastcall
+DDKFASTAPI
 AtapiSoftReset(
     IN struct _HW_CHANNEL*   chan,
     PIDE_REGISTERS_1 BaseIoAddress,
@@ -934,7 +939,7 @@ IdeMediaStatus(
     IN UCHAR Channel
     );
 
-ULONG
+ULONG DDKAPI
 AtapiFindController(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -1073,6 +1078,9 @@ AtapiDisableInterrupts(
     IN PVOID HwDeviceExtension,
     IN ULONG c
     );
+
+#define CHAN_NOT_SPECIFIED      (0xffffffffL)
+#define DEVNUM_NOT_SPECIFIED    (0xffffffffL)
 
 extern ULONG
 AtapiRegCheckDevValue(

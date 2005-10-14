@@ -91,7 +91,7 @@ typedef struct _FOUR_BYTE {
 }
 #define DEC_TO_BCD(x) (((x / 10) << 4) + (x % 10))
 
-#ifdef _X86_
+#if defined _X86_ && !defined(__GNUC__)
 
 #define MOV_DD_SWP(a,b)           \
 {                                 \
@@ -374,7 +374,7 @@ if ( Irp->AssociatedIrp.SystemBuffer == NULL ){                                 
     goto CdRwSpecDevCtrlCompleteRequest;                                \
 }
 
-#define WAIT_FOR_XXX_EMU_DELAY  5000000I64        //  0.5 s
+#define WAIT_FOR_XXX_EMU_DELAY  DEF_I64(5000000)        //  0.5 s
 
 // neat little hacks to count number of bits set efficiently
 __inline ULONG CountOfSetBitsUChar(UCHAR _X)
@@ -399,6 +399,7 @@ extern UNICODE_STRING SavedSPString;
 #endif //USER_MODE
 
 
+#define WinVer_Is351  (MajorVersion==0x03)
 #define WinVer_IsNT   (MajorVersion==0x04)
 #define WinVer_Is2k   (MajorVersion==0x05 && MinorVersion==0x00)
 #define WinVer_IsXP   (MajorVersion==0x05 && MinorVersion==0x01)
@@ -406,6 +407,7 @@ extern UNICODE_STRING SavedSPString;
 
 #define WinVer_Id()   ((MajorVersion << 8) | MinorVersion)
 
+#define WinVer_351    (0x0351)
 #define WinVer_NT     (0x0400)
 #define WinVer_2k     (0x0500)
 #define WinVer_XP     (0x0501)

@@ -240,12 +240,18 @@ SRC=id_probe
 
 SRC=idedma
 
-"$(SRC).rc" : "$(SRC).rc_"
-    copy "$(SRC).rc_" "$(SRC).rc"
+"uniata_ver.h_.lk" :
+    echo "." > "uniata_ver.h_.lk"
 
-"$(INTDIR)\$(SRC).res" : "$(SRC).rc" "$(INTDIR)"
+"uniata_ver.h_" : "uniata_ver.h_.lk"
+    del "uniata_ver.h_.lk"
+
+"uniata_ver.h" : "uniata_ver.h_"
+    copy "uniata_ver.h_" "uniata_ver.h"
+    srchrep.exe -src "**VER**" -dest "$(VER)" "uniata_ver.h"
+
+"$(INTDIR)\$(SRC).res" : "$(SRC).rc" "$(INTDIR)" "uniata_ver.h"
     -@erase ".\$(SRC).res"
-    srchrep.exe -src "%%VER%%" -dest "$(VER)" "$(SRC).rc"
     $(RSC) $(RSC_PROJ) "$(SRC).rc"
     -@erase "$(INTDIR)\$(SRC).res"
     -@move "$(SRC).res" "$(INTDIR)\$(SRC).res"

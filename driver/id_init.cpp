@@ -80,13 +80,13 @@ AtapiChipDetect(
 
     i = Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[0], VendorID, 0xffff, 0, NUM_BUSMASTER_ADAPTERS);
 
-    c = AtapiRegCheckDevValue(deviceExtension, -1, -1, L"ForceSimplex", 0);
+    c = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"ForceSimplex", 0);
     if(c) {
         *simplexOnly = TRUE; 
     }
 
     KdPrint2((PRINT_PREFIX "i: %#x\n", i));
-    if(i != -1) {
+    if(i != BMLIST_TERMINATOR) {
         DevTypeInfo = (PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[i];
     } else {
         DevTypeInfo = NULL;
@@ -260,7 +260,7 @@ AtapiChipDetect(
         PCI_DEV_HW_SPEC_BM( 5513, 1039, 0xc2, ATA_UDMA2, "SiS 5513" , SIS33 | SIS_BASE ),
         PCI_DEV_HW_SPEC_BM( 5513, 1039, 0x00, ATA_WDMA2, "SiS 5513" , SIS33 | SIS_BASE ),
         PCI_DEV_HW_SPEC_BM( 0601, 1039, 0x00, ATA_UDMA2, "SiS 5513" , SIS33 | SIS_BASE ),
-        PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL       , -1 )
+        PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, BMLIST_TERMINATOR       , NULL       , BMLIST_TERMINATOR )
         };
 
     static BUSMASTER_CONTROLLER_INFORMATION const ViaAdapters[] = {
@@ -279,7 +279,7 @@ AtapiChipDetect(
         PCI_DEV_HW_SPEC_BM( 3147, 1106, 0x00, ATA_UDMA6, "VIA 8233A"  , VIA133 | VIAAST ),
         PCI_DEV_HW_SPEC_BM( 3177, 1106, 0x00, ATA_UDMA6, "VIA 8235"   , VIA133 | VIAAST ),
         PCI_DEV_HW_SPEC_BM( 3227, 1106, 0x00, ATA_UDMA6, "VIA 8237"   , VIA133 | VIAAST ),
-        PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1       , NULL         , -1 )
+        PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, BMLIST_TERMINATOR       , NULL         , BMLIST_TERMINATOR )
         };
 
     static BUSMASTER_CONTROLLER_INFORMATION const ViaSouthAdapters[] = {
@@ -287,7 +287,7 @@ AtapiChipDetect(
         PCI_DEV_HW_SPEC_BM( 0305, 1106, 0x00, -1, "VIA 8363", VIASOUTH ),
         PCI_DEV_HW_SPEC_BM( 0391, 1106, 0x00, -1, "VIA 8371", VIASOUTH ),
         PCI_DEV_HW_SPEC_BM( 3102, 1106, 0x00, -1, "VIA 8662", VIASOUTH ),
-        PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1, NULL      , -1 )
+        PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, BMLIST_TERMINATOR, NULL      , BMLIST_TERMINATOR )
         };
 
     KdPrint2((PRINT_PREFIX "VendorID/DeviceID/Rev %#x/%#x/%#x\n", VendorID, DeviceID, RevID));
@@ -332,7 +332,7 @@ AtapiChipDetect(
         // New chips have own DeviceId
         if(deviceExtension->DevID != ATA_VIA82C571)
             break;
-        // Old chips hav same DeviceId, we can distinguish between them
+        // Old chips have same DeviceId, we can distinguish between them
         // only by SouthBridge DeviceId
         DevTypeInfo = (BUSMASTER_CONTROLLER_INFORMATION*)&ViaSouthAdapters[0];
         i = AtapiFindListedDev(DevTypeInfo, -1, HwDeviceExtension, SystemIoBusNumber, slotNumber, NULL);
@@ -1023,12 +1023,14 @@ AtapiChipInit(
         break; }
     case ATA_NVIDIA_ID: {
         UCHAR reg52;
+        
         /* set prefetch, postwrite */
-        if(ChipFlags & AMDBUG) {
-            ChangePciConfig1(0x51, (a & 0x0f));
-        } else {
-            ChangePciConfig1(0x51, (a | 0xf0));
-        }
+        //if(ChipFlags & AMDBUG) {  /* this is commented, since newest FBSD unconditionally clears these bits */
+        ChangePciConfig1(0x51, (a & 0x0f));
+        //} else {
+        //    ChangePciConfig1(0x51, (a | 0xf0));
+        //}
+
         // check 80-pin cable
         if(c == -1) {
             for(c=0; c<deviceExtension->NumberChannels; c++) {

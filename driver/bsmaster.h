@@ -41,6 +41,8 @@ Revision History:
 #ifndef __IDE_BUSMASTER_H__
 #define __IDE_BUSMASTER_H__
 
+#include "config.h"
+
 #include "tools.h"
 
 //
@@ -59,15 +61,6 @@ Revision History:
 
 
 #include "bm_devs.h"
-
-#define USE_OWN_DMA
-
-#define UNIATA_DUMP_ATAPI
-
-//#define UNI_CPU_OPTIMIZATION
-
-#define QUEUE_STATISTICS
-#define IO_STATISTICS
 
 #include "uata_ctl.h"
 
@@ -92,7 +85,7 @@ Revision History:
 #define ATA_ALTIOSIZE			0x01	/* alternate registers size */
 #define ATA_BMIOSIZE			0x20
 #define ATA_PC98_BANKIOSIZE             0x01
-#define ATA_MAX_LBA28                   (0x0fffffffUI64)
+#define ATA_MAX_LBA28                   DEF_U64(0x0fffffff)
 
 #define DEV_BSIZE                       512
 
@@ -219,7 +212,7 @@ typedef struct _ATA_REQ {
 #define CMD_ACTION_ALL                  (CMD_ACTION_PREPARE | CMD_ACTION_EXEC)
 
 // predefined Reorder costs
-#define REORDER_COST_MAX               ((0x1I64 << 60) - 1)
+#define REORDER_COST_MAX               ((DEF_I64(0x1) << 60) - 1)
 #define REORDER_COST_TTL               (REORDER_COST_MAX - 1)
 #define REORDER_COST_INTERSECT         (REORDER_COST_MAX - 2)
 #define REORDER_COST_DENIED            (REORDER_COST_MAX - 3)
@@ -452,6 +445,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     ULONG HwFlags;
     INTERFACE_TYPE OrigAdapterInterfaceType;
     ULONG MaximumDmaTransferLength;
+    ULONG AlignmentMask;
 
     ULONG BaseMemAddress;
 
@@ -478,7 +472,7 @@ AtapiEnumBusMasterController(
     PVOID Argument2
     );
 
-extern ULONG
+extern ULONG DDKAPI
 AtapiFindBusMasterController(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -562,6 +556,8 @@ AtapiDmaStart(
     IN PSCSI_REQUEST_BLOCK Srb
     );
 
+//#define DEVNUM_NOT_SPECIFIED    (0xffffffffL)
+
 extern UCHAR
 AtapiDmaDone(
     IN PVOID HwDeviceExtension,
@@ -594,7 +590,7 @@ AtapiDmaInit(
     IN CHAR udmamode
     );
 
-extern BOOLEAN
+extern BOOLEAN NTAPI
 AtapiInterrupt2(
     IN PKINTERRUPT Interrupt,
     IN PVOID HwDeviceExtension
@@ -750,28 +746,28 @@ AtapiWritePort1(
     );
 
 ULONG
-__fastcall
+DDKFASTAPI
 AtapiReadPort4(
     IN PHW_CHANNEL chan,
     IN PULONG port
     );
 
 USHORT
-__fastcall
+DDKFASTAPI
 AtapiReadPort2(
     IN PHW_CHANNEL chan,
     IN PUSHORT port
     );
 
 UCHAR
-__fastcall
+DDKFASTAPI
 AtapiReadPort1(
     IN PHW_CHANNEL chan,
     IN PUCHAR port
     );
 
 VOID
-__fastcall
+DDKFASTAPI
 AtapiWriteBuffer4(
     IN PHW_CHANNEL chan,
     IN PULONG _port,
@@ -780,7 +776,7 @@ AtapiWriteBuffer4(
     );
 
 VOID
-__fastcall
+DDKFASTAPI
 AtapiWriteBuffer2(
     IN PHW_CHANNEL chan,
     IN PUSHORT _port,
@@ -789,7 +785,7 @@ AtapiWriteBuffer2(
     );
 
 VOID
-__fastcall
+DDKFASTAPI
 AtapiReadBuffer4(
     IN PHW_CHANNEL chan,
     IN PULONG _port,
@@ -798,7 +794,7 @@ AtapiReadBuffer4(
     );
 
 VOID
-__fastcall
+DDKFASTAPI
 AtapiReadBuffer2(
     IN PHW_CHANNEL chan,
     IN PUSHORT _port,

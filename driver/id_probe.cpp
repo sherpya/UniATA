@@ -133,9 +133,16 @@ AtapiGetIoRange(
 
     io_start = (pciData->u.type0.BaseAddresses[rid] & ~0x07/*PCI_ADDRESS_IOMASK*/) + offset;
     if(io_start > offset) {
-        (*ConfigInfo->AccessRanges)[rid].RangeStart =
-            ScsiPortConvertUlongToPhysicalAddress(io_start);
-        (*ConfigInfo->AccessRanges)[rid].RangeLength = length;
+        if((WinVer_Id() <= WinVer_NT) && offset && rid == 4) {
+            // MS atapi.sys does so for BusMaster controllers
+            (*ConfigInfo->AccessRanges)[rid+1].RangeStart =
+                ScsiPortConvertUlongToPhysicalAddress(io_start);
+            (*ConfigInfo->AccessRanges)[rid+1].RangeLength = length;
+        } else {
+            (*ConfigInfo->AccessRanges)[rid].RangeStart =
+                ScsiPortConvertUlongToPhysicalAddress(io_start);
+            (*ConfigInfo->AccessRanges)[rid].RangeLength = length;
+        }
     } else {
         io_start = 0;
     }
@@ -220,6 +227,7 @@ AtapiEnumBusMasterController__(
     ULONG                 slotNumber;
     ULONG                 funcNumber;
     BOOLEAN               no_buses = FALSE;
+    BOOLEAN               no_ranges = FALSE;
     ULONG                 busDataRead;
 //    BOOLEAN               SimplexOnly;
 
@@ -350,6 +358,56 @@ AtapiEnumBusMasterController__(
                 if(found) {
 
                     KdPrint2((PRINT_PREFIX "found, pass %d\n", pass));
+
+                    KdPrint2((PRINT_PREFIX "InterruptPin = %#x\n", pciData.u.type0.InterruptPin));
+                    KdPrint2((PRINT_PREFIX "InterruptLine = %#x\n", pciData.u.type0.InterruptLine));
+
+                    if(!pass) {
+                        // Enable Busmastering, IO-space and Mem-space
+                        KdPrint2((PRINT_PREFIX "Enabling Mem/Io spaces and busmastering...\n"));
+                        KdPrint2((PRINT_PREFIX "Initial pciData.Command = %#x\n", pciData.Command));
+                        for(i=0; i<3; i++) {
+                            switch(i) {
+                            case 0:
+                                KdPrint2((PRINT_PREFIX "PCI_ENABLE_IO_SPACE\n"));
+                                pciData.Command |= PCI_ENABLE_IO_SPACE;
+                                break;
+                            case 1:
+                                KdPrint2((PRINT_PREFIX "PCI_ENABLE_MEMORY_SPACE\n"));
+                                pciData.Command |= PCI_ENABLE_MEMORY_SPACE;
+                                break;
+                            case 2:
+                                KdPrint2((PRINT_PREFIX "PCI_ENABLE_BUS_MASTER\n"));
+                                pciData.Command |= PCI_ENABLE_BUS_MASTER;
+                                break;
+                            }
+                            HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                    &(pciData.Command),
+                                                    offsetof(PCI_COMMON_CONFIG, Command),
+                                                    sizeof(pciData.Command));
+                            KdPrint2((PRINT_PREFIX "InterruptLine = %#x\n", pciData.u.type0.InterruptLine));
+
+                            // reread config space
+                            busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                        &pciData, PCI_COMMON_HDR_LENGTH);
+                            KdPrint2((PRINT_PREFIX "New pciData.Command = %#x\n", pciData.Command));
+                        }
+                        KdPrint2((PRINT_PREFIX "Final pciData.Command = %#x\n", pciData.Command));
+                    }
+                    // validate Mem/Io ranges
+                    no_ranges = TRUE;
+                    for(i=0; i<PCI_TYPE0_ADDRESSES; i++) {
+                        if(pciData.u.type0.BaseAddresses[i] & ~0x7) {
+                            no_ranges = FALSE;
+                            //break;
+                            KdPrint2((PRINT_PREFIX "Range %d = %#x\n", i, pciData.u.type0.BaseAddresses[i]));
+                        }
+                    }
+                    if(no_ranges) {
+                        KdPrint2((PRINT_PREFIX "No PCI Mem/Io ranges found on device, skip it\n"));
+                        continue;
+                    }
+                    
                     if(pass) {
                         // fill list of detected devices
                         // it'll be used for further init
@@ -363,10 +421,12 @@ AtapiEnumBusMasterController__(
                                 KdPrint2((PRINT_PREFIX "try switch to native mode\n"));
 
                                 IrqForCompat = (UCHAR)AtapiRegCheckDevValue(deviceExtension, -1, -1, L"NativePCIModeIRQ", 0xff);
-                                if((IrqForCompat & 0xffffff00) ||
-                                   (IrqForCompat & 0xff) > 15) {
-                                    IrqForCompat = 10;
-                                    KdPrint2((PRINT_PREFIX "default to IRQ 10\n"));
+                                KdPrint2((PRINT_PREFIX "IrqForCompat = %#x\n", IrqForCompat));
+                                if((IrqForCompat & 0xffffff00) /*||
+                                   (IrqForCompat & 0xff) > 31*/ ||
+                                   (IrqForCompat == 0xff)) {
+                                    IrqForCompat = 0x0b;
+                                    KdPrint2((PRINT_PREFIX "default to IRQ 11\n"));
                                 }
 
                                 //ChangePciConfig1(0x09, a | PCI_IDE_PROGIF_NATIVE_ALL); // ProgIf
@@ -380,39 +440,58 @@ AtapiEnumBusMasterController__(
                                 busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
                                                             &pciData, PCI_COMMON_HDR_LENGTH);
                                 // check if the device have switched to Native Mode
-                                if(!IsMasterDev(&pciData)) {
+                                if(IsMasterDev(&pciData)) {
+                                    KdPrint2((PRINT_PREFIX "Can't switch to native mode\n"));
+                                } else {
                                     KdPrint2((PRINT_PREFIX "switched to native mode\n"));
-                                    continue;
-                                }
-                                // check if IRQ assigned to device
-                                if(!pciData.u.type0.InterruptLine ||
-                                    pciData.u.type0.InterruptLine == 0xff) {
-                                    KdPrint2((PRINT_PREFIX "assign interrupt for device\n"));
-                                    pciData.u.type0.InterruptLine = IrqForCompat;
-                                    HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
-                                                            &(pciData.u.type0.InterruptLine),
-                                                            offsetof(PCI_COMMON_CONFIG, u.type0.InterruptLine),
-                                                            sizeof(pciData.u.type0.InterruptLine));
-                                }
-                                // reread config space
-                                busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
-                                                            &pciData, PCI_COMMON_HDR_LENGTH);
-                                // check if we have successfully assigned IRQ to device
-                                if(pciData.u.type0.InterruptLine != IrqForCompat) {
-                                    KdPrint2((PRINT_PREFIX "can't assign interrupt for device, revert to compat mode\n"));
-                                    pciData.u.type0.InterruptLine = 0xff;
-                                    HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
-                                                            &(pciData.u.type0.InterruptLine),
-                                                            offsetof(PCI_COMMON_CONFIG, u.type0.InterruptLine),
-                                                            sizeof(pciData.u.type0.InterruptLine));
-                                    pciData.ProgIf &= ~PCI_IDE_PROGIF_NATIVE_ALL;
-                                    HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
-                                                            &(pciData.ProgIf),
-                                                            offsetof(PCI_COMMON_CONFIG, ProgIf),
-                                                            sizeof(pciData.ProgIf));
+                                    KdPrint2((PRINT_PREFIX "InterruptPin = %#x\n", pciData.u.type0.InterruptPin));
+                                    KdPrint2((PRINT_PREFIX "InterruptLine = %#x\n", pciData.u.type0.InterruptLine));
+                                    // check if IRQ is assigned to device
+                                    if(!(pciData.u.type0.InterruptLine) ||
+                                        (pciData.u.type0.InterruptLine == 0xff)) {
+                                        KdPrint2((PRINT_PREFIX "assign interrupt for device\n"));
+                                        pciData.u.type0.InterruptLine = IrqForCompat;
+                                        HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                                &(pciData.u.type0.InterruptLine),
+                                                                offsetof(PCI_COMMON_CONFIG, u.type0.InterruptLine),
+                                                                sizeof(pciData.u.type0.InterruptLine));
+                                    } else {
+                                        KdPrint2((PRINT_PREFIX "Auto-assigned interrupt line %#x\n",
+                                            pciData.u.type0.InterruptLine));
+                                        IrqForCompat = pciData.u.type0.InterruptLine;
+                                    }
+                                    KdPrint2((PRINT_PREFIX "reread config space\n"));
                                     // reread config space
                                     busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
                                                                 &pciData, PCI_COMMON_HDR_LENGTH);
+                                    KdPrint2((PRINT_PREFIX "busDataRead = %#x\n", busDataRead));
+                                    KdPrint2((PRINT_PREFIX "reread InterruptLine = %#x\n", pciData.u.type0.InterruptLine));
+                                    // check if we have successfully assigned IRQ to device
+                                    if((pciData.u.type0.InterruptLine != IrqForCompat) ||
+                                       (pciData.u.type0.InterruptLine == 0xff) ||
+                                       !pciData.u.type0.InterruptLine) {
+                                        KdPrint2((PRINT_PREFIX "can't assign interrupt for device, revert to compat mode\n"));
+                                        pciData.u.type0.InterruptLine = 0xff;
+                                        KdPrint2((PRINT_PREFIX "set IntrLine to 0xff\n"));
+                                        HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                                &(pciData.u.type0.InterruptLine),
+                                                                offsetof(PCI_COMMON_CONFIG, u.type0.InterruptLine),
+                                                                sizeof(pciData.u.type0.InterruptLine));
+                                        KdPrint2((PRINT_PREFIX "clear PCI_IDE_PROGIF_NATIVE_ALL\n"));
+                                        pciData.ProgIf &= ~PCI_IDE_PROGIF_NATIVE_ALL;
+                                        HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                                &(pciData.ProgIf),
+                                                                offsetof(PCI_COMMON_CONFIG, ProgIf),
+                                                                sizeof(pciData.ProgIf));
+                                        // reread config space
+                                        KdPrint2((PRINT_PREFIX "reread config space on revert\n"));
+                                        busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                                                    &pciData, PCI_COMMON_HDR_LENGTH);
+                                    } else {
+                                        KdPrint2((PRINT_PREFIX "Assigned interrupt %#x for device\n", IrqForCompat));
+                                        KdPrint2((PRINT_PREFIX "continue detection on next round\n"));
+                                        continue;
+                                    }
                                 }
                             }
                         } else
@@ -442,10 +521,12 @@ AtapiEnumBusMasterController__(
                         newBMListPtr->slotNumber = slotData.u.AsULONG;
                         newBMListPtr->MasterDev = IsMasterDev(&pciData) ? 1 : 0;
                         newBMListPtr->busNumber = busNumber;
+
+                        KdPrint2((PRINT_PREFIX "Add to BMList\n"));
                     } else {
+                        KdPrint2((PRINT_PREFIX "count: BMListLen++\n"));
                     }
 
-                    KdPrint2((PRINT_PREFIX "Add to BMList\n"));
                     BMListLen++;
                 }
             }
@@ -862,7 +943,7 @@ AtapiFindBusMasterController(
     KdPrint2((PRINT_PREFIX "HwFlags = %x\n (3)", deviceExtension->HwFlags));
     if(deviceExtension->HwFlags & UNIATA_NO_DPC) {
         /* CMD 649, ROSB SWK33, ICH4 */
-        KdPrint2((PRINT_PREFIX "CheckDevice: UNIATA_NO_DPC (0)\n"));
+        KdPrint2((PRINT_PREFIX "AtapiFindBusMasterController: UNIATA_NO_DPC (0)\n"));
         deviceExtension->UseDpc = FALSE;
     }
 
@@ -875,7 +956,7 @@ AtapiFindBusMasterController(
     }
 
     if(MasterDev) {
-        if(WinVer_IsNT && AltInit && FirstMasterOk) {
+        if((WinVer_Id() <= WinVer_NT) && AltInit && FirstMasterOk) {
             // this is the 2nd attempt to init this controller by OUR driver
             KdPrint2((PRINT_PREFIX "Skip primary/secondary claiming checks\n"));
         } else {
@@ -909,6 +990,11 @@ AtapiFindBusMasterController(
                 deviceExtension->BusMaster = TRUE;
             }
             KdPrint2((PRINT_PREFIX "  BusMasterAddress (base): %#x\n", deviceExtension->BaseIoAddressBM_0));
+        }
+
+        if(!deviceExtension->BusMaster) {
+            KdPrint2((PRINT_PREFIX "  !BusMasterAddress -> PIO4\n"));
+            deviceExtension->MaxTransferMode = ATA_PIO4;
         }
 
         if(deviceExtension->BusMaster && !MasterDev) {
@@ -1018,24 +1104,28 @@ AtapiFindBusMasterController(
     ConfigInfo->AutoRequestSense     = TRUE;
     ConfigInfo->TaggedQueuing        = TRUE;
 
-    if(WinVer_Id() >= WinVer_NT) {
+    if((WinVer_Id() >= WinVer_NT) ||
+       (ConfigInfo->Length >= sizeof(_ConfigInfo->comm) + sizeof(_ConfigInfo->nt4))) {
         _ConfigInfo->nt4.DeviceExtensionSize         = sizeof(HW_DEVICE_EXTENSION);
         _ConfigInfo->nt4.SpecificLuExtensionSize     = sizeof(HW_LU_EXTENSION);    
         _ConfigInfo->nt4.SrbExtensionSize            = sizeof(ATA_REQ);            
     }
-    if(WinVer_Id() > WinVer_NT) {
+    if((WinVer_Id() > WinVer_2k) ||
+       (ConfigInfo->Length >= sizeof(_ConfigInfo->comm) + sizeof(_ConfigInfo->nt4) + sizeof(_ConfigInfo->w2k))) {
         _ConfigInfo->w2k.Dma64BitAddresses           = 0;
         _ConfigInfo->w2k.ResetTargetSupported        = TRUE;
         _ConfigInfo->w2k.MaximumNumberOfLogicalUnits = 2;
     }
 
     // Save the Interrupe Mode for later use
-    deviceExtension->InterruptMode = ConfigInfo->InterruptMode;
-    deviceExtension->BusInterruptLevel = ConfigInfo->BusInterruptLevel;
+    deviceExtension->InterruptMode      = ConfigInfo->InterruptMode;
+    deviceExtension->BusInterruptLevel  = ConfigInfo->BusInterruptLevel;
     deviceExtension->BusInterruptVector = ConfigInfo->BusInterruptVector;
-    deviceExtension->Channel = channel;
-    deviceExtension->DevIndex = i;
-    deviceExtension->OrigAdapterInterfaceType = ConfigInfo->AdapterInterfaceType;
+    deviceExtension->Channel            = channel;
+    deviceExtension->DevIndex           = i;
+    deviceExtension->OrigAdapterInterfaceType
+                                        = ConfigInfo->AdapterInterfaceType;
+    deviceExtension->AlignmentMask      = ConfigInfo->AlignmentMask;
 
     found = FALSE;
 
@@ -1057,7 +1147,7 @@ AtapiFindBusMasterController(
         // better solution:
 
         if(/*BMList[i].AltInitMasterDev == 0x00 ||*/
-           ((ULONG)Context & 0x80000000) /*||
+           AltInit /*||
            (WinVer_Id() > WinVer_NT)*/) {
             // I'm sorry, I have to do this
             // when Win doesn't 
@@ -1118,7 +1208,7 @@ AtapiFindBusMasterController(
 
                 // do not claim 2nd BM io-range for Secondary channel of
                 // Compatible-mode controllers
-                if(WinVer_IsNT && !c && channel == 1) {
+                if((WinVer_Id() <= WinVer_NT) && !c && channel == 1) {
                     KdPrint2((PRINT_PREFIX "cheat ScsiPort for 2nd channel, BM io-range\n"));
                     (*ConfigInfo->AccessRanges)[4].RangeStart = ScsiPortConvertUlongToPhysicalAddress(0);
                     (*ConfigInfo->AccessRanges)[4].RangeLength = 0;
@@ -1127,6 +1217,13 @@ AtapiFindBusMasterController(
 
             IoBasePort1 = (*ConfigInfo->AccessRanges)[channel * 2 + 0].RangeStart;
             IoBasePort2 = (*ConfigInfo->AccessRanges)[channel * 2 + 1].RangeStart;
+
+            if(!MasterDev) {
+                if(!IoBasePort1.QuadPart || !IoBasePort2.QuadPart) {
+                    KdPrint2((PRINT_PREFIX "ScsiPortValidateRange failed (1)\n"));
+                    continue;
+                }
+            }
 
             if(!ScsiPortValidateRange(HwDeviceExtension,
                                       PCIBus /*ConfigInfo->AdapterInterfaceType*/,
@@ -1518,10 +1615,18 @@ AtapiFindController(
     // port addresses in the previous table.
     CONST ULONG InterruptLevels[5] = {14, 15, 11, 10, 0};
 
+    KdPrint2((PRINT_PREFIX "AtapiFindController:\n"));
+
     if (!deviceExtension) {
         return SP_RETURN_ERROR;
     }
     RtlZeroMemory(deviceExtension, sizeof(HW_DEVICE_EXTENSION));
+
+    KdPrint2((PRINT_PREFIX "  assume max PIO4\n"));
+    deviceExtension->MaxTransferMode = ATA_PIO4;
+
+    /* do extra chipset specific setups */
+    AtapiChipInit(HwDeviceExtension, -1, -1);
 
     // Check to see if this is a special configuration environment.
     portBase = irq = 0;
@@ -1592,15 +1697,18 @@ AtapiFindController(
 
         // Check if ioSpace accessible.
         if (!ioSpace) {
+            KdPrint2((PRINT_PREFIX "AtapiFindController: !ioSpace\n"));
             continue;
         }
         // check if Primary/Secondary Master IDE claimed
         if((ioSpace == (PUCHAR)IO_WD1) &&
            (ConfigInfo->AtdiskPrimaryClaimed)) {
+            KdPrint2((PRINT_PREFIX "AtapiFindController: AtdiskPrimaryClaimed\n"));
             continue;
         } else
         if((ioSpace == (PUCHAR)IO_WD2) &&
            (ConfigInfo->AtdiskSecondaryClaimed)) {
+            KdPrint2((PRINT_PREFIX "AtapiFindController: AtdiskSecondaryClaimed\n"));
             continue;
         }
 
@@ -1719,6 +1827,19 @@ retryIdentifier:
         ConfigInfo->MaximumTransferLength = 0x10000;
         deviceExtension->MaximumDmaTransferLength = ConfigInfo->MaximumTransferLength;
 
+        KdPrint2((PRINT_PREFIX "de %#x, Channel ???\n", deviceExtension));
+        //PrintNtConsole("de %#x, Channel %#x, nchan %#x\n",deviceExtension, channel, deviceExtension->NumberChannels);
+
+        KdPrint2((PRINT_PREFIX "chan = %#x\n", chan));
+        //PrintNtConsole("chan = %#x, c=%#x\n", chan, c);
+        chan->DeviceExtension = deviceExtension;
+        chan->lChannel        = 0;
+        chan->lun[0] = &(deviceExtension->lun[0]);
+        chan->lun[1] = &(deviceExtension->lun[1]);
+
+        /* do extra channel-specific setups */
+        AtapiChipInit(HwDeviceExtension, -1, 0);
+
         KdPrint2((PRINT_PREFIX 
                    "AtapiFindController: Found IDE at %#x\n",
                    deviceExtension->BaseIoAddress1[0]));
@@ -1747,7 +1868,7 @@ retryIdentifier:
                 } else {
 
                     KdPrint2((PRINT_PREFIX 
-                               "AtapiFindController: Atapi Only\n"));
+                               "AtapiFindController: Atapi Only (2)\n"));
                     atapiOnly = TRUE;
                     deviceExtension->DriverMustPoll = FALSE;
                 }
@@ -1766,11 +1887,15 @@ retryIdentifier:
         // Save the Interrupe Mode for later use
         deviceExtension->InterruptMode = ConfigInfo->InterruptMode;
 
+        KdPrint2((PRINT_PREFIX 
+                   "AtapiFindController: look for devices\n"));
         // Search for devices on this controller.
         if (FindDevices(HwDeviceExtension,
-                        atapiOnly,
+                        /*atapiOnly*/ FALSE,
                         0)) {
 
+            KdPrint2((PRINT_PREFIX 
+                       "AtapiFindController: detected\n"));
             // Claim primary or secondary ATA IO range.
             if (portBase) {
                 switch (portBase) {
@@ -1795,6 +1920,8 @@ retryIdentifier:
                 }
             }
 
+            KdPrint2((PRINT_PREFIX 
+                       "AtapiFindController: return SP_RETURN_FOUND\n"));
             return(SP_RETURN_FOUND);
         }
     }
@@ -1805,6 +1932,8 @@ retryIdentifier:
     *Again = FALSE;
     *(adapterCount) = 0;
 
+    KdPrint2((PRINT_PREFIX 
+               "AtapiFindController: return SP_RETURN_NOT_FOUND\n"));
     return(SP_RETURN_NOT_FOUND);
 
 } // end AtapiFindController()
@@ -1972,6 +2101,8 @@ FindDevices(
     UCHAR                statusByte;
     ULONG                ldev;
 
+    KdPrint2((PRINT_PREFIX "FindDevices:\n"));
+
     // Disable interrupts
     AtapiDisableInterrupts(deviceExtension, Channel);
 //    AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_DISABLE_INTERRUPTS | IDE_DC_A_4BIT );
@@ -2078,6 +2209,8 @@ FindDevices(
                         "FindDevices: Status before SetDriveParameters: (%#x) (%#x)\n",
                         statusByte,
                         AtapiReadPort1(chan, &baseIoAddress1->i.DriveSelect)));
+
+            GetBaseStatus(chan, baseIoAddress1, statusByte);
 
             // Use the IDENTIFY data to set drive parameters.
             if (!SetDriveParameters(HwDeviceExtension,i,Channel)) {

@@ -169,6 +169,12 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_I82801FB		0x266f8086
 #define ATA_I82801FB_S1		0x26518086
 #define ATA_I82801FB_R1		0x26528086
+#define ATA_I82801FB_M          0x26538086
+#define ATA_I82801GB            0x27df8086
+#define ATA_I82801GB_S1         0x27c08086
+#define ATA_I82801GB_R1         0x27c38086
+#define ATA_I82801GB_AH         0x27c18086
+#define ATA_I82801GB_M          0x27c58086
 
 #define ATA_NATIONAL_ID		0x100b
 #define ATA_SC1100		0x0502100b
@@ -296,6 +302,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ATA_VIA8662		0x31021106
 #define ATA_VIA6410		0x31641106
 #define ATA_VIA6420		0x31491106
+#define ATA_VIA6421             0x32491106
 
 #define ATA_ITE_ID		0x1283
 #define ATA_IT8172G		0x81721283
@@ -395,6 +402,8 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
     { #idlo, 4, 0x##idlo, #idhi, 4, 0x##idhi, rev, mode, NULL, flags}
 #endif
 
+#define BMLIST_TERMINATOR   (0xffffffffL)
+
 BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
 
     PCI_DEV_HW_SPEC_BM( 0005, 1191, 0x00, ATA_UDMA2, "Acard ATP850"     , ATPOLD | UNIATA_SIMPLEX_ONLY            ),
@@ -440,15 +449,21 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
     PCI_DEV_HW_SPEC_BM( 24db, 8086, 0x00, ATA_UDMA5, "Intel ICH5 EB"    , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 24d1, 8086, 0x00, ATA_SA150, "Intel ICH5 EB1"   , UNIATA_SATA                             ),
     PCI_DEV_HW_SPEC_BM( 24df, 8086, 0x00, ATA_SA150, "Intel ICH5 EB2"   , UNIATA_SATA                             ),
-    PCI_DEV_HW_SPEC_BM( 25a2, 8086, 0x00, ATA_UDMA5, "Intel ICH5 ESB"   , 0                                       ),
-    PCI_DEV_HW_SPEC_BM( 25a3, 8086, 0x00, ATA_SA150, "Intel ICH5 ESB1"  , UNIATA_SATA                             ),
-    PCI_DEV_HW_SPEC_BM( 25b0, 8086, 0x00, ATA_SA150, "Intel ICH5 ESB2"  , UNIATA_SATA                             ),
+    PCI_DEV_HW_SPEC_BM( 25a2, 8086, 0x00, ATA_UDMA5, "Intel 6300ESB"    , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 25a3, 8086, 0x00, ATA_SA150, "Intel 6300ESB1"   , UNIATA_SATA                             ),
+    PCI_DEV_HW_SPEC_BM( 25b0, 8086, 0x00, ATA_SA150, "Intel 6300ESB2"   , UNIATA_SATA                             ),
     PCI_DEV_HW_SPEC_BM( 266f, 8086, 0x00, ATA_UDMA5, "Intel ICH6"       , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 2651, 8086, 0x00, ATA_SA150, "Intel ICH6"       , UNIATA_SATA                             ),
     PCI_DEV_HW_SPEC_BM( 2652, 8086, 0x00, ATA_SA150, "Intel ICH6"       , UNIATA_SATA                             ),
+    PCI_DEV_HW_SPEC_BM( 2653, 8086, 0x00, ATA_SA150, "Intel ICH6"       , UNIATA_SATA                             ),
+    PCI_DEV_HW_SPEC_BM( 27df, 8086, 0x00, ATA_UDMA5, "Intel ICH7"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 27c0, 8086, 0x00, ATA_SA150, "Intel ICH7"       , UNIATA_SATA                             ),
+    PCI_DEV_HW_SPEC_BM( 27c3, 8086, 0x00, ATA_SA150, "Intel ICH7"       , UNIATA_SATA                             ),
+    PCI_DEV_HW_SPEC_BM( 27c1, 8086, 0x00, ATA_SA150, "Intel ICH7"       , UNIATA_SATA                             ),
+    PCI_DEV_HW_SPEC_BM( 27c5, 8086, 0x00, ATA_SA150, "Intel ICH7"       , UNIATA_SATA                             ),
     
-    PCI_DEV_HW_SPEC_BM( 01bc, 10de, 0x00, ATA_UDMA5, "nVidia nForce"    , AMDNVIDIA | AMDBUG                      ),
-    PCI_DEV_HW_SPEC_BM( 0065, 10de, 0x00, ATA_UDMA6, "nVidia nForce2"   , AMDNVIDIA | AMDBUG                      ),
+    PCI_DEV_HW_SPEC_BM( 01bc, 10de, 0x00, ATA_UDMA5, "nVidia nForce"    , AMDNVIDIA                               ),
+    PCI_DEV_HW_SPEC_BM( 0065, 10de, 0x00, ATA_UDMA6, "nVidia nForce2"   , AMDNVIDIA                               ),
     PCI_DEV_HW_SPEC_BM( 0085, 10de, 0x00, ATA_UDMA6, "nVidia nForce2 MCP",AMDNVIDIA                               ),
     PCI_DEV_HW_SPEC_BM( 00d5, 10de, 0x00, ATA_UDMA6, "nVidia nForce3"   , AMDNVIDIA                               ),
     PCI_DEV_HW_SPEC_BM( 00e5, 10de, 0x00, ATA_UDMA6, "nVidia nForce3 Pro",AMDNVIDIA                               ),
@@ -560,6 +575,7 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
     PCI_DEV_HW_SPEC_BM( 0571, 1106, 0x00, ATA_UDMA2, "VIA ATA-xxx"      , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 3164, 1106, 0x00, ATA_UDMA6, "VIA 6410"         , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 3149, 1106, 0x00, ATA_SA150, "VIA 6420"         , 0 | UNIATA_SATA                         ),
+    PCI_DEV_HW_SPEC_BM( 3249, 1106, 0x00, ATA_SA150, "VIA 6421"         , 0 | UNIATA_SATA                         ),
     
     PCI_DEV_HW_SPEC_BM( c693, 1080, 0x00, ATA_WDMA2, "Cypress 82C693"   ,0                                        ),
                                           
@@ -596,7 +612,7 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
     PCI_DEV_HW_SPEC_BM( 8013, 3388, 0x00, ATA_DMA,   "HiNT VXII EIDE"   , 0                                       ),
 
     // Terminator
-    PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, -1, NULL      , -1 )
+    PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, BMLIST_TERMINATOR, NULL       , BMLIST_TERMINATOR )
 };
 
 #define NUM_BUSMASTER_ADAPTERS (sizeof(BusMasterAdapters) / sizeof(BUSMASTER_CONTROLLER_INFORMATION))
@@ -620,16 +636,16 @@ Ata_is_dev_listed(
         if(BusMasterAdapters[k].nVendorId == 0xffff &&
            BusMasterAdapters[k].nDeviceId == 0xffff &&
            BusMasterAdapters[k].nRevId    == 0xff) {
-            if(lim != -1)
+            if(lim != BMLIST_TERMINATOR)
                 continue;
-            return -1;
+            return BMLIST_TERMINATOR;
         }
         if(BusMasterAdapters[k].nVendorId == VendorId &&
            (BusMasterAdapters[k].nDeviceId == DeviceId || DeviceId == 0xffff) &&
            (!RevId || BusMasterAdapters[k].nRevId <= RevId) )
             return k;
     }
-    return -1;
+    return BMLIST_TERMINATOR;
 }
 
 #define Ata_is_supported_dev(pciData) \

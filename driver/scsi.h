@@ -510,7 +510,7 @@ typedef union _CDB {
 
 #define CloseTrkSes_LastTrkSes  0xff
 
-#define CloseTrkSes_Delay   3100000000I64        //  310 s
+#define CloseTrkSes_Delay   DEF_I64(3100000000)        //  310 s
 
     struct _CLOSE_TRACK_SESSION {
         UCHAR OperationCode;
