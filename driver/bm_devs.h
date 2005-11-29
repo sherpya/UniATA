@@ -384,7 +384,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define AMDNVIDIA	4
 #define AMDCABLE	0x0100
 #define AMDBUG		0x0200
-#define NVIDIA		0x0400
+//#define NVIDIA		0x0400
 #define VIACLK		0x0800
 #define VIABUG		0x1000
 #define VIASOUTH	0x2000

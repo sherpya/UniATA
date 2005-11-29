@@ -1,2 +1,2 @@
 
-#define UNIATA_VER_STR "32a"
+#define UNIATA_VER_STR "32a2"

@@ -789,7 +789,7 @@ set_new_acard:
             { 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0, 0x00 },        /* ATA100 */
             { 0xf7, 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0 },        /* VIA ATA133 */
             { 0xc2, 0xc1, 0xc0, 0xc4, 0xc5, 0xc6, 0xc7 }};       /* AMD/nVIDIA */
-			static const UCHAR via_pio[] =
+	static const UCHAR via_pio[] =
             { 0xa8, 0x65, 0x42, 0x22, 0x20, 0x42, 0x22, 0x20,
               0x20, 0x20, 0x20, 0x20, 0x20, 0x20 };
         const UCHAR *reg_val = NULL;
@@ -797,7 +797,7 @@ set_new_acard:
 
         reg_val = &via_modes[ChipType][0];
 
-        if(ChipFlags & NVIDIA)
+        if(VendorID == ATA_NVIDIA_ID)
             reg += 0x10;
 
         for(i = udmamode; i>=0; i--) {

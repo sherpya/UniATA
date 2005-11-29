@@ -816,10 +816,10 @@ AtaCommand48(
 
         chan->ChannelCtrlFlags &= ~CTRFLAGS_LBA48;
         
-        if(feature ||
-           (deviceExtension->lun[ldev].DeviceFlags & (DFLAGS_ATAPI_DEVICE | DFLAGS_TAPE_DEVICE))) {
+        //if(feature ||
+        //   (deviceExtension->lun[ldev].DeviceFlags & (DFLAGS_ATAPI_DEVICE | DFLAGS_TAPE_DEVICE | DFLAGS_LBA_ENABLED))) {
             AtapiWritePort1(chan, &baseIoAddress1->o.Feature,      (UCHAR)feature);
-        }
+        //}
         AtapiWritePort1(chan, &baseIoAddress1->o.BlockCount,   (UCHAR)count);
         AtapiWritePort1(chan, &baseIoAddress1->o.BlockNumber,  (UCHAR)lba & 0xff);
         AtapiWritePort1(chan, &baseIoAddress1->o.CylinderLow,  (UCHAR)(lba>>8) & 0xff);
@@ -1778,124 +1778,127 @@ IssueIdentify(
             goto skip_lba_staff;
         }
         // Check for LBA48 support
-        if(deviceExtension->FullIdentifyData.FeaturesSupport.Address48 &&
-           deviceExtension->FullIdentifyData.FeaturesEnabled.Address48 &&
-           (deviceExtension->FullIdentifyData.UserAddressableSectors48 > NumOfSectors)
-           ) {
-//            BrutePoint();
-            KdPrint2((PRINT_PREFIX "LBA48\n"));
-            cylinders = 
-                (deviceExtension->FullIdentifyData.UserAddressableSectors48 /
-                    (deviceExtension->FullIdentifyData.NumberOfHeads *
-                       deviceExtension->FullIdentifyData.SectorsPerTrack));
+        if(LunExt->DeviceFlags & DFLAGS_LBA_ENABLED) {
+            if(deviceExtension->FullIdentifyData.FeaturesSupport.Address48 &&
+               deviceExtension->FullIdentifyData.FeaturesEnabled.Address48 &&
+               (deviceExtension->FullIdentifyData.UserAddressableSectors48 > NumOfSectors)
+               ) {
+    //            BrutePoint();
+                KdPrint2((PRINT_PREFIX "LBA48\n"));
+                cylinders = 
+                    (deviceExtension->FullIdentifyData.UserAddressableSectors48 /
+                        (deviceExtension->FullIdentifyData.NumberOfHeads *
+                           deviceExtension->FullIdentifyData.SectorsPerTrack));
 
-            KdPrint2((PRINT_PREFIX "cylinders %#I64x\n", cylinders));
-            
-            NativeNumOfSectors = cylinders *
-                           deviceExtension->FullIdentifyData.NumberOfHeads *
-                           deviceExtension->FullIdentifyData.SectorsPerTrack;
-
-            KdPrint2((PRINT_PREFIX "NativeNumOfSectors %#I64x\n", NativeNumOfSectors));
-
-            if(NativeNumOfSectors > NumOfSectors) {
-                KdPrint2((PRINT_PREFIX "Update NumOfSectors to %#I64x\n", NativeNumOfSectors));
-                NumOfSectors = NativeNumOfSectors;
-            }
-        }
-
-        // Check drive capacity report for LBA48-capable drives.
-        if(deviceExtension->FullIdentifyData.FeaturesSupport.Address48) {
-            ULONG hNativeNumOfSectors;
-            KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_READ_NATIVE_SIZE48\n"));
-
-            statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
-                         IDE_COMMAND_READ_NATIVE_SIZE48, 0, 0, 0, ATA_WAIT_READY);
-
-            if(!(statusByte & IDE_STATUS_ERROR)) {
-                NativeNumOfSectors = (ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber) |
-                                    ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow)  << 8) |
-                                    ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 16) ;
-
-                AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,
-                                       IDE_DC_USE_HOB );
-//                if(AtapiReadPort1(chan, &baseIoAddress2->AlternateStatus) & IDE_DC_USE_HOB) {
-                    KdPrint2((PRINT_PREFIX "High order bytes seem to be valid\n"));
-                    NativeNumOfSectors |=
-                                        ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber)  << 24 );
-                    hNativeNumOfSectors= 
-                                         (ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow) |
-                                        ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 8) ;
-                    ((PULONG)&NativeNumOfSectors)[1] = hNativeNumOfSectors;
-//                }
-
-                KdPrint2((PRINT_PREFIX "NativeNumOfSectors %#I64x\n", NativeNumOfSectors));
-
-                if((NativeNumOfSectors & 0xffffff) == ((NativeNumOfSectors >> 24) & 0xffffff)) {
-                    KdPrint2((PRINT_PREFIX "High-order bytes == Low-order bytes !!!\n"));
-
-                    statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
-                                 IDE_COMMAND_READ_NATIVE_SIZE48, 0, 0, 0, ATA_WAIT_READY);
-
-                    if(!(statusByte & IDE_STATUS_ERROR)) {
-                        NativeNumOfSectors = (ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber) |
-                                            ((ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber)  << 24) |
-                                            ((ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow)  << 8 ) |
-                                            ((ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow)  << 32) |
-                                            ((ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 16) |
-                                            ((ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 40) 
-                                            ;
-                    }
-
-                    if((NativeNumOfSectors & 0xffffff) == ((NativeNumOfSectors >> 24) & 0xffffff)) {
-                        KdPrint2((PRINT_PREFIX "High-order bytes == Low-order bytes !!! (2)\n"));
-                        NativeNumOfSectors = 0;
-                    }
-                }
-
-                if(NumOfSectors <= ATA_MAX_LBA28 &&
-                   NativeNumOfSectors > NumOfSectors) {
-
-                    KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_SET_NATIVE_SIZE48\n"));
-                    KdPrint2((PRINT_PREFIX "Update NumOfSectors to %#I64x\n", NativeNumOfSectors));
-
-                    statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
-                                 IDE_COMMAND_SET_NATIVE_SIZE, NativeNumOfSectors, 0, 0, ATA_WAIT_READY);
-                    if(!(statusByte & IDE_STATUS_ERROR)) {
-                        NumOfSectors = NativeNumOfSectors;
-                    }
-                }
-            }
-        }
-
-        if(NumOfSectors < 0x2100000 /*&& NumOfSectors > 31*1000*1000*/) {
-            // check for native LBA size
-            // some drives report ~32Gb in Identify Block
-            KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_READ_NATIVE_SIZE\n"));
-
-            statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel, IDE_COMMAND_READ_NATIVE_SIZE,
-                         0, IDE_USE_LBA, 0, 0, 0, ATA_WAIT_READY);
-
-            if(!(statusByte & IDE_STATUS_ERROR)) {
-                NativeNumOfSectors = (ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber) |
-                                    ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow) << 8) |
-                                    ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 16) |
-                                   (((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.DriveSelect) & 0xf) << 24);
+                KdPrint2((PRINT_PREFIX "cylinders %#I64x\n", cylinders));
+                
+                NativeNumOfSectors = cylinders *
+                               deviceExtension->FullIdentifyData.NumberOfHeads *
+                               deviceExtension->FullIdentifyData.SectorsPerTrack;
 
                 KdPrint2((PRINT_PREFIX "NativeNumOfSectors %#I64x\n", NativeNumOfSectors));
 
                 if(NativeNumOfSectors > NumOfSectors) {
-
-                    KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_SET_NATIVE_SIZE\n"));
                     KdPrint2((PRINT_PREFIX "Update NumOfSectors to %#I64x\n", NativeNumOfSectors));
+                    NumOfSectors = NativeNumOfSectors;
+                }
+            }
 
-                    statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
-                                 IDE_COMMAND_SET_NATIVE_SIZE, NativeNumOfSectors, 0, 0, ATA_WAIT_READY);
-                    if(!(statusByte & IDE_STATUS_ERROR)) {
-                        NumOfSectors = NativeNumOfSectors;
+            // Check drive capacity report for LBA48-capable drives.
+            if(deviceExtension->FullIdentifyData.FeaturesSupport.Address48) {
+                ULONG hNativeNumOfSectors;
+                KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_READ_NATIVE_SIZE48\n"));
+
+                statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
+                             IDE_COMMAND_READ_NATIVE_SIZE48, 0, 0, 0, ATA_WAIT_READY);
+
+                if(!(statusByte & IDE_STATUS_ERROR)) {
+                    NativeNumOfSectors = (ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber) |
+                                        ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow)  << 8) |
+                                        ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 16) ;
+
+                    AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,
+                                           IDE_DC_USE_HOB );
+    //                if(AtapiReadPort1(chan, &baseIoAddress2->AlternateStatus) & IDE_DC_USE_HOB) {
+                        KdPrint2((PRINT_PREFIX "High order bytes seem to be valid\n"));
+                        NativeNumOfSectors |=
+                                            ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber)  << 24 );
+                        hNativeNumOfSectors= 
+                                             (ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow) |
+                                            ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 8) ;
+                        ((PULONG)&NativeNumOfSectors)[1] = hNativeNumOfSectors;
+    //                }
+
+                    KdPrint2((PRINT_PREFIX "NativeNumOfSectors %#I64x\n", NativeNumOfSectors));
+
+                    if((NativeNumOfSectors & 0xffffff) == ((NativeNumOfSectors >> 24) & 0xffffff)) {
+                        KdPrint2((PRINT_PREFIX "High-order bytes == Low-order bytes !!!\n"));
+
+                        statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
+                                     IDE_COMMAND_READ_NATIVE_SIZE48, 0, 0, 0, ATA_WAIT_READY);
+
+                        if(!(statusByte & IDE_STATUS_ERROR)) {
+                            NativeNumOfSectors = (ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber) |
+                                                ((ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber)  << 24) |
+                                                ((ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow)  << 8 ) |
+                                                ((ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow)  << 32) |
+                                                ((ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 16) |
+                                                ((ULONGLONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 40) 
+                                                ;
+                        }
+
+                        if((NativeNumOfSectors & 0xffffff) == ((NativeNumOfSectors >> 24) & 0xffffff)) {
+                            KdPrint2((PRINT_PREFIX "High-order bytes == Low-order bytes !!! (2)\n"));
+                            NativeNumOfSectors = 0;
+                        }
+                    }
+
+                    if(NumOfSectors <= ATA_MAX_LBA28 &&
+                       NativeNumOfSectors > NumOfSectors) {
+
+                        KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_SET_NATIVE_SIZE48\n"));
+                        KdPrint2((PRINT_PREFIX "Update NumOfSectors to %#I64x\n", NativeNumOfSectors));
+
+                        statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
+                                     IDE_COMMAND_SET_NATIVE_SIZE, NativeNumOfSectors, 0, 0, ATA_WAIT_READY);
+                        if(!(statusByte & IDE_STATUS_ERROR)) {
+                            NumOfSectors = NativeNumOfSectors;
+                        }
                     }
                 }
             }
-        }
+    
+            if(NumOfSectors < 0x2100000 /*&& NumOfSectors > 31*1000*1000*/) {
+                // check for native LBA size
+                // some drives report ~32Gb in Identify Block
+                KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_READ_NATIVE_SIZE\n"));
+
+                statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel, IDE_COMMAND_READ_NATIVE_SIZE,
+                             0, IDE_USE_LBA, 0, 0, 0, ATA_WAIT_READY);
+
+                if(!(statusByte & IDE_STATUS_ERROR)) {
+                    NativeNumOfSectors = (ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.BlockNumber) |
+                                        ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow) << 8) |
+                                        ((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh) << 16) |
+                                       (((ULONG)AtapiReadPort1(chan, &baseIoAddress1->i.DriveSelect) & 0xf) << 24);
+
+                    KdPrint2((PRINT_PREFIX "NativeNumOfSectors %#I64x\n", NativeNumOfSectors));
+
+                    if(NativeNumOfSectors > NumOfSectors) {
+
+                        KdPrint2((PRINT_PREFIX "Use IDE_COMMAND_SET_NATIVE_SIZE\n"));
+                        KdPrint2((PRINT_PREFIX "Update NumOfSectors to %#I64x\n", NativeNumOfSectors));
+
+                        statusByte = AtaCommand48(deviceExtension, DeviceNumber, lChannel,
+                                     IDE_COMMAND_SET_NATIVE_SIZE, NativeNumOfSectors, 0, 0, ATA_WAIT_READY);
+                        if(!(statusByte & IDE_STATUS_ERROR)) {
+                            NumOfSectors = NativeNumOfSectors;
+                        }
+                    }
+                }
+            }
+
+        } // if(LunExt->DeviceFlags & DFLAGS_LBA_ENABLED)
 
         // fill IdentifyData with bogus geometry
         KdPrint2((PRINT_PREFIX "requested LunExt->GeomType=%x\n", LunExt->opt_GeomType));
@@ -2004,6 +2007,7 @@ skip_lba_staff:
     }
 
     if(Command != IDE_COMMAND_IDENTIFY) {
+        // ATAPI branch
         if(LunExt->IdentifyData.DeviceType == ATAPI_TYPE_TAPE) {
             // This is a tape.
             LunExt->DeviceFlags |= DFLAGS_TAPE_DEVICE;
@@ -3665,9 +3669,11 @@ AtapiCheckInterrupt__(
 
     if(chan->ChannelCtrlFlags & CTRFLAGS_DMA_ACTIVE) {
         DmaTransfer = TRUE;
-        KdPrint2((PRINT_PREFIX "  cntrlr %#x, lch %#x DmaTransfer = TRUE\n", deviceExtension->DevIndex, c));
+        KdPrint2((PRINT_PREFIX "  cntrlr %#x:%#x, lch %#x DmaTransfer = TRUE\n", deviceExtension->DevIndex,
+            deviceExtension->Channel + c, c));
     } else {
-        KdPrint2((PRINT_PREFIX "  cntrlr %#x, lch %#x DmaTransfer = FALSE\n", deviceExtension->DevIndex, c));
+        KdPrint2((PRINT_PREFIX "  cntrlr %#x:%#x, lch %#x DmaTransfer = FALSE\n", deviceExtension->DevIndex,
+            deviceExtension->Channel + c, c));
     }
 
     lChannel = c;
@@ -4338,6 +4344,8 @@ continue_err:
     chan->lun[DeviceNumber]->IoCount++;
 #endif //IO_STATISTICS
 
+continue_PIO:
+
     // check reason for this interrupt.
     if (atapiDev) {
 
@@ -4601,7 +4609,7 @@ IntrPrepareResetController:
                 ReadBuffer(chan, baseIoAddress1,
                           AtaReq->DataBuffer,
                           wordCount);
-                KdPrint2(("IdeIntr: Read AtaReq->DataBuffer %#x, srb->DataBuffer %#x\n", AtaReq->DataBuffer, (srb ? srb->DataBuffer : (void*)-1) ));
+                KdPrint2(("IdeIntr: PIO Read AtaReq->DataBuffer %#x, srb->DataBuffer %#x\n", AtaReq->DataBuffer, (srb ? srb->DataBuffer : (void*)-1) ));
                 //KdDump(AtaReq->DataBuffer, wordCount*2);
 
                 if(DataOverrun) {
@@ -4635,6 +4643,7 @@ IntrPrepareResetController:
         // Check for read command complete.
         if (AtaReq->WordsLeft == 0) {
 
+            KdPrint2((PRINT_PREFIX "AtapiInterrupt: all transferred, AtaReq->WordsLeft == 0\n"));
             if (atapiDev) {
 
                 // Work around to make many atapi devices return correct sector size
@@ -4655,6 +4664,7 @@ IntrPrepareResetController:
                 }
             } else {
 
+            /*
                 // Completion for IDE drives.
                 if (AtaReq->WordsLeft) {
                     status = SRB_STATUS_DATA_OVERRUN;
@@ -4662,6 +4672,9 @@ IntrPrepareResetController:
                     status = SRB_STATUS_SUCCESS;
                 }
 
+                goto CompleteRequest;
+            */
+                status = SRB_STATUS_SUCCESS;
                 goto CompleteRequest;
 
             }
@@ -4855,6 +4868,7 @@ CompleteRequest:
 
             KdPrint2((PRINT_PREFIX "AtapiInterrupt: PIO completion\n"));
 PIO_wait_busy:
+            KdPrint2((PRINT_PREFIX "AtapiInterrupt: PIO completion, wait BUSY\n"));
             // Wait for busy to drop.
             for (i = 0; i < 5*30; i++) {
                 GetStatus(chan, baseIoAddress2,statusByte);
@@ -4881,9 +4895,35 @@ PIO_wait_busy:
                 goto IntrPrepareResetController;
             }
             // Check to see if DRQ is still up.
-            if (atapiDev && (statusByte & IDE_STATUS_DRQ)) {
+            if(statusByte & IDE_STATUS_DRQ) {
+                KdPrint2((PRINT_PREFIX "AtapiInterrupt: DRQ...\n"));
+                if(srb) {
+                    if(srb->SrbFlags & SRB_FLAGS_DATA_IN) {
+                        KdPrint2((PRINT_PREFIX "srb %x data in\n", srb));
+                    } else {
+                        KdPrint2((PRINT_PREFIX "srb %x data out\n", srb));
+                    }
+                } else {
+                    KdPrint2((PRINT_PREFIX "srb NULL\n"));
+                }
+                if(AtaReq) {
+                    KdPrint2((PRINT_PREFIX "AtaReq %x AtaReq->WordsLeft=%x\n", AtaReq, AtaReq->WordsLeft));
+                } else {
+                    KdPrint2((PRINT_PREFIX "AtaReq NULL\n"));
+                }
+                if(AtaReq && AtaReq->WordsLeft /*&&
+                   !(LunExt->DeviceFlags & (DFLAGS_ATAPI_DEVICE | DFLAGS_TAPE_DEVICE | DFLAGS_LBA_ENABLED))*/) {
+                    KdPrint2((PRINT_PREFIX "DRQ+AtaReq->WordsLeft -> next portion\n"));
+                    goto continue_PIO;
+                }
+            }
+            //if (atapiDev && (statusByte & IDE_STATUS_DRQ)) {}
+            //if ((statusByte & IDE_STATUS_DRQ)) {}
+            if((statusByte & IDE_STATUS_DRQ) &&
+               (LunExt->DeviceFlags & (DFLAGS_ATAPI_DEVICE | DFLAGS_TAPE_DEVICE | DFLAGS_LBA_ENABLED)) ) {
 
 PIO_wait_DRQ:
+                KdPrint2((PRINT_PREFIX "AtapiInterrupt: PIO_wait_DRQ\n"));
                 for (i = 0; i < 200; i++) {
                     GetStatus(chan, baseIoAddress2,statusByte);
                     if (!(statusByte & IDE_STATUS_DRQ)) {
@@ -4907,7 +4947,7 @@ PIO_wait_DRQ:
                 }
             }
             if(atapiDev) {
-                KdPrint2(("IdeIntr: Read AtaReq->DataBuffer %#x, srb->DataBuffer %#x, len %#x\n",
+                KdPrint2(("IdeIntr: ATAPI Read AtaReq->DataBuffer %#x, srb->DataBuffer %#x, len %#x\n",
                      AtaReq->DataBuffer, (srb ? srb->DataBuffer : (void*)(-1)), srb->DataTransferLength ));
                 //KdDump(srb->DataBuffer, srb->DataTransferLength);
             }
@@ -4929,6 +4969,7 @@ PIO_wait_DRQ:
             // Check for underflow.
             if (AtaReq->WordsLeft) {
 
+                KdPrint2((PRINT_PREFIX "AtapiInterrupt: Check for underflow, AtaReq->WordsLeft %x\n", AtaReq->WordsLeft));
                 // Subtract out residual words and update if filemark hit,
                 // setmark hit , end of data, end of media...
                 if (!(LunExt->DeviceFlags & DFLAGS_TAPE_DEVICE)) {
@@ -5099,6 +5140,7 @@ ReturnEnableIntr:
     InterlockedExchange(&(chan->CheckIntr), CHECK_INTR_IDLE);
     // in simplex mode next command must be sent here if
     // DPC is not used
+    KdPrint2((PRINT_PREFIX "AtapiInterrupt: exiting, UseDpc=%d, NoStartIo=%d\n", UseDpc, NoStartIo));
     if(!UseDpc && /*deviceExtension->simplexOnly &&*/ !NoStartIo) {
         chan = AtapiGetNextChannel(chan);
         if(chan) {
@@ -5106,6 +5148,7 @@ ReturnEnableIntr:
         } else {
             srb = NULL;
         }
+        KdPrint2((PRINT_PREFIX "AtapiInterrupt: run srb %x\n", srb));
         if(srb) {
             AtapiStartIo__(HwDeviceExtension, srb, FALSE);
         }
