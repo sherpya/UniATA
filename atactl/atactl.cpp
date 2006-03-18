@@ -382,6 +382,7 @@ ata_check_unit(
     char buff[sizeof(SENDCMDOUTPARAMS)+sizeof(IDENTIFY_DATA)];
     char mode_str[12];
     ULONG bus_id = (dev_id >> 24) & 0xff;
+    BOOLEAN found = FALSE;
 
     if(dev_id != -1) {
         dev_id &= 0x00ffffff;
@@ -400,6 +401,7 @@ ata_check_unit(
                              FALSE);
 
     if(!status) {
+        printf("Can't get device info\n");
         return FALSE;
     }
 
@@ -423,6 +425,8 @@ ata_check_unit(
             l_dev_id = (i << 16) | ((ULONG)(inquiryData->TargetId) << 8) | inquiryData->Lun;
             
             if(l_dev_id == dev_id || dev_id == -1) {
+
+                found = TRUE;
 
                 printf("  b%d:d%d:l%d    %.28s ",
                 i,
@@ -476,6 +480,9 @@ ata_check_unit(
             inquiryData = (PSCSI_INQUIRY_DATA) (g_inquiry_buffer +
                 inquiryData->NextInquiryDataOffset);
         }
+    }
+    if(!found) {
+        printf("  No device(s) found.\n");
     }
 
     return FALSE;
@@ -569,8 +576,11 @@ ata_mode(
                             &IoMode, sizeof(IoMode),
                             NULL, 0,
                             &returned);
+    if(!status) {
+        printf("Can't apply specified transfer mode\n");
+    }
     ata_close_dev(h);
-    return TRUE;
+    return status ? TRUE : FALSE;
 } // end ata_list()
 
 BOOLEAN

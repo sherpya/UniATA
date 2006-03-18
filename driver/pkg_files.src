@@ -10,6 +10,8 @@
 ..\driver\id_dma.cpp
 ..\driver\id_init.cpp
 ..\driver\id_probe.cpp
+..\driver\id_queue.cpp
+..\driver\id_queue.h
 ..\driver\idedma.def
 ..\driver\idedma.dep
 ..\driver\idedma.mak

@@ -160,6 +160,8 @@ AtapiDmaSetup(
     PHW_CHANNEL chan = &(deviceExtension->chan[lChannel]);
     PATA_REQ AtaReq = (PATA_REQ)(Srb->SrbExtension);
 
+    AtaReq->Flags &= ~REQ_FLAG_DMA_OPERATION;
+
     KdPrint2((PRINT_PREFIX "AtapiDmaSetup: mode %#x\n", deviceExtension->lun[lChannel*2+DeviceNumber].TransferMode ));
     if(deviceExtension->lun[lChannel*2+DeviceNumber].TransferMode < ATA_DMA) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: Not DMA mode, assume this is just preparation\n" ));
@@ -383,7 +385,7 @@ AtapiDmaDone(
     ULONG VendorID =  deviceExtension->DevID        & 0xffff;
     ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
 
-    KdPrint2((PRINT_PREFIX "AtapiDmaDone:\n" ));
+    KdPrint2((PRINT_PREFIX "AtapiDmaDone: dev %d\n", DeviceNumber));
 
     switch(VendorID) {
     case ATA_PROMISE_ID:
@@ -465,6 +467,8 @@ limit_lba48:
             LunExt->DeviceFlags |= REQ_FLAG_FORCE_DOWNRATE_LBA48;
 limit_pio:
             // do not make extra work if we already use PIO
+            KdPrint2((PRINT_PREFIX 
+                        "AtapiDmaReinit: set PIO mode on Device %d\n", ldev & 1));
             if(LunExt->TransferMode >= ATA_DMA) {
                 AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
                              (CHAR)AtaPioMode(&(LunExt->IdentifyData)), 
@@ -472,6 +476,8 @@ limit_pio:
                              -1 );
             }
         } else {
+            KdPrint2((PRINT_PREFIX 
+                        "AtapiDmaReinit: set MAX mode on Device %d\n", ldev & 1));
             AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
                          (CHAR)AtaPioMode(&(LunExt->IdentifyData)), 
                          min( retry_Wdma[AtaReq->retry],
@@ -502,7 +508,7 @@ AtapiDmaInit__(
 
     if(LunExt->IdentifyData.SupportDma) {
         KdPrint2((PRINT_PREFIX 
-                    "AtapiHwInitialize: Set (U)DMA on Device %d\n", ldev & 1));
+                    "AtapiDmaInit__: Set (U)DMA on Device %d\n", ldev & 1));
 /*        for(i=AtaUmode(&(LunExt->IdentifyData)); i>=0; i--) {
             AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
                          (CHAR)AtaPioMode(&(LunExt->IdentifyData)),
@@ -521,7 +527,7 @@ AtapiDmaInit__(
                      (CHAR)AtaUmode(&(LunExt->IdentifyData)) );
     } else {
         KdPrint2((PRINT_PREFIX 
-                    "AtapiHwInitialize: Set PIO on Device %d\n", ldev & 1));
+                    "AtapiDmaInit__: Set PIO on Device %d\n", ldev & 1));
         AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
                      (CHAR)AtaPioMode(&(LunExt->IdentifyData)), -1, -1);
     }
@@ -536,6 +542,8 @@ AtaSetTransferMode(
     IN ULONG mode
     )
 {
+    KdPrint2((PRINT_PREFIX 
+                "AtaSetTransferMode: Set %#x on Device %d/%d\n", mode, lChannel, DeviceNumber));
     LONG statusByte = 0;
     statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                         IDE_COMMAND_SET_FEATURES, 0, 0, 0,
@@ -575,6 +583,8 @@ AtapiDmaInit(
     ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
     ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
 
+    LONG statusByte = 0;
+
     //UCHAR *reg_val = NULL;
 
     LunExt->DeviceFlags &= ~DFLAGS_REINIT_DMA;
@@ -585,16 +595,16 @@ AtapiDmaInit(
     }
 
     // Limit transfer mode (controller limitation)
-    if(deviceExtension->MaxTransferMode >= ATA_UDMA) {
+    if((LONG)deviceExtension->MaxTransferMode >= ATA_UDMA) {
         KdPrint2((PRINT_PREFIX "AtapiDmaInit: deviceExtension->MaxTransferMode >= ATA_UDMA\n"));
         udmamode = min( udmamode, (CHAR)(deviceExtension->MaxTransferMode - ATA_UDMA));
     } else
-    if(deviceExtension->MaxTransferMode >= ATA_WDMA) {
+    if((LONG)deviceExtension->MaxTransferMode >= ATA_WDMA) {
         KdPrint2((PRINT_PREFIX "AtapiDmaInit: deviceExtension->MaxTransferMode >= ATA_WDMA\n"));
         udmamode = -1;
         wdmamode = min( wdmamode, (CHAR)(deviceExtension->MaxTransferMode - ATA_WDMA));
     } else
-    if(deviceExtension->MaxTransferMode >= ATA_PIO0) {
+    if((LONG)deviceExtension->MaxTransferMode >= ATA_PIO0) {
         KdPrint2((PRINT_PREFIX "AtapiDmaInit: NO DMA\n"));
         wdmamode = udmamode = -1;
         apiomode = min( apiomode, (CHAR)(deviceExtension->MaxTransferMode - ATA_PIO0));
@@ -605,20 +615,20 @@ AtapiDmaInit(
     }
     // Limit transfer mode (device limitation)
     KdPrint2((PRINT_PREFIX "AtapiDmaInit: LunExt->LimitedTransferMode %#x\n", LunExt->LimitedTransferMode));
-    if(LunExt->LimitedTransferMode >= ATA_UDMA) {
+    if((LONG)LunExt->LimitedTransferMode >= ATA_UDMA) {
         KdPrint2((PRINT_PREFIX "AtapiDmaInit: LunExt->MaxTransferMode >= ATA_UDMA   =>   %#x\n",
          min( udmamode, (CHAR)(LunExt->LimitedTransferMode - ATA_UDMA))
                 ));
         udmamode = min( udmamode, (CHAR)(LunExt->LimitedTransferMode - ATA_UDMA));
     } else
-    if(LunExt->LimitedTransferMode >= ATA_WDMA) {
+    if((LONG)LunExt->LimitedTransferMode >= ATA_WDMA) {
         KdPrint2((PRINT_PREFIX "AtapiDmaInit: LunExt->MaxTransferMode >= ATA_WDMA   =>   %#x\n",
          min( wdmamode, (CHAR)(LunExt->LimitedTransferMode - ATA_WDMA))
                 ));
         udmamode = -1;
         wdmamode = min( wdmamode, (CHAR)(LunExt->LimitedTransferMode - ATA_WDMA));
     } else
-    if(LunExt->LimitedTransferMode >= ATA_PIO0) {
+    if((LONG)LunExt->LimitedTransferMode >= ATA_PIO0) {
         KdPrint2((PRINT_PREFIX "AtapiDmaInit: lun NO DMA\n"));
         wdmamode = udmamode = -1;
         apiomode = min( apiomode, (CHAR)(LunExt->LimitedTransferMode - ATA_PIO0));
@@ -633,6 +643,14 @@ AtapiDmaInit(
         udmamode = 2;
         apiomode = min( apiomode, (CHAR)(LunExt->LimitedTransferMode - ATA_PIO));
     }
+
+    SelectDrive(chan, deviceExtension->BaseIoAddress1[lChannel], DeviceNumber);
+    GetStatus(chan, deviceExtension->BaseIoAddress2[lChannel], statusByte);
+    if (statusByte && statusByte != IDE_STATUS_IDLE) {
+        KdPrint2((PRINT_PREFIX "Can't setup transfer mode: statusByte = %#x\n", statusByte));
+        return;
+    }
+
 
     if(deviceExtension->UnknownDev) {
         KdPrint2((PRINT_PREFIX "Unknown chip, omit Vendor/Dev checks\n"));

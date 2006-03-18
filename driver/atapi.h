@@ -48,7 +48,9 @@ Revision History:
 extern "C" {
 #endif //__cplusplus
 
+#ifndef USER_MODE
 #include "config.h"
+#endif //USER_MODE
 
 #include "scsi.h"
 #include "stdio.h"
@@ -746,6 +748,8 @@ NATIVE_MODE_CONTROLLER_INFORMATION const NativeModeAdapters[] = {
 // Beautification macros
 //
 
+#ifndef USER_MODE
+
 #define GetStatus(chan, BaseIoAddress, Status) \
     Status = AtapiReadPort1(chan, &((BaseIoAddress)->AlternateStatus));
 
@@ -853,6 +857,8 @@ AtapiSoftReset(
     }\
     result = TRUE;\
 }*/
+
+#endif //USER_MODE
 
 #define IS_RDP(OperationCode)\
     ((OperationCode == SCSIOP_ERASE)||\

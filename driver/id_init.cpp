@@ -855,13 +855,17 @@ AtapiChipInit(
         c = channel - deviceExtension->Channel; // logical channel (for Compatible Mode controllers)
     } else {
         c = -1;
+
+        if(AtapiRegCheckDevValue(deviceExtension, -1, -1, L"ForceSimplex", FALSE)) {
+            deviceExtension->simplexOnly = TRUE; 
+        }
+        deviceExtension->opt_AtapiDmaZeroTransfer = FALSE; 
+        deviceExtension->opt_AtapiDmaControlCmd   = FALSE; 
+        deviceExtension->opt_AtapiDmaRawRead      = TRUE; 
+        deviceExtension->opt_AtapiDmaReadWrite    = TRUE; 
     }
 
     KdPrint2((PRINT_PREFIX "AtapiChipInit: dev %#x, ph chan %d\n", DeviceNumber, channel ));
-
-    if(AtapiRegCheckDevValue(deviceExtension, -1, -1, L"ForceSimplex", 0)) {
-        deviceExtension->simplexOnly = TRUE; 
-    }
 
     if(c == -1) {
         for(c=0; c<deviceExtension->NumberChannels; c++) {
@@ -896,7 +900,8 @@ AtapiChipInit(
 
     if(deviceExtension->UnknownDev) {
         KdPrint2((PRINT_PREFIX "  Unknown chip, exiting\n" ));
-        return TRUE;
+        //return TRUE;
+        VendorID = 0xffffffff;
     }
 
     switch(VendorID) {
@@ -1046,6 +1051,10 @@ AtapiChipInit(
             if( !((reg52 >> (channel*2)) & 0x01)) {
                 chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
             }
+        }
+        if(channel == -1) {
+            KdPrint2((PRINT_PREFIX "default opt_AtapiDmaControlCmd=TRUE\n"));
+            deviceExtension->opt_AtapiDmaControlCmd   = TRUE; 
         }
         break; }
     case ATA_PROMISE_ID: {
@@ -1207,6 +1216,12 @@ AtapiChipInit(
             SetPciConfig1(0x57, 0x1c);
             SetPciConfig1(0x58, 0x3f);
             SetPciConfig1(0x5b, 0x3f);
+
+            if(channel == -1) {
+                KdPrint2((PRINT_PREFIX "default opt_AtapiDmaControlCmd=TRUE\n"));
+                deviceExtension->opt_AtapiDmaControlCmd   = TRUE; 
+            }
+
             break; }
         }
         break;
@@ -1342,6 +1357,24 @@ AtapiChipInit(
         }
 
         break;
+    }
+
+    if(channel == -1) {
+        deviceExtension->opt_AtapiDmaZeroTransfer = 
+            AtapiRegCheckDevValue(deviceExtension, -1, -1, L"AtapiDmaZeroTransfer", deviceExtension->opt_AtapiDmaZeroTransfer) ?
+               TRUE : FALSE; 
+
+        deviceExtension->opt_AtapiDmaControlCmd =
+            AtapiRegCheckDevValue(deviceExtension, -1, -1, L"AtapiDmaControlCmd", deviceExtension->opt_AtapiDmaControlCmd) ?
+               TRUE : FALSE; 
+
+        deviceExtension->opt_AtapiDmaRawRead = TRUE; 
+            AtapiRegCheckDevValue(deviceExtension, -1, -1, L"AtapiDmaRawRead", deviceExtension->opt_AtapiDmaRawRead) ?
+               TRUE : FALSE; 
+
+        deviceExtension->opt_AtapiDmaReadWrite =
+            AtapiRegCheckDevValue(deviceExtension, -1, -1, L"AtapiDmaReadWrite", deviceExtension->opt_AtapiDmaReadWrite) ?
+               TRUE : FALSE; 
     }
 
     return TRUE;

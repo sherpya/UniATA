@@ -154,6 +154,7 @@ typedef struct _ATA_REQ {
 
     PUSHORT             DataBuffer;     // Data buffer pointer.
     ULONG               WordsLeft;      // Data words left.
+    ULONG               TransferLength; // Originally requested transfer length
     LONGLONG            lba;
     ULONG               bcount;
 
@@ -199,10 +200,11 @@ typedef struct _ATA_REQ {
 #define REQ_STATE_DPC_COMPLETE_REQ      0x53
 
 #define REQ_STATE_DPC_WAIT_BUSY0        0x57
-#define REQ_STATE_DPC_WAIT_BUSY         0x58
-#define REQ_STATE_DPC_WAIT_DRQ          0x59
-#define REQ_STATE_DPC_WAIT_DRQ0         0x5a
-#define REQ_STATE_DPC_WAIT_DRQ_ERR      0x5b
+#define REQ_STATE_DPC_WAIT_BUSY1        0x58
+#define REQ_STATE_DPC_WAIT_BUSY         0x59
+#define REQ_STATE_DPC_WAIT_DRQ          0x5a
+#define REQ_STATE_DPC_WAIT_DRQ0         0x5b
+#define REQ_STATE_DPC_WAIT_DRQ_ERR      0x5c
 
 #define REQ_STATE_TRANSFER_COMPLETE     0x7f
 
@@ -448,6 +450,11 @@ typedef struct _HW_DEVICE_EXTENSION {
     ULONG AlignmentMask;
 
     ULONG BaseMemAddress;
+
+    BOOLEAN        opt_AtapiDmaZeroTransfer; // default FALSE
+    BOOLEAN        opt_AtapiDmaControlCmd;   // default FALSE
+    BOOLEAN        opt_AtapiDmaRawRead;      // default TRUE
+    BOOLEAN        opt_AtapiDmaReadWrite;    // default TRUE  
 
 } HW_DEVICE_EXTENSION, *PHW_DEVICE_EXTENSION;
 
@@ -712,8 +719,10 @@ AtapiGetIoRange(
     SetPciConfig4(offs, a);                                      \
 }
 
+#ifndef GetDmaStatus
 #define GetDmaStatus(de, c) \
     (((de)->BaseIoAddressBM[c]) ? ScsiPortReadPortUchar(&((de)->BaseIoAddressBM[c]->Status)) : 0)
+#endif //GetDmaStatus
 
 #ifdef USE_OWN_DMA
 #define AtapiVirtToPhysAddr(hwde, srb, phaddr, plen) \
@@ -810,6 +819,15 @@ AtapiReadBuffer2(
 #define GET_LDEV(Srb)  (Srb->TargetId | (Srb->PathId << 1))
 #define GET_LDEV2(P, T, L)  (T | (P<<1))
 #define GET_CDEV(Srb)  (Srb->TargetId)
+
+#define AtapiSetupLunPtrs(chan, deviceExtension, c) \
+{ \
+        chan->DeviceExtension = deviceExtension; \
+        chan->lChannel        = c; \
+        chan->lun[0] = &(deviceExtension->lun[c*2+0]); \
+        chan->lun[1] = &(deviceExtension->lun[c*2+1]); \
+        chan->MemIo  = deviceExtension->MemIo; \
+}
 
 extern ULONG SkipRaids;
 extern ULONG ForceSimplex;

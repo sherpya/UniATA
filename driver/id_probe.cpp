@@ -58,10 +58,14 @@ extern "C" {
 #include "ntddscsi.h"
 #include "bsmaster.h"
 
-UCHAR         pciBuffer[256];
 PBUSMASTER_CONTROLLER_INFORMATION BMList = NULL;
 ULONG         BMListLen = 0;
+
+#ifndef UNIATA_CORE
+
+UCHAR         pciBuffer[256];
 ULONG         maxPciBus = 16;
+
 PDRIVER_OBJECT SavedDriverObject = NULL;
 
 BOOLEAN FirstMasterOk = FALSE;
@@ -84,6 +88,8 @@ AtapiDoNothing(VOID)
     ULONG i = 0;
     return;
 } // end AtapiDoNothing()
+
+#endif //UNIATA_CORE
 
 /*
     Get PCI address by ConfigInfo and RID
@@ -151,6 +157,8 @@ AtapiGetIoRange(
 
 } // end AtapiGetIoRange()
 
+#ifndef UNIATA_CORE
+
 /*
     Do nothing, but build list of supported IDE controllers
     It is a hack, ScsiPort architecture assumes, that DriverEntry
@@ -167,38 +175,6 @@ AtapiEnumBusMasterController(
     PVOID Argument2
     )
 {
-/*    HW_INITIALIZATION_DATA hwInitializationData;
-
-    // Zero out structure.
-    RtlZeroMemory(((PCHAR)&hwInitializationData), sizeof(HW_INITIALIZATION_DATA));
-
-    // Set size of hwInitializationData.
-    hwInitializationData.HwInitializationDataSize =
-      sizeof(HW_INITIALIZATION_DATA);
-
-    // Set entry points.
-    hwInitializationData.HwInitialize = AtapiHwInitialize;
-    hwInitializationData.HwResetBus = AtapiResetController;
-    hwInitializationData.HwStartIo = AtapiStartIo;
-    hwInitializationData.HwInterrupt = AtapiInterrupt;
-
-    // Specify size of extensions.
-    hwInitializationData.DeviceExtensionSize = sizeof(HW_DEVICE_EXTENSION);
-    hwInitializationData.SpecificLuExtensionSize = sizeof(HW_LU_EXTENSION);
-
-    // Indicate PIO device.
-    hwInitializationData.MapBuffers = TRUE;
-
-    hwInitializationData.HwFindAdapter = AtapiEnumBusMasterController__;
-    hwInitializationData.NumberOfAccessRanges = 4;
-    hwInitializationData.AdapterInterfaceType = Isa;
-
-    KdPrint2((PRINT_PREFIX "\n\nATAPI IDE Look for PCI Controllers\n"));
-    ScsiPortInitialize(DriverObject,
-                       Argument2,
-                       &hwInitializationData,
-                       NULL);*/
-
     AtapiEnumBusMasterController__();
 
 } // end AtapiEnumBusMasterController()
@@ -210,12 +186,6 @@ AtapiEnumBusMasterController(
 */
 ULONG
 AtapiEnumBusMasterController__(
-/*    IN PVOID HwDeviceExtension,
-    IN PVOID Context,
-    IN PVOID BusInformation,
-    IN PCHAR ArgumentString,
-    IN OUT PPORT_CONFIGURATION_INFORMATION ConfigInfo,
-    OUT PBOOLEAN Again*/
     )
 {
 //    PHW_DEVICE_EXTENSION  deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
@@ -718,6 +688,8 @@ AtapiFindDev(
     return 0;
 } // end AtapiFindDev()
 
+#endif //UNIATA_CORE
+
 /*++
 
 Routine Description:
@@ -1185,11 +1157,7 @@ AtapiFindBusMasterController(
 
         KdPrint2((PRINT_PREFIX "chan = %#x\n", chan));
         //PrintNtConsole("chan = %#x, c=%#x\n", chan, c);
-        chan->DeviceExtension = deviceExtension;
-        chan->lChannel        = c;
-        chan->lun[0] = &(deviceExtension->lun[c*2+0]);
-        chan->lun[1] = &(deviceExtension->lun[c*2+1]);
-        chan->MemIo  = deviceExtension->MemIo;
+        AtapiSetupLunPtrs(chan, deviceExtension, c);
 
         /* do extra channel-specific setups */
         AtapiChipInit(HwDeviceExtension, i, channel);
@@ -1964,7 +1932,9 @@ CheckDevice(
     if(ResetDev) {
         KdPrint2((PRINT_PREFIX "CheckDevice: reset bus\n"));
         // Reset device
+        AtapiDisableInterrupts(deviceExtension, Channel);
         AtapiSoftReset(chan, baseIoAddress1,deviceNumber);
+        AtapiEnableInterrupts(deviceExtension, Channel);
         statusByte = WaitOnBusy(chan, baseIoAddress2);
     }
     // Select the device.
@@ -2113,8 +2083,10 @@ FindDevices(
 
     // Search for devices.
     for (i = 0; i < 2; i++) {
+        AtapiDisableInterrupts(deviceExtension, Channel);
         deviceResponded |= 
             (CheckDevice(HwDeviceExtension, Channel, i, TRUE) != 0);
+        AtapiEnableInterrupts(deviceExtension, Channel);
     }
 
     for (i = 0; i < 2; i++) {
@@ -2249,6 +2221,19 @@ FindDevices(
     }
 */
     if(deviceResponded) {
+        for (i = 0; i < 2; i++) {
+            ldev = GET_LDEV2(Channel, i, 0);
+
+            if(deviceExtension->lun[ldev].DeviceFlags & DFLAGS_DEVICE_PRESENT) {
+                // Make sure some device (master is preferred) is selected on exit.
+                KdPrint2((PRINT_PREFIX 
+                           "FindDevices: select %d dev to clear INTR\n", i));
+                SelectDrive(chan, baseIoAddress1, i);
+                GetBaseStatus(chan, baseIoAddress1, statusByte);
+                KdPrint2((PRINT_PREFIX 
+                           "FindDevices: statusByte=%#x\n", statusByte));
+            }
+        }
         for (i = 0; i < 2; i++) {
             ldev = GET_LDEV2(Channel, i, 0);
 

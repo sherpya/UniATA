@@ -31,8 +31,8 @@ Revision History:
 
 --*/
 
-#ifndef __UNIATA_TOOLS_H__
-#define __UNIATA_TOOLS_H__
+#ifndef __TOOLS_H__
+#define __TOOLS_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -46,12 +46,15 @@ extern "C" {
 
 //----------------
 
+#ifndef FOUR_BYTE_DEFINED
+#define FOUR_BYTE_DEFINED
 typedef struct _FOUR_BYTE {
     UCHAR Byte0;
     UCHAR Byte1;
     UCHAR Byte2;
     UCHAR Byte3;
 } FOUR_BYTE, *PFOUR_BYTE;
+#endif //FOUR_BYTE_DEFINED
 
 #ifdef _DEBUG
 
@@ -310,6 +313,7 @@ if((a)!=NULL) {                             \
 
 #endif //DBG
 
+/*
 #define CHECK_OUT_MDL()                                                 \
 if(irpStack->Parameters.DeviceIoControl.OutputBufferLength < length) {  \
     KdPrint(("Output buffer (MDL) too small (%#x/%#x)\n", length, \
@@ -373,7 +377,7 @@ if ( Irp->AssociatedIrp.SystemBuffer == NULL ){                                 
     cddata->LastError = CDRW_ERR_INVALID_IO_BUFFER_ADDRESS;             \
     goto CdRwSpecDevCtrlCompleteRequest;                                \
 }
-
+*/
 #define WAIT_FOR_XXX_EMU_DELAY  DEF_I64(5000000)        //  0.5 s
 
 // neat little hacks to count number of bits set efficiently
@@ -382,8 +386,13 @@ __inline ULONG CountOfSetBitsUChar(UCHAR _X)
 __inline ULONG CountOfSetBitsULong(ULONG _X)
 { ULONG i = 0; while (_X) { _X &= _X - 1; i++; } return i; }
 
+#ifndef max
 #define max(a,b) (((a) > (b)) ? (a) : (b))
+#endif //max
+
+#ifndef min
 #define min(a,b) (((a) < (b)) ? (a) : (b))
+#endif //min
 //#define abs(a) (((a) < 0) ? (-(a)) : (a))
 
 #ifdef __cplusplus
@@ -419,4 +428,4 @@ extern UNICODE_STRING SavedSPString;
 #define offsetof(type, field)   (ULONG)&(((type *)0)->field)
 #endif //offsetof
 
-#endif // __UNIATA_TOOLS_H__
+#endif // __TOOLS_H__

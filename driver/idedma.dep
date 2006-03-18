@@ -10,6 +10,7 @@
 	".\srb.h"\
 	".\uata_ctl.h"\
 	".\bsmaster.h"\
+	".\id_queue.h"\
 	".\uniata_ver.h"\
 	
 .\id_dma.cpp : \
@@ -21,6 +22,7 @@
 	".\scsi.h"\
 	".\srb.h"\
 	".\uata_ctl.h"\
+	".\id_queue.h"\
 	".\bsmaster.h"\
 	
 .\id_init.cpp : \
@@ -32,6 +34,7 @@
 	".\scsi.h"\
 	".\srb.h"\
 	".\uata_ctl.h"\
+	".\id_queue.h"\
 	".\bsmaster.h"\
 	
 .\id_probe.cpp : \
@@ -43,8 +46,21 @@
 	".\scsi.h"\
 	".\srb.h"\
 	".\uata_ctl.h"\
+	".\id_queue.h"\
 	".\bsmaster.h"\
 	
+.\id_queue.cpp : \
+	".\config.h"\
+	".\tools.h"\
+	".\atapi.h"\
+	".\bm_devs.h"\
+	".\ntddscsi.h"\
+	".\scsi.h"\
+	".\srb.h"\
+	".\uata_ctl.h"\
+	".\id_queue.h"\
+	".\bsmaster.h"\
+
 BusMaster_v$(VER).rar : \
 	"Debug\idedma.sys"\
 	".\pkg_files.dist"\

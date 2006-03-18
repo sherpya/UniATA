@@ -65,6 +65,10 @@ AddReg         = uniata_PNP_Inst_AddReg
 ;HKR, "Parameters\PnpInterface", "1", 0x00010001, 0x00000001
 ;HKR, "Parameters\PnpInterface", "5", 0x00010001, 0x00000001
 
+[uniata_EventLog_AddReg]
+HKR,,EventMessageFile,%REG_EXPAND_SZ%,%11%%IOLOGMSGDLL%
+HKR,,TypesSupported,%REG_DWORD%,7
+
 
 [DISABLE_PCIIDE]
 AddReg         = DISABLE_PCIIDE_Reg
@@ -101,6 +105,8 @@ REG_EXPAND_SZ  = 0x00020000
 REG_BINARY     = 0x00000001
 REG_DWORD      = 0x00010001
 SERVICEROOT    = "System\CurrentControlSet\Services"
+
+IOLOGMSGDLL    = "\IoLogMsg.dll"
 
 DiskId1 = "UniATA Installation disk"
 

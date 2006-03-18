@@ -68,6 +68,7 @@ LINK32_OBJS= \
 	"$(INTDIR)\id_ata.obj" \
 	"$(INTDIR)\id_dma.obj" \
 	"$(INTDIR)\id_init.obj" \
+	"$(INTDIR)\id_queue.obj" \
 	"$(INTDIR)\idedma.res"
 
 
@@ -236,6 +237,9 @@ SRC=id_init
 !INCLUDE build.mak
 
 SRC=id_probe
+!INCLUDE build.mak
+
+SRC=id_queue
 !INCLUDE build.mak
 
 SRC=idedma

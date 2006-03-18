@@ -49,6 +49,8 @@ extern "C" {
 #define MAX_QUEUE_STAT        8
 
 
+#ifndef UNIATA_CORE
+
 #define IOCTL_SCSI_MINIPORT_UNIATA_FIND_DEVICES    ((FILE_DEVICE_SCSI << 16) + 0x09a0)
 #define IOCTL_SCSI_MINIPORT_UNIATA_DELETE_DEVICE   ((FILE_DEVICE_SCSI << 16) + 0x09a1)
 #define IOCTL_SCSI_MINIPORT_UNIATA_SET_MAX_MODE    ((FILE_DEVICE_SCSI << 16) + 0x09a2)
@@ -133,6 +135,8 @@ typedef struct _UNIATA_CTL {
 //        IDENTIFY_DATA2   LunIdent;
     };
 } UNIATA_CTL, *PUNIATA_CTL;
+
+#endif //UNIATA_CORE
 
 #ifdef __cplusplus
 };
