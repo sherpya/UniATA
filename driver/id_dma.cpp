@@ -438,6 +438,9 @@ AtapiDmaReinit(
     )
 {
     PHW_LU_EXTENSION LunExt = &(deviceExtension->lun[ldev]);
+    CHAR apiomode;
+
+    apiomode = (CHAR)AtaPioMode(&(LunExt->IdentifyData));
 
     if(!(AtaReq->Flags & REQ_FLAG_DMA_OPERATION)) {
         KdPrint2((PRINT_PREFIX 
@@ -468,10 +471,12 @@ limit_lba48:
 limit_pio:
             // do not make extra work if we already use PIO
             KdPrint2((PRINT_PREFIX 
-                        "AtapiDmaReinit: set PIO mode on Device %d\n", ldev & 1));
-            if(LunExt->TransferMode >= ATA_DMA) {
+                        "AtapiDmaReinit: set PIO mode on Device %d (%x -> %x)\n", ldev & 1, LunExt->TransferMode, apiomode));
+            if(/*LunExt->TransferMode >= ATA_DMA*/
+               LunExt->TransferMode != ATA_PIO0+apiomode
+               ) {
                 AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
-                             (CHAR)AtaPioMode(&(LunExt->IdentifyData)), 
+                             apiomode, 
                              -1,
                              -1 );
             }
@@ -479,7 +484,7 @@ limit_pio:
             KdPrint2((PRINT_PREFIX 
                         "AtapiDmaReinit: set MAX mode on Device %d\n", ldev & 1));
             AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
-                         (CHAR)AtaPioMode(&(LunExt->IdentifyData)), 
+                         apiomode, 
                          min( retry_Wdma[AtaReq->retry],
                               (CHAR)AtaWmode(&(LunExt->IdentifyData)) ),
                          min( retry_Udma[AtaReq->retry],
@@ -646,11 +651,15 @@ AtapiDmaInit(
 
     SelectDrive(chan, deviceExtension->BaseIoAddress1[lChannel], DeviceNumber);
     GetStatus(chan, deviceExtension->BaseIoAddress2[lChannel], statusByte);
-    if (statusByte && statusByte != IDE_STATUS_IDLE) {
+    // we can see here IDE_STATUS_ERROR status after previous operation
+    if(statusByte & IDE_STATUS_ERROR) {
+        KdPrint2((PRINT_PREFIX "IDE_STATUS_ERROR detected on entry, statusByte = %#x\n", statusByte));
+        //GetBaseStatus(chan, deviceExtension->BaseIoAddress1[lChannel], statusByte);
+    }
+    if (statusByte && (statusByte & ~IDE_STATUS_ERROR) != IDE_STATUS_IDLE) {
         KdPrint2((PRINT_PREFIX "Can't setup transfer mode: statusByte = %#x\n", statusByte));
         return;
     }
-
 
     if(deviceExtension->UnknownDev) {
         KdPrint2((PRINT_PREFIX "Unknown chip, omit Vendor/Dev checks\n"));
@@ -692,6 +701,10 @@ AtapiDmaInit(
         AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ModeByte);
         return;
     }
+    KdPrint2((PRINT_PREFIX "Setup chip a:w:u=%d:%d:%d\n",
+        apiomode,
+        wdmamode,
+        udmamode));
 
     switch(VendorID) {
     case ATA_ACARD_ID: {

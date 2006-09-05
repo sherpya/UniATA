@@ -279,6 +279,7 @@ AtapiChipDetect(
         PCI_DEV_HW_SPEC_BM( 3147, 1106, 0x00, ATA_UDMA6, "VIA 8233A"  , VIA133 | VIAAST ),
         PCI_DEV_HW_SPEC_BM( 3177, 1106, 0x00, ATA_UDMA6, "VIA 8235"   , VIA133 | VIAAST ),
         PCI_DEV_HW_SPEC_BM( 3227, 1106, 0x00, ATA_UDMA6, "VIA 8237"   , VIA133 | VIAAST ),
+        PCI_DEV_HW_SPEC_BM( 3349, 1106, 0x00, ATA_UDMA6, "VIA 8237"   , VIA133 | VIAAST ),
         PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, BMLIST_TERMINATOR       , NULL         , BMLIST_TERMINATOR )
         };
 
@@ -412,11 +413,11 @@ for_ugly_chips:
 
     KdPrint2((PRINT_PREFIX "HwFlags: %#x\n", deviceExtension->HwFlags));
     
-    tmp32 = AtapiRegCheckDevValue(deviceExtension, -1, -1, L"HwFlagsOverride", deviceExtension->HwFlags);
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"HwFlagsOverride", deviceExtension->HwFlags);
     KdPrint2((PRINT_PREFIX "HwFlagsOverride: %#x\n", tmp32));
     deviceExtension->HwFlags = tmp32;
 
-    tmp32 = AtapiRegCheckDevValue(deviceExtension, -1, -1, L"HwFlagsAdd", 0);
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"HwFlagsAdd", 0);
     KdPrint2((PRINT_PREFIX "HwFlagsAdd: %#x\n", tmp32));
     deviceExtension->HwFlags |= tmp32;
 
@@ -427,7 +428,7 @@ for_ugly_chips:
     }
 
     KdPrint2((PRINT_PREFIX "MaxTransferMode: %#x\n", deviceExtension->MaxTransferMode));
-    tmp32 = AtapiRegCheckDevValue(deviceExtension, -1, -1, L"MaxTransferMode", deviceExtension->MaxTransferMode);
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"MaxTransferMode", deviceExtension->MaxTransferMode);
     if(tmp32 != 0xffffffff) {
         KdPrint2((PRINT_PREFIX "MaxTransferMode (overriden): %#x\n", deviceExtension->MaxTransferMode));
         deviceExtension->MaxTransferMode = tmp32;
@@ -856,7 +857,7 @@ AtapiChipInit(
     } else {
         c = -1;
 
-        if(AtapiRegCheckDevValue(deviceExtension, -1, -1, L"ForceSimplex", FALSE)) {
+        if(AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"ForceSimplex", FALSE)) {
             deviceExtension->simplexOnly = TRUE; 
         }
         deviceExtension->opt_AtapiDmaZeroTransfer = FALSE; 
@@ -871,7 +872,7 @@ AtapiChipInit(
         for(c=0; c<deviceExtension->NumberChannels; c++) {
             chan = &deviceExtension->chan[c];
             chan->MaxTransferMode = deviceExtension->MaxTransferMode;
-            tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, -1, L"MaxTransferMode", chan->MaxTransferMode);
+            tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, DEVNUM_NOT_SPECIFIED, L"MaxTransferMode", chan->MaxTransferMode);
             if(tmp32 != 0xffffffff) {
                 KdPrint2((PRINT_PREFIX "MaxTransferMode (overriden): %#x\n", chan->MaxTransferMode));
                 chan->MaxTransferMode = tmp32;
@@ -883,12 +884,12 @@ AtapiChipInit(
     } else {
         chan = &deviceExtension->chan[c];
         chan->MaxTransferMode = deviceExtension->MaxTransferMode;
-        tmp32 = AtapiRegCheckDevValue(deviceExtension, c, -1, L"MaxTransferMode", chan->MaxTransferMode);
+        tmp32 = AtapiRegCheckDevValue(deviceExtension, c, DEVNUM_NOT_SPECIFIED, L"MaxTransferMode", chan->MaxTransferMode);
         if(tmp32 != 0xffffffff) {
             KdPrint2((PRINT_PREFIX "MaxTransferMode (overriden): %#x\n", chan->MaxTransferMode));
             chan->MaxTransferMode = tmp32;
         }
-        tmp32 = AtapiRegCheckDevValue(deviceExtension, c, -1, L"ReorderEnable", TRUE);
+        tmp32 = AtapiRegCheckDevValue(deviceExtension, c, DEVNUM_NOT_SPECIFIED, L"ReorderEnable", TRUE);
         chan->UseReorder = tmp32 ? TRUE : FALSE;
 
         UniAtaReadLunConfig(deviceExtension, channel, 0);
@@ -1361,19 +1362,19 @@ AtapiChipInit(
 
     if(channel == -1) {
         deviceExtension->opt_AtapiDmaZeroTransfer = 
-            AtapiRegCheckDevValue(deviceExtension, -1, -1, L"AtapiDmaZeroTransfer", deviceExtension->opt_AtapiDmaZeroTransfer) ?
+            AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"AtapiDmaZeroTransfer", deviceExtension->opt_AtapiDmaZeroTransfer) ?
                TRUE : FALSE; 
 
         deviceExtension->opt_AtapiDmaControlCmd =
-            AtapiRegCheckDevValue(deviceExtension, -1, -1, L"AtapiDmaControlCmd", deviceExtension->opt_AtapiDmaControlCmd) ?
+            AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"AtapiDmaControlCmd", deviceExtension->opt_AtapiDmaControlCmd) ?
                TRUE : FALSE; 
 
         deviceExtension->opt_AtapiDmaRawRead = TRUE; 
-            AtapiRegCheckDevValue(deviceExtension, -1, -1, L"AtapiDmaRawRead", deviceExtension->opt_AtapiDmaRawRead) ?
+            AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"AtapiDmaRawRead", deviceExtension->opt_AtapiDmaRawRead) ?
                TRUE : FALSE; 
 
         deviceExtension->opt_AtapiDmaReadWrite =
-            AtapiRegCheckDevValue(deviceExtension, -1, -1, L"AtapiDmaReadWrite", deviceExtension->opt_AtapiDmaReadWrite) ?
+            AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"AtapiDmaReadWrite", deviceExtension->opt_AtapiDmaReadWrite) ?
                TRUE : FALSE; 
     }
 

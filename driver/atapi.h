@@ -129,7 +129,8 @@ DbgPrint(
 */
 #endif // SCSI_PORT_DBG_PRINT
 
-#define AtapiStallExecution(dt)  {/*KdPrint2(("  AtapiStallExecution(%d)\n", dt));*/ ScsiPortStallExecution(dt); }
+#define AtapiStallExecution(dt)  { KdPrint2(("  AtapiStallExecution(%d)\n", dt)); ScsiPortStallExecution(dt); }
+//#define AtapiStallExecution(dt)  { ScsiPortStallExecution(dt); }
 
 #endif // _DBGNT_
 
@@ -1105,17 +1106,18 @@ AtapiRegCheckParameterValue(
     IN ULONG Default
     );
 
-#ifdef _DEBUG
-
 extern ULONG  g_LogToDisplay;
 
 extern "C"
 VOID
 _cdecl
-PrintNtConsole(
+_PrintNtConsole(
     PCHAR DebugMessage,
     ...
     );
+
+#ifdef _DEBUG
+#define PrintNtConsole  _PrintNtConsole
 #else //_DEBUG
 #define PrintNtConsole(x)  {;}
 #endif //_DEBUG

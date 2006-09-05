@@ -178,6 +178,7 @@ typedef struct _ATA_REQ {
 #define     REQ_FLAG_READ                   0x08
 #define     REQ_FLAG_WRITE                  0x00
 #define REQ_FLAG_FORCE_DOWNRATE_LBA48   0x10
+//#define REQ_FLAG_DPC_DISABLED_INTR      0x20
 
 // Request states
 #define REQ_STATE_NONE                  0x00
@@ -248,6 +249,9 @@ typedef struct _HW_CHANNEL {
     PATA_REQ            last_req;*/
     ULONG               queue_depth;
     ULONG               ChannelSelectWaitCount;
+
+    UCHAR               DpcState;
+    UCHAR               Reserved[3];
 
     BOOLEAN             ExpectingInterrupt;    // Indicates expecting an interrupt
     BOOLEAN             RDP;    // Indicate last tape command was DSC Restrictive.
@@ -334,6 +338,12 @@ typedef struct _HW_CHANNEL {
 #define GEOM_ORIG                       0x0002
 #define GEOM_MANUAL                     0x0003
 
+#define DPC_STATE_NONE                  0x00
+#define DPC_STATE_ISR                   0x10
+#define DPC_STATE_DPC                   0x20
+#define DPC_STATE_TIMER                 0x30
+#define DPC_STATE_COMPLETE              0x40
+
 // Logical unit extension
 typedef struct _HW_LU_EXTENSION {
     IDENTIFY_DATA2 IdentifyData;
@@ -409,7 +419,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     IDENTIFY_DATA FullIdentifyData;    // Identify data for device
     // BusMaster specific data
 //    PBM_DMA_ENTRY dma_tab_0;
-    KSPIN_LOCK  DpcSpinLock;
+    //KSPIN_LOCK  DpcSpinLock;
     ULONG       ActiveDpcChan;
     ULONG       FirstDpcChan;
     PHW_TIMER   HwScsiTimer1;
@@ -833,5 +843,7 @@ extern ULONG SkipRaids;
 extern ULONG ForceSimplex;
 
 extern BOOLEAN InDriverEntry;
+
+extern BOOLEAN g_opt_Verbose;
 
 #endif //__IDE_BUSMASTER_H__

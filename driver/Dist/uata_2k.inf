@@ -1,4 +1,4 @@
-; Copyright (c) 2002-2004 UniATA group
+; Copyright (c) 2002-2006 UniATA group
 
 [Version]
 Signature="$Windows NT$"
@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=SCSIAdapter
 CatalogFile=uniata.cat
-DriverVer=03/02/2005,0.30.9.0
+DriverVer=03/09/2006,0.33.7.0
 
 ;
 ; Source file information
@@ -174,6 +174,9 @@ ExcludeFromSelect = *
 [DISABLE_PCIIDE]
 HKLM, system\currentcontrolset\services\pciide, "Start", %REG_DWORD%, 0x00000004
 HKLM, system\currentcontrolset\services\pciidex, "Start", %REG_DWORD%, 0x00000004
+;HKLM, system\currentcontrolset\control\CriticalDeviceDatabase\pci#CC_0101, "Service", %REG_SZ%, "uniata"
+;HKLM, system\currentcontrolset\control\CriticalDeviceDatabase\primary_ide_channel, "Service", %REG_SZ%, "uniata"
+;HKLM, system\currentcontrolset\control\CriticalDeviceDatabase\secondary_ide_channel, "Service", %REG_SZ%, "uniata"
 ;HKLM, system\currentcontrolset\services\atapi, "Start", %REG_DWORD%, 0x00000004
 
 [uniata_Inst]
