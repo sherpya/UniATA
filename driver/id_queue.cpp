@@ -1,23 +1,10 @@
-extern "C" {
-
-#include <ntddk.h>
-//#include "miniport.h"
-
-};
-#include "stddef.h"
-#include "stdarg.h"
-
-#include "atapi.h"               // includes scsi.h
-#include "ntdddisk.h"
-#include "ntddscsi.h"
-#include "bsmaster.h"
-#include "uniata_ver.h"
+#include "stdafx.h"
 
 /*
     Get cost of insertion Req1 before Req2
  */
 LONGLONG
-AtapiGetCost(
+UniataGetCost(
     PHW_LU_EXTENSION LunExt,
     IN PATA_REQ AtaReq1,
     IN PATA_REQ AtaReq2
@@ -58,14 +45,14 @@ AtapiGetCost(
         return cost;
     }
     return (cost * LunExt->RwSwitchMCost) + LunExt->RwSwitchCost;
-} // end AtapiGetCost()
+} // end UniataGetCost()
 
 /*
     Insert command to proper place of command queue
     Perform reorder if necessary
  */
 VOID
-AtapiQueueRequest(
+UniataQueueRequest(
     IN PHW_CHANNEL chan,
     IN PSCSI_REQUEST_BLOCK Srb
     )
@@ -126,12 +113,12 @@ AtapiQueueRequest(
                 break;
             case SRB_SIMPLE_TAG_REQUEST:
             default:
-                best_cost = AtapiGetCost(LunExt, BestAtaReq1, AtaReq);
+                best_cost = UniataGetCost(LunExt, BestAtaReq1, AtaReq);
                 use_reorder |= TRUE;
             }
         } else
         if(use_reorder) {
-            best_cost = AtapiGetCost(LunExt, BestAtaReq1, AtaReq);
+            best_cost = UniataGetCost(LunExt, BestAtaReq1, AtaReq);
         }
 
         if(use_reorder) {
@@ -143,8 +130,8 @@ AtapiQueueRequest(
             // walk through command queue and find the best
             // place for insertion of the command
             while (AtaReq1 = AtaReq2->prev_req) {
-                new_cost1 = AtapiGetCost(LunExt, AtaReq1, AtaReq);
-                new_cost2 = AtapiGetCost(LunExt, AtaReq, AtaReq2);
+                new_cost1 = UniataGetCost(LunExt, AtaReq1, AtaReq);
+                new_cost2 = UniataGetCost(LunExt, AtaReq, AtaReq2);
 
                 if(new_cost1 == REORDER_COST_INTERSECT ||
                    new_cost2 == REORDER_COST_INTERSECT)
@@ -156,7 +143,7 @@ AtapiQueueRequest(
                 // for now I see nothing bad in RESELECT here
                 //ASSERT(new_cost1 <= REORDER_COST_RESELECT);
 
-                new_cost = AtapiGetCost(LunExt, AtaReq1, AtaReq2);
+                new_cost = UniataGetCost(LunExt, AtaReq1, AtaReq2);
                 new_cost = new_cost1 + new_cost2 - new_cost;
 
                 // check for Stop Reordering
@@ -223,13 +210,13 @@ AtapiQueueRequest(
     ASSERT(!chan->queue_depth || chan->cur_req);
 */
     return;
-} // end AtapiQueueRequest()
+} // end UniataQueueRequest()
 
 /*
     Remove request from queue and get next request
  */
 VOID
-AtapiRemoveRequest(
+UniataRemoveRequest(
     IN PHW_CHANNEL chan,
     IN PSCSI_REQUEST_BLOCK Srb
     )
@@ -309,14 +296,14 @@ AtapiRemoveRequest(
     ASSERT(!chan->queue_depth || chan->cur_req);
 */
     return;
-} // end AtapiRemoveRequest()
+} // end UniataRemoveRequest()
 
 /*
     Get currently processed request
     (from head of the queue)
  */
 PSCSI_REQUEST_BLOCK
-AtapiGetCurRequest(
+UniataGetCurRequest(
     IN PHW_CHANNEL chan
     )
 {
@@ -326,14 +313,14 @@ AtapiGetCurRequest(
     }
 
     return chan->cur_req->Srb;
-} // end AtapiGetCurRequest()
+} // end UniataGetCurRequest()
 
 /*
     Get next channel to be serviced
     (used in simplex mode only)
  */
 PHW_CHANNEL
-AtapiGetNextChannel(
+UniataGetNextChannel(
     IN PHW_CHANNEL chan
     )
 {
@@ -347,7 +334,7 @@ AtapiGetNextChannel(
     if(!deviceExtension->simplexOnly) {
         return chan;
     }
-    KdPrint2((PRINT_PREFIX "AtapiGetNextChannel:\n"));
+    KdPrint2((PRINT_PREFIX "UniataGetNextChannel:\n"));
     best_c = -1;
     cost_c = 0;
     for(_c=0; _c<deviceExtension->NumberChannels; _c++) {
@@ -380,4 +367,4 @@ AtapiGetNextChannel(
     }
     KdPrint2((PRINT_PREFIX "  select chan %d\n", best_c));
     return &deviceExtension->chan[best_c];
-} // end AtapiGetNextChannel()
+} // end UniataGetNextChannel()

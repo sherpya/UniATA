@@ -43,17 +43,7 @@ Revision History:
 
 --*/
 
-extern "C" {
-
-#include <ntddk.h>
-
-};
-#include "stddef.h"
-
-#include "atapi.h"               // includes scsi.h
-#include "ntdddisk.h"
-#include "ntddscsi.h"
-#include "bsmaster.h"
+#include "stdafx.h"
 
 static const ULONG valid_udma[7] = {0,0,2,0,4,5,6};
 
@@ -108,10 +98,6 @@ AtapiDmaAlloc(
     ULONG c = lChannel;
 
     deviceExtension->chan[c].CopyDmaBuffer = FALSE;
-/*
-    deviceExtension->chan[c].DmaBuffer =
-        (PUCHAR)ExAllocatePool(NonPagedPool, ConfigInfo->MaximumTransferLength);
-*/
 #endif //USE_OWN_DMA
 
     return;
@@ -129,7 +115,17 @@ AtapiVirtToPhysAddr_(
     PHYSICAL_ADDRESS ph_addr;
     ULONG addr;
 
-    ph_addr = MmGetPhysicalAddress(data);
+    //__try {
+        ph_addr = MmGetPhysicalAddress(data);
+    //} __except(EXCEPTION_EXECUTE_HANDLER) {
+    //    ph_addr.QuadPart = 0;
+    //}
+    if(ph_addr.HighPart) {
+        // do so until we add 64bit address support
+        // or some workaround
+        *count = 0;
+        return 0;
+    }
     addr = ScsiPortConvertPhysicalAddressToUlong(ph_addr);
     if(!addr) {
         *count = 0;
@@ -302,7 +298,7 @@ AtapiDmaStart(
     )
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
-    PIDE_BUSMASTER_REGISTERS BaseIoAddressBM = deviceExtension->BaseIoAddressBM[lChannel];
+    //PIDE_BUSMASTER_REGISTERS BaseIoAddressBM = deviceExtension->BaseIoAddressBM[lChannel];
     PATA_REQ AtaReq = (PATA_REQ)(Srb->SrbExtension);
     PHW_CHANNEL chan = &deviceExtension->chan[lChannel];
 
@@ -324,46 +320,46 @@ AtapiDmaStart(
     switch(VendorID) {
     case ATA_PROMISE_ID:
         if(ChipType == PRNEW) {
+            ULONG Channel = deviceExtension->Channel + lChannel;
             if(chan->ChannelCtrlFlags & CTRFLAGS_LBA48) {
-                AtapiWritePort1(chan, (PUCHAR)(BaseIoAddressBM)+0x11, 
-                      AtapiReadPort1(chan, (PUCHAR)(BaseIoAddressBM)+0x11) |
-                          (DeviceNumber ? 0x08 : 0x02));
-/*                AtapiWritePort4(chan, (PULONG)((PUCHAR)(BaseIoAddressBM) + (DeviceNumber ? 0x24 : 0x20)), 
-                      ((Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? 0x05000000 : 0x06000000) | (Srb->DataTransferLength >> 1)
-                      );*/
-                AtapiWritePort4(chan, (PULONG)((PUCHAR)(BaseIoAddressBM) + 0x20), 
+                AtapiWritePortEx1(chan, (ULONG)(&deviceExtension->BaseIoAddressBM_0),0x11, 
+                      AtapiReadPortEx1(chan, (ULONG)(&deviceExtension->BaseIoAddressBM_0),0x11) |
+                          (Channel ? 0x08 : 0x02));
+                AtapiWritePortEx4(chan, (ULONG)(&deviceExtension->BaseIoAddressBM_0),(Channel ? 0x24 : 0x20), 
                       ((Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? 0x05000000 : 0x06000000) | (Srb->DataTransferLength >> 1)
                       );
             }
+/*
         } else
         if(deviceExtension->MemIo) {
             // begin transaction
             AtapiWritePort4(chan,
-                 (PULONG)&(BaseIoAddressBM->Command), 
+                 IDX_BM_Command, 
                  (AtapiReadPort4(chan,
-                     (PULONG)&(BaseIoAddressBM->Command)) & ~0x000000c0) |
+                     IDX_BM_Command) & ~0x000000c0) |
                      ((Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? 0x00000080 : 0x000000c0) );
             return;
+*/
         }
         break;
     }
 
     // set pointer to Pointer Table
-    AtapiWritePort4(chan, &(BaseIoAddressBM->PRD_Table), 
+    AtapiWritePort4(chan, IDX_BM_PRD_Table, 
           AtaReq->dma_base
           );
     // set transfer direction
-    AtapiWritePort1(chan, &(BaseIoAddressBM->Command), 
+    AtapiWritePort1(chan, IDX_BM_Command, 
           (Srb->SrbFlags & SRB_FLAGS_DATA_IN) ? BM_COMMAND_READ : BM_COMMAND_WRITE);
     // clear Error & Intr bits (writeing 1 clears bits)
     // set DMA capability bit
-    AtapiWritePort1(chan, &(BaseIoAddressBM->Status), 
-         AtapiReadPort1(chan, &(BaseIoAddressBM->Status)) |
+    AtapiWritePort1(chan, IDX_BM_Status, 
+         AtapiReadPort1(chan, IDX_BM_Status) |
              (BM_STATUS_INTR | BM_STATUS_ERR) /*|
              (DeviceNumber ? BM_STATUS_DRIVE_1_DMA : BM_STATUS_DRIVE_0_DMA)*/);
     // begin transaction
-    AtapiWritePort1(chan, &(BaseIoAddressBM->Command), 
-         AtapiReadPort1(chan, &(BaseIoAddressBM->Command)) |
+    AtapiWritePort1(chan, IDX_BM_Command, 
+         AtapiReadPort1(chan, IDX_BM_Command) |
              BM_COMMAND_START_STOP);
     return;
 
@@ -378,7 +374,7 @@ AtapiDmaDone(
     )
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
-    PIDE_BUSMASTER_REGISTERS BaseIoAddressBM = deviceExtension->BaseIoAddressBM[lChannel];
+    //PIDE_BUSMASTER_REGISTERS BaseIoAddressBM = deviceExtension->BaseIoAddressBM[lChannel];
     PHW_CHANNEL chan = &deviceExtension->chan[lChannel];
     UCHAR dma_status;
 
@@ -390,39 +386,39 @@ AtapiDmaDone(
     switch(VendorID) {
     case ATA_PROMISE_ID:
         if(ChipType == PRNEW) {
+            ULONG Channel = deviceExtension->Channel + lChannel;
             if(chan->ChannelCtrlFlags & CTRFLAGS_LBA48) {
-                AtapiWritePort1(chan, (PUCHAR)(BaseIoAddressBM)+0x11, 
-                      AtapiReadPort1(chan, (PUCHAR)(BaseIoAddressBM)+0x11) &
-                          ~(DeviceNumber ? 0x08 : 0x02));
-/*                AtapiWritePort4(chan, (PULONG)((PUCHAR)(BaseIoAddressBM) + (DeviceNumber ? 0x24 : 0x20)), 
-                      0
-                      );*/
-                AtapiWritePort4(chan, (PULONG)((PUCHAR)(BaseIoAddressBM) + 0x20), 
+                AtapiWritePortEx1(chan, (ULONG)(&deviceExtension->BaseIoAddressBM_0),0x11, 
+                      AtapiReadPortEx1(chan, (ULONG)(&deviceExtension->BaseIoAddressBM_0),0x11) &
+                          ~(Channel ? 0x08 : 0x02));
+                AtapiWritePortEx4(chan, (ULONG)(&deviceExtension->BaseIoAddressBM_0),(Channel ? 0x24 : 0x20), 
                       0
                       );
             }
+/*
         } else
         if(deviceExtension->MemIo) {
             // end transaction
             AtapiWritePort4(chan,
-                 (PULONG)&(BaseIoAddressBM->Command), 
+                 IDX_BM_Command, 
                  (AtapiReadPort4(chan,
-                     (PULONG)&(BaseIoAddressBM->Command)) & ~0x00000080) );
+                     IDX_BM_Command) & ~0x00000080) );
             // clear flag
             chan->ChannelCtrlFlags &= ~CTRFLAGS_DMA_ACTIVE;
             return 0;
+*/
         }
         break;
     }
 
     // get status
-    dma_status = AtapiReadPort1(chan, &(BaseIoAddressBM->Status)) & BM_STATUS_MASK;
+    dma_status = AtapiReadPort1(chan, IDX_BM_Status) & BM_STATUS_MASK;
     // end transaction
-    AtapiWritePort1(chan, &(BaseIoAddressBM->Command), 
-         AtapiReadPort1(chan, &(BaseIoAddressBM->Command)) &
+    AtapiWritePort1(chan, IDX_BM_Command, 
+         AtapiReadPort1(chan, IDX_BM_Command) &
              ~BM_COMMAND_START_STOP);
     // clear interrupt and error status
-    AtapiWritePort1(chan, &(BaseIoAddressBM->Status), BM_STATUS_ERR | BM_STATUS_INTR);
+    AtapiWritePort1(chan, IDX_BM_Status, BM_STATUS_ERR | BM_STATUS_INTR);
     // clear flag
     chan->ChannelCtrlFlags &= ~CTRFLAGS_DMA_ACTIVE;
 
@@ -552,11 +548,13 @@ AtaSetTransferMode(
     LONG statusByte = 0;
     statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                         IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                        (UCHAR)mode, ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+                        (UCHAR)((mode > ATA_UDMA6) ? ATA_UDMA6 : mode), ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
     if(statusByte & IDE_STATUS_ERROR) {
         return FALSE;
     }
-    LunExt->TransferMode = (UCHAR)mode;
+    if(mode <= ATA_UDMA6) {
+        LunExt->TransferMode = (UCHAR)mode;
+    }
     return TRUE;
 } // end AtaSetTransferMode()
 
@@ -595,7 +593,8 @@ AtapiDmaInit(
     LunExt->DeviceFlags &= ~DFLAGS_REINIT_DMA;
     /* set our most pessimistic default mode */
     LunExt->TransferMode = ATA_PIO;
-    if(!deviceExtension->BaseIoAddressBM[lChannel]) {
+//    if(!deviceExtension->BaseIoAddressBM[lChannel]) {
+    if(!deviceExtension->BusMaster) {
         wdmamode = udmamode = -1;
     }
 
@@ -649,14 +648,14 @@ AtapiDmaInit(
         apiomode = min( apiomode, (CHAR)(LunExt->LimitedTransferMode - ATA_PIO));
     }
 
-    SelectDrive(chan, deviceExtension->BaseIoAddress1[lChannel], DeviceNumber);
-    GetStatus(chan, deviceExtension->BaseIoAddress2[lChannel], statusByte);
+    SelectDrive(chan, DeviceNumber);
+    GetStatus(chan, statusByte);
     // we can see here IDE_STATUS_ERROR status after previous operation
     if(statusByte & IDE_STATUS_ERROR) {
         KdPrint2((PRINT_PREFIX "IDE_STATUS_ERROR detected on entry, statusByte = %#x\n", statusByte));
-        //GetBaseStatus(chan, deviceExtension->BaseIoAddress1[lChannel], statusByte);
+        //GetBaseStatus(chan, statusByte);
     }
-    if (statusByte && (statusByte & ~IDE_STATUS_ERROR) != IDE_STATUS_IDLE) {
+    if(statusByte && UniataIsIdle(deviceExtension, statusByte & ~IDE_STATUS_ERROR) != IDE_STATUS_IDLE) {
         KdPrint2((PRINT_PREFIX "Can't setup transfer mode: statusByte = %#x\n", statusByte));
         return;
     }
@@ -677,7 +676,7 @@ AtapiDmaInit(
             if(LunExt->IdentifyData.SataCapabilities != 0x0000 &&
                LunExt->IdentifyData.SataCapabilities != 0xffff) {
                 //udmamode = min(udmamode, 6);
-                if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_UDMA6)) {
+                if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_SA150)) {
                     return;
                 }
                 udmamode = min(udmamode, 5);
@@ -862,26 +861,24 @@ set_new_acard:
             { 0x00009172, 0x00012171, 0x00020080, 0x00032010, 0x00040010 };
         ULONG cyr_wdmatiming[] = { 0x00077771, 0x00012121, 0x00002020 };
         ULONG cyr_udmatiming[] = { 0x00921250, 0x00911140, 0x00911030 };
+        ULONG mode_reg = 0x24+(dev << 3);
 
         if(apiomode >= 4)
             apiomode = 4;
         for(i=udmamode; i>=0; i--) {
             if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_UDMA0 + i)) {
-                AtapiWritePort4(chan, (PULONG)(((PUCHAR)(&(deviceExtension->BaseIoAddressBM_0->Command))+0x24+(dev << 3))), 
-                      cyr_udmatiming[udmamode]);
+                AtapiWritePortEx4(chan, (ULONG)(&deviceExtension->BaseIoAddressBM_0), mode_reg, cyr_udmatiming[udmamode]);
                 return;
             }
         }
         for(i=wdmamode; i>=0; i--) {
             if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_WDMA0 + i)) {
-                AtapiWritePort4(chan, (PULONG)((PUCHAR)(&(deviceExtension->BaseIoAddressBM_0->Command))+0x24+(dev << 3)), 
-                      cyr_wdmatiming[wdmamode]);
+                AtapiWritePortEx4(chan, (ULONG)(&deviceExtension->BaseIoAddressBM_0), mode_reg, cyr_wdmatiming[wdmamode]);
                 return;
             }
         }
         if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_PIO0 + apiomode)) {
-            AtapiWritePort4(chan, (PULONG)((PUCHAR)(&(deviceExtension->BaseIoAddressBM_0->Command))+0x24+(dev << 3)), 
-                  cyr_piotiming[apiomode]);
+            AtapiWritePortEx4(chan, (ULONG)(&deviceExtension->BaseIoAddressBM_0), mode_reg, cyr_piotiming[apiomode]);
             return;
         }
         return;
@@ -1128,6 +1125,17 @@ set_new_acard:
         promise_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
         return;
         break;
+    case ATA_ATI_ID:
+
+        KdPrint2((PRINT_PREFIX "ATI\n"));
+        if(ChipType = SIIMIO) {
+            goto l_ATA_SILICON_IMAGE_ID;
+        }
+        //goto ATA_SERVERWORKS_ID;
+        // FALL THROUGH
+
+        //break; }
+
     case ATA_SERVERWORKS_ID: {
         /***************/
         /* ServerWorks */
@@ -1182,6 +1190,17 @@ set_new_acard:
         }
         AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_PIO0 + apiomode);
 //        SetPciConfig4(0x44, sw_pio_modes[apiomode]);
+        if(VendorID == ATA_ATI_ID) {
+            // special case for ATI
+            // Seems, that PATA ATI are just re-brended ServerWorks
+            USHORT reg4a;
+            // 4a
+            GetPciConfig2(0x4a, reg4a);
+            reg4a = (reg4a & ~(0xf << (dev*4))) |
+                           (apiomode << (dev*4));
+            SetPciConfig2(0x4a, reg4a);
+        }
+
         // 40
         GetPciConfig4(0x40, reg40);
         reg40 = (reg40 & ~(0xff << bit_offset)) |
@@ -1190,6 +1209,7 @@ set_new_acard:
         return;
         break; }
     case ATA_SILICON_IMAGE_ID: {
+l_ATA_SILICON_IMAGE_ID:
         /********************/
         /* SiliconImage/CMD */
         /********************/
@@ -1220,6 +1240,7 @@ set_new_acard:
                     return;
                 }
             }
+            /* enable WDMA mode */
             for(i = wdmamode; i>=0; i--) {
 
                 if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_WDMA0 + i)) {
@@ -1362,7 +1383,7 @@ set_new_acard:
     case 0x16ca:
         /* Cenatek Rocket Drive controller */
         if (wdmamode >= 0 &&
-            (AtapiReadPort1(chan, &deviceExtension->BaseIoAddressBM[lChannel]->Status) & 
+            (AtapiReadPort1(chan, IDX_BM_Status) & 
              (DeviceNumber ? BM_STATUS_DRIVE_1_DMA : BM_STATUS_DRIVE_0_DMA))) {
             AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_WDMA0 + wdmamode);
         } else {
@@ -1486,7 +1507,7 @@ setup_drive_ite:
     case 0x3388:
         /* HiNT Corp. VXPro II EIDE */
         if (wdmamode >= 0 &&
-            (AtapiReadPort1(chan, &deviceExtension->BaseIoAddressBM[lChannel]->Status) & 
+            (AtapiReadPort1(chan, IDX_BM_Status) & 
              (DeviceNumber ? BM_STATUS_DRIVE_1_DMA : BM_STATUS_DRIVE_0_DMA))) {
             AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_DMA);
         } else {
@@ -1509,8 +1530,8 @@ try_generic_dma:
     /* if controller says its setup for DMA take the easy way out */
     /* the downside is we dont know what DMA mode we are in */
     if ((udmamode >= 0 || /*wdmamode > 1*/ wdmamode >= 0) &&
-         deviceExtension->BaseIoAddressBM[lChannel] &&
-        (AtapiReadPort1(chan, &deviceExtension->BaseIoAddressBM[lChannel]->Status) &
+         /*deviceExtension->BaseIoAddressBM[lChannel]*/ deviceExtension->BusMaster &&
+        (GetDmaStatus(deviceExtension, lChannel) &
          (!(ldev & 1) ? 
           BM_STATUS_DRIVE_0_DMA : BM_STATUS_DRIVE_1_DMA))) {
 //        LunExt->TransferMode = ATA_DMA;
@@ -1564,8 +1585,8 @@ cyrix_timing(
     case ATA_WDMA2:       reg24 = 0x00002020; break;
     case ATA_UDMA2:       reg24 = 0x00911030; break;
     }
-    AtapiWritePort4(NULL, (PULONG)((PUCHAR)(deviceExtension->BaseIoAddressBM_0) + (dev*8)) + 0x20, reg20);
-    AtapiWritePort4(NULL, (PULONG)((PUCHAR)(deviceExtension->BaseIoAddressBM_0) + (dev*8)) + 0x24, reg24);
+    AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressBM_0),(dev*8) + 0x20, reg20);
+    AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressBM_0),(dev*8) + 0x24, reg24);
 } // cyrix_timing()
  
 VOID

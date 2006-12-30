@@ -17,7 +17,8 @@
 // Define SCSI maximum configuration parameters.
 
 #define SCSI_MAXIMUM_LOGICAL_UNITS 8
-#define SCSI_MAXIMUM_TARGETS_PER_BUS 32
+#define SCSI_MAXIMUM_TARGETS_PER_BUS 128
+#define SCSI_MAXIMUM_LUNS_PER_TARGET 255
 #define SCSI_MAXIMUM_BUSES 8
 #define SCSI_MINIMUM_PHYSICAL_BREAKS  16
 #define SCSI_MAXIMUM_PHYSICAL_BREAKS 255
@@ -250,11 +251,48 @@ typedef struct _SCSI_REQUEST_BLOCK {
     struct _SCSI_REQUEST_BLOCK *NextSrb; // offset 20
     PVOID OriginalRequest;          // offset 24
     PVOID SrbExtension;             // offset 28
-    ULONG QueueSortKey;             // offset 2c
+    union {
+        ULONG InternalStatus;       // offset 2c
+        ULONG QueueSortKey;         // offset 2c
+    };
+
+#if defined(_WIN64)
+    // Force PVOID alignment of Cdb
+    ULONG Reserved;
+
+#endif
+
     UCHAR Cdb[16];                  // offset 30
 } SCSI_REQUEST_BLOCK, *PSCSI_REQUEST_BLOCK;
 
 #define SCSI_REQUEST_BLOCK_SIZE sizeof(SCSI_REQUEST_BLOCK)
+
+//
+// SCSI I/O Request Block for WMI Requests
+//
+
+typedef struct _SCSI_WMI_REQUEST_BLOCK {
+    USHORT Length;
+    UCHAR Function;        // SRB_FUNCTION_WMI
+    UCHAR SrbStatus;
+    UCHAR WMISubFunction;
+    UCHAR PathId;          // If SRB_WMI_FLAGS_ADAPTER_REQUEST is set in
+    UCHAR TargetId;        // WMIFlags then PathId, TargetId and Lun are
+    UCHAR Lun;             // reserved fields.
+    UCHAR Reserved1;
+    UCHAR WMIFlags;
+    UCHAR Reserved2[2];
+    ULONG SrbFlags;
+    ULONG DataTransferLength;
+    ULONG TimeOutValue;
+    PVOID DataBuffer;
+    PVOID DataPath;
+    PVOID Reserved3;
+    PVOID OriginalRequest;
+    PVOID SrbExtension;
+    ULONG Reserved4;
+    UCHAR Reserved5[16];
+} SCSI_WMI_REQUEST_BLOCK, *PSCSI_WMI_REQUEST_BLOCK;
 
 //
 // SRB Functions
@@ -276,6 +314,10 @@ typedef struct _SCSI_REQUEST_BLOCK {
 #define SRB_FUNCTION_TERMINATE_IO           0x14
 #define SRB_FUNCTION_FLUSH_QUEUE            0x15
 #define SRB_FUNCTION_REMOVE_DEVICE          0x16
+#define SRB_FUNCTION_WMI                    0x17
+#define SRB_FUNCTION_LOCK_QUEUE             0x18
+#define SRB_FUNCTION_UNLOCK_QUEUE           0x19
+#define SRB_FUNCTION_RESET_LOGICAL_UNIT     0x20
 
 //
 // SRB Status
@@ -307,6 +349,21 @@ typedef struct _SCSI_REQUEST_BLOCK {
 #define SRB_STATUS_INVALID_TARGET_ID        0x21
 #define SRB_STATUS_BAD_FUNCTION             0x22
 #define SRB_STATUS_ERROR_RECOVERY           0x23
+#define SRB_STATUS_NOT_POWERED              0x24
+
+//
+// This value is used by the port driver to indicate that a non-scsi-related
+// error occured.  Miniports must never return this status.
+//
+
+#define SRB_STATUS_INTERNAL_ERROR           0x30
+
+//
+// Srb status values 0x38 through 0x3f are reserved for internal port driver 
+// use.
+// 
+
+
 
 //
 // SRB Status Masks
@@ -332,10 +389,19 @@ typedef struct _SCSI_REQUEST_BLOCK {
 #define SRB_FLAGS_UNSPECIFIED_DIRECTION      (SRB_FLAGS_DATA_IN | SRB_FLAGS_DATA_OUT)
 #define SRB_FLAGS_NO_QUEUE_FREEZE           0x00000100
 #define SRB_FLAGS_ADAPTER_CACHE_ENABLE      0x00000200
+#define SRB_FLAGS_FREE_SENSE_BUFFER         0x00000400
 #define SRB_FLAGS_IS_ACTIVE                 0x00010000
 #define SRB_FLAGS_ALLOCATED_FROM_ZONE       0x00020000
 #define SRB_FLAGS_SGLIST_FROM_POOL          0x00040000
+#define SRB_FLAGS_BYPASS_LOCKED_QUEUE       0x00080000
 
+#define SRB_FLAGS_NO_KEEP_AWAKE             0x00100000
+#define SRB_FLAGS_PORT_DRIVER_ALLOCSENSE    0x00200000
+#define SRB_FLAGS_PORT_DRIVER_SENSEHASPORT  0x00400000
+#define SRB_FLAGS_DONT_START_NEXT_PACKET    0x00800000
+
+#define SRB_FLAGS_PORT_DRIVER_RESERVED      0x0F000000
+#define SRB_FLAGS_CLASS_DRIVER_RESERVED     0xF0000000
 //
 // Queue Action
 //
@@ -343,6 +409,8 @@ typedef struct _SCSI_REQUEST_BLOCK {
 #define SRB_SIMPLE_TAG_REQUEST              0x20
 #define SRB_HEAD_OF_QUEUE_TAG_REQUEST       0x21
 #define SRB_ORDERED_QUEUE_TAG_REQUEST       0x22
+
+#define SRB_WMI_FLAGS_ADAPTER_REQUEST       0x01
 
 // end_ntminitape
 
@@ -429,6 +497,8 @@ SCSI_ADAPTER_CONTROL_STATUS
 #define SP_IRQ_NOT_RESPONDING       0x0008
 #define SP_BAD_FW_WARNING           0x0009
 #define SP_BAD_FW_ERROR             0x000a
+#define SP_LOST_WMI_MINIPORT_REQUEST 0x000b
+
 
 //
 // Return values for SCSI_HW_FIND_ADAPTER.
@@ -450,7 +520,10 @@ typedef enum _SCSI_NOTIFICATION_TYPE {
     ResetDetected,
     CallDisableInterrupts,
     CallEnableInterrupts,
-    RequestTimerCall
+    RequestTimerCall,
+    BusChangeDetected,     /* New */
+    WMIEvent,
+    WMIReregister
 } SCSI_NOTIFICATION_TYPE, *PSCSI_NOTIFICATION_TYPE;
 
 //

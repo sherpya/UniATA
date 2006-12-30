@@ -42,9 +42,10 @@ Revision History:
 extern "C" {
 #endif //__cplusplus
 
+#define AHCI_MAX_PORT                   32
 #define IDE_MAX_CHAN          8
 #define IDE_MAX_LUN_PER_CHAN  2
-#define IDE_MAX_LUN           (IDE_MAX_CHAN*IDE_MAX_LUN_PER_CHAN)
+#define IDE_MAX_LUN           (AHCI_MAX_PORT*IDE_MAX_LUN_PER_CHAN)
 
 #define MAX_QUEUE_STAT        8
 
@@ -120,7 +121,7 @@ typedef struct _ADAPTERINFO {
 
     BOOLEAN ChanInfoValid;
 
-    CHANINFO Chan[IDE_MAX_CHAN];
+    CHANINFO Chan[AHCI_MAX_PORT];
 
 } ADAPTERINFO, *PADAPTERINFO;
 

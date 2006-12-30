@@ -66,7 +66,7 @@ extern "C" {
 #endif
 
 #ifdef USE_DBGPRINT_LOGGER
-#include "PostDbgMesg.h"
+#include "inc\PostDbgMesg.h"
 #define DbgPrint             DbgDump_Printf
 #define Connect_DbgPrint()   {DbgDump_SetAutoReconnect(TRUE); DbgDump_Reconnect();}
 #else // USE_DBGPRINT_LOGGER
@@ -129,8 +129,8 @@ DbgPrint(
 */
 #endif // SCSI_PORT_DBG_PRINT
 
-#define AtapiStallExecution(dt)  { KdPrint2(("  AtapiStallExecution(%d)\n", dt)); ScsiPortStallExecution(dt); }
-//#define AtapiStallExecution(dt)  { ScsiPortStallExecution(dt); }
+//#define AtapiStallExecution(dt)  { KdPrint2(("  AtapiStallExecution(%d)\n", dt)); ScsiPortStallExecution(dt); }
+#define AtapiStallExecution(dt)  { ScsiPortStallExecution(dt); }
 
 #endif // _DBGNT_
 
@@ -173,25 +173,56 @@ typedef union _IDE_REGISTERS_1 {
 
 } IDE_REGISTERS_1, *PIDE_REGISTERS_1;
 
+#define IDX_IO1                     0
+#define IDX_IO1_SZ                  sizeof(IDE_REGISTERS_1)
+
+#define IDX_IO1                     0
+#define IDX_IO1_SZ                  sizeof(IDE_REGISTERS_1)
+#define IDX_IO1_i_Data              (FIELD_OFFSET(IDE_REGISTERS_1, i.Data        )+IDX_IO1)
+#define IDX_IO1_i_Error             (FIELD_OFFSET(IDE_REGISTERS_1, i.Error       )+IDX_IO1)
+#define IDX_IO1_i_BlockCount        (FIELD_OFFSET(IDE_REGISTERS_1, i.BlockCount  )+IDX_IO1)
+#define IDX_IO1_i_BlockNumber       (FIELD_OFFSET(IDE_REGISTERS_1, i.BlockNumber )+IDX_IO1)
+#define IDX_IO1_i_CylinderLow       (FIELD_OFFSET(IDE_REGISTERS_1, i.CylinderLow )+IDX_IO1)
+#define IDX_IO1_i_CylinderHigh      (FIELD_OFFSET(IDE_REGISTERS_1, i.CylinderHigh)+IDX_IO1)
+#define IDX_IO1_i_DriveSelect       (FIELD_OFFSET(IDE_REGISTERS_1, i.DriveSelect )+IDX_IO1)
+#define IDX_IO1_i_Status            (FIELD_OFFSET(IDE_REGISTERS_1, i.Status      )+IDX_IO1)
+
+#define IDX_IO1_o                   IDX_IO1_SZ
+#define IDX_IO1_o_SZ                sizeof(IDE_REGISTERS_1)
+
+#define IDX_IO1_o_Data              (FIELD_OFFSET(IDE_REGISTERS_1, o.Data        )+IDX_IO1_o)
+#define IDX_IO1_o_Feature           (FIELD_OFFSET(IDE_REGISTERS_1, o.Feature     )+IDX_IO1_o)
+#define IDX_IO1_o_BlockCount        (FIELD_OFFSET(IDE_REGISTERS_1, o.BlockCount  )+IDX_IO1_o)
+#define IDX_IO1_o_BlockNumber       (FIELD_OFFSET(IDE_REGISTERS_1, o.BlockNumber )+IDX_IO1_o)
+#define IDX_IO1_o_CylinderLow       (FIELD_OFFSET(IDE_REGISTERS_1, o.CylinderLow )+IDX_IO1_o)
+#define IDX_IO1_o_CylinderHigh      (FIELD_OFFSET(IDE_REGISTERS_1, o.CylinderHigh)+IDX_IO1_o)
+#define IDX_IO1_o_DriveSelect       (FIELD_OFFSET(IDE_REGISTERS_1, o.DriveSelect )+IDX_IO1_o)
+#define IDX_IO1_o_Command           (FIELD_OFFSET(IDE_REGISTERS_1, o.Command     )+IDX_IO1_o)
+
 typedef struct _IDE_REGISTERS_2 {
-    UCHAR AlternateStatus;
+    UCHAR AltStatus;
     UCHAR DriveAddress;
 } IDE_REGISTERS_2, *PIDE_REGISTERS_2;
 
-typedef struct _IDE_REGISTERS_3 {
-    ULONG Data;
-    UCHAR Others[4];
-} IDE_REGISTERS_3, *PIDE_REGISTERS_3;
+#define IDX_IO2                     (IDX_IO1_o+IDX_IO1_o_SZ)
+#define IDX_IO2_SZ                  sizeof(IDE_REGISTERS_2)
 
+#define IDX_IO2_AltStatus           (FIELD_OFFSET(IDE_REGISTERS_2, AltStatus   )+IDX_IO2)
+#define IDX_IO2_DriveAddress        (FIELD_OFFSET(IDE_REGISTERS_2, DriveAddress)+IDX_IO2)
+
+#define IDX_IO2_o                   (IDX_IO2+IDX_IO2_SZ)
+#define IDX_IO2_o_SZ                sizeof(IDE_REGISTERS_2)
+
+#define IDX_IO2_o_Control           (FIELD_OFFSET(IDE_REGISTERS_2, AltStatus   )+IDX_IO2_o)
 //
 // Device Extension Device Flags
 //
 
 #define DFLAGS_DEVICE_PRESENT        0x0001    // Indicates that some device is present.
-#define DFLAGS_ATAPI_DEVICE          0x0002    // Indicates whether Atapi commands can be used.
+#define DFLAGS_ATAPI_DEVICE          0x0002    // Indicates whether ATAPI commands can be used.
 #define DFLAGS_TAPE_DEVICE           0x0004    // Indicates whether this is a tape device.
 #define DFLAGS_INT_DRQ               0x0008    // Indicates whether device interrupts as DRQ is set after
-                                               // receiving Atapi Packet Command
+                                               // receiving ATAPI Packet Command
 #define DFLAGS_REMOVABLE_DRIVE       0x0010    // Indicates that the drive has the 'removable' bit set in
                                                // identify data (offset 128)
 #define DFLAGS_MEDIA_STATUS_ENABLED  0x0020    // Media status notification enabled
@@ -379,19 +410,45 @@ typedef union _ATAPI_REGISTERS_1 {
         UCHAR Status;
     } i;
 
-    IDE_REGISTERS_1 ide;
+    //IDE_REGISTERS_1 ide;
 
 } ATAPI_REGISTERS_1, *PATAPI_REGISTERS_1;
 
+#define IDX_ATAPI_IO1                     IDX_IO1
+#define IDX_ATAPI_IO1_SZ                  sizeof(ATAPI_REGISTERS_1)
+
+#define IDX_ATAPI_IO1_i_Data              (FIELD_OFFSET(ATAPI_REGISTERS_1, i.Data           )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_i_Error             (FIELD_OFFSET(ATAPI_REGISTERS_1, i.Error          )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_i_InterruptReason   (FIELD_OFFSET(ATAPI_REGISTERS_1, i.InterruptReason)+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_i_Unused1           (FIELD_OFFSET(ATAPI_REGISTERS_1, i.Unused1        )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_i_ByteCountLow      (FIELD_OFFSET(ATAPI_REGISTERS_1, i.ByteCountLow   )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_i_ByteCountHigh     (FIELD_OFFSET(ATAPI_REGISTERS_1, i.ByteCountHigh  )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_i_DriveSelect       (FIELD_OFFSET(ATAPI_REGISTERS_1, i.DriveSelect    )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_i_Status            (FIELD_OFFSET(ATAPI_REGISTERS_1, i.Status         )+IDX_ATAPI_IO1)
+
+#define IDX_ATAPI_IO1_o_Data              (FIELD_OFFSET(ATAPI_REGISTERS_1, o.Data         )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_o_Feature           (FIELD_OFFSET(ATAPI_REGISTERS_1, o.Feature      )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_o_Unused0           (FIELD_OFFSET(ATAPI_REGISTERS_1, o.Unused0      )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_o_Unused1           (FIELD_OFFSET(ATAPI_REGISTERS_1, o.Unused1      )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_o_ByteCountLow      (FIELD_OFFSET(ATAPI_REGISTERS_1, o.ByteCountLow )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_o_ByteCountHigh     (FIELD_OFFSET(ATAPI_REGISTERS_1, o.ByteCountHigh)+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_o_DriveSelect       (FIELD_OFFSET(ATAPI_REGISTERS_1, o.DriveSelect  )+IDX_ATAPI_IO1)
+#define IDX_ATAPI_IO1_o_Command           (FIELD_OFFSET(ATAPI_REGISTERS_1, o.Command      )+IDX_ATAPI_IO1)
+
+/*
 typedef union _ATAPI_REGISTERS_2 {
     struct {
-        UCHAR AlternateStatus;
+        UCHAR AltStatus;
         UCHAR DriveAddress;
     };
 
-    IDE_REGISTERS_2 ide;
+    //IDE_REGISTERS_2 ide;
 
 } ATAPI_REGISTERS_2, *PATAPI_REGISTERS_2;
+
+#define IDX_ATAPI_IO2               IDX_ATAPI_IO2_SZ
+#define IDX_ATAPI_IO2_SZ            sizeof(ATAPI_REGISTERS_2)
+*/
 
 //
 // ATAPI interrupt reasons
@@ -751,87 +808,87 @@ NATIVE_MODE_CONTROLLER_INFORMATION const NativeModeAdapters[] = {
 
 #ifndef USER_MODE
 
-#define GetStatus(chan, BaseIoAddress, Status) \
-    Status = AtapiReadPort1(chan, &((BaseIoAddress)->AlternateStatus));
+#define GetStatus(chan, Status) \
+    Status = AtapiReadPort1(chan, IDX_IO2_AltStatus);
 
-#define GetBaseStatus(chan, BaseIoAddress, pStatus) \
-    pStatus = AtapiReadPort1(chan, &((BaseIoAddress)->i.Status));
+#define GetBaseStatus(chan, pStatus) \
+    pStatus = AtapiReadPort1(chan, IDX_IO1_i_Status);
 
-#define WriteCommand(chan, BaseIoAddress, _Command) \
-    AtapiWritePort1(chan, &((BaseIoAddress)->o.Command), _Command);
-
-
-#define SelectDrive(chan, BaseIoAddress, unit) \
-    AtapiWritePort1(chan, &((BaseIoAddress)->o.DriveSelect), (unit) ? IDE_DRIVE_SELECT_2 : IDE_DRIVE_SELECT_1);
+#define WriteCommand(chan, _Command) \
+    AtapiWritePort1(chan, IDX_IO1_o_Command, _Command);
 
 
-#define ReadBuffer(chan, BaseIoAddress, Buffer, Count) \
-    AtapiReadBuffer2(chan, (PUSHORT)&((BaseIoAddress)->i.Data), \
+#define SelectDrive(chan, unit) \
+    AtapiWritePort1(chan, IDX_IO1_o_DriveSelect, (unit) ? IDE_DRIVE_SELECT_2 : IDE_DRIVE_SELECT_1);
+
+
+#define ReadBuffer(chan, Buffer, Count) \
+    AtapiReadBuffer2(chan, IDX_IO1_i_Data, \
                                  Buffer, \
                                  Count);
 
-#define WriteBuffer(chan, BaseIoAddress, Buffer, Count) \
-    AtapiWriteBuffer2(chan, (PUSHORT)&((BaseIoAddress)->o.Data), \
+#define WriteBuffer(chan, Buffer, Count) \
+    AtapiWriteBuffer2(chan, IDX_IO1_o_Data, \
                                   Buffer, \
                                   Count);
 
-#define ReadBuffer2(chan, BaseIoAddress, Buffer, Count) \
-    AtapiReadBuffer4(chan, (PULONG)&((BaseIoAddress)->i.Data), \
+#define ReadBuffer2(chan, Buffer, Count) \
+    AtapiReadBuffer4(chan, IDX_IO1_i_Data, \
                              Buffer, \
                              Count);
 
-#define WriteBuffer2(chan, BaseIoAddress, Buffer, Count) \
-    AtapiWriteBuffer4(chan, (PULONG)&BaseIoAddress->o.Data, \
+#define WriteBuffer2(chan, Buffer, Count) \
+    AtapiWriteBuffer4(chan, IDX_IO1_o_Data, \
                               Buffer, \
                               Count);
 
 UCHAR
 DDKFASTAPI
 WaitOnBusy(
-    IN struct _HW_CHANNEL*   chan,
-    PIDE_REGISTERS_2 BaseIoAddress
+    IN struct _HW_CHANNEL*   chan/*,
+    PIDE_REGISTERS_2 BaseIoAddress*/
     );
 
 UCHAR
 DDKFASTAPI
 WaitOnBusyLong(
-    IN struct _HW_CHANNEL*   chan,
-    PIDE_REGISTERS_2 BaseIoAddress
+    IN struct _HW_CHANNEL*   chan/*,
+    PIDE_REGISTERS_2 BaseIoAddress*/
     );
 
 UCHAR
 DDKFASTAPI
 WaitOnBaseBusy(
-    IN struct _HW_CHANNEL*   chan,
-    PIDE_REGISTERS_1 BaseIoAddress
+    IN struct _HW_CHANNEL*   chan/*,
+    PIDE_REGISTERS_1 BaseIoAddress*/
     );
 
 UCHAR
 DDKFASTAPI
 WaitOnBaseBusyLong(
-    IN struct _HW_CHANNEL*   chan,
-    PIDE_REGISTERS_1 BaseIoAddress
+    IN struct _HW_CHANNEL*   chan/*,
+    PIDE_REGISTERS_1 BaseIoAddress*/
     );
 
 UCHAR
 DDKFASTAPI
 WaitForDrq(
-    IN struct _HW_CHANNEL*   chan,
-    PIDE_REGISTERS_2 BaseIoAddress
+    IN struct _HW_CHANNEL*   chan/*,
+    PIDE_REGISTERS_2 BaseIoAddress*/
     );
 
 UCHAR
 DDKFASTAPI
 WaitShortForDrq(
-    IN struct _HW_CHANNEL*   chan,
-    PIDE_REGISTERS_2 BaseIoAddress
+    IN struct _HW_CHANNEL*   chan/*,
+    PIDE_REGISTERS_2 BaseIoAddress*/
     );
 
 VOID
 DDKFASTAPI
 AtapiSoftReset(
-    IN struct _HW_CHANNEL*   chan,
-    PIDE_REGISTERS_1 BaseIoAddress,
+    IN struct _HW_CHANNEL*   chan,/*
+    PIDE_REGISTERS_1 BaseIoAddress*/
     ULONG            DeviceNumber
     );
 
@@ -840,12 +897,12 @@ AtapiSoftReset(
     UCHAR statusByte;\
     ULONG i;\
     SelectDrive(BaseIoAddress,DeviceNumber); \
-    AtapiWritePort1(&BaseIoAddress->AlternateStatus,/*IDE_DC_DISABLE_INTERRUPTS | *//*IDE_DC_RESET_CONTROLLER );\
+    AtapiWritePort1(&BaseIoAddress->AltStatus,/*IDE_DC_DISABLE_INTERRUPTS | *//*IDE_DC_RESET_CONTROLLER );\
 /*    ScsiPortStallExecution(50 * 1000);\
-    AtapiWritePort1(&BaseIoAddress->AlternateStatus,IDE_DC_REENABLE_CONTROLLER);\
+    AtapiWritePort1(&BaseIoAddress->AltStatus,IDE_DC_REENABLE_CONTROLLER);\
     /* 5 seconds for reset */ \
 /*    for (i = 0; i < 1000 * (1+11); i++) {\
-        statusByte = AtapiReadPort1(&BaseIoAddress->AlternateStatus);\
+        statusByte = AtapiReadPort1(&BaseIoAddress->AltStatus);\
         if (statusByte != IDE_STATUS_IDLE && statusByte != IDE_STATUS_SUCCESS) {\
             ScsiPortStallExecution((i<1000) ? 5 : 500);\
         } else {\
@@ -1114,6 +1171,37 @@ _cdecl
 _PrintNtConsole(
     PCHAR DebugMessage,
     ...
+    );
+
+VOID
+UniataInitMapBM(
+    IN struct _HW_DEVICE_EXTENSION* deviceExtension,
+    IN struct _IDE_BUSMASTER_REGISTERS* BaseIoAddressBM_0,
+    IN BOOLEAN MemIo
+    );
+
+VOID
+UniataInitMapBase(
+    IN struct _HW_CHANNEL* chan,
+    IN PIDE_REGISTERS_1 BaseIoAddress1,
+    IN PIDE_REGISTERS_2 BaseIoAddress2
+    );
+
+VOID
+UniataInitSyncBaseIO(
+    IN struct _HW_CHANNEL* chan
+    );
+
+UCHAR
+DDKFASTAPI
+UniataIsIdle(
+    IN struct _HW_DEVICE_EXTENSION* deviceExtension,
+    IN UCHAR Status
+    );
+
+VOID
+UniataDumpATARegs(
+    IN struct _HW_CHANNEL* chan
     );
 
 #ifdef _DEBUG

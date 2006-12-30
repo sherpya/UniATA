@@ -69,6 +69,8 @@ LINK32_OBJS= \
 	"$(INTDIR)\id_dma.obj" \
 	"$(INTDIR)\id_init.obj" \
 	"$(INTDIR)\id_queue.obj" \
+	"$(INTDIR)\id_sata.obj" \
+	"$(INTDIR)\stdafx.obj" \
 	"$(INTDIR)\idedma.res"
 
 
@@ -121,9 +123,9 @@ PKG : "BusMaster_v$(VER).rar"
 	nmake /A CFG="UniATA - Win32 Release"
 	nmake /A CFG="UniATA - Win32 Debug"
 !ENDIF 
-	rar a -s -mdD -m5 BusMaster_v$(VER).rar @pkg_files.dist
+	rar a -s -mdD -m5 BusMaster_v$(VER).rar @..\pkg_files.dist
 	rar a -s -mdD -m5 BusMaster_v$(VER)_Dbg.rar Debug_Dist
-	rar a -s -mdD -m5 BusMaster_v$(VER)_src.rar @pkg_files.src
+	rar a -s -mdD -m5 BusMaster_v$(VER)_src.rar @..\pkg_files.src
 	rar a -s -mdD -m5 BusMaster_v$(VER)_sym.rar Release_sym
 
 CLEAN :
@@ -131,6 +133,7 @@ CLEAN :
 	-@erase "$(INTDIR)\vc60.idb"
 	-@erase "$(OUTDIR)\IdeDma.sys"
 	-@erase ".\copy.msg"
+	-@erase "$(INTDIR)\idedma.pch"
 !IF  "$(CFG)" == "UniATA - Win32 Debug"
 	-@erase "$(OUTDIR)\IdeDma.map"
 	-@erase "$(OUTDIR)\IdeDma.pdb"
@@ -144,7 +147,8 @@ CLEAN :
 
 !IF  "$(CFG)" == "UniATA - Win32 Release"
 
-CPP_PROJ=/nologo /Gz /MT /W3 /GX /O2 $(DDKINC) /DNDEBUG /DWIN32 /D_WINDOWS /D_MBCS /D_USRDLL /DIdeDma_EXPORTS /D_X86_ /D_WIN32_WINNT=0x0400 /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
+CPP_PROJ_BASE=/nologo /Gz /MT /W3 /GX /O2 $(DDKINC) /DNDEBUG /DWIN32 /D_WINDOWS /D_MBCS /D_USRDLL /DIdeDma_EXPORTS /D_X86_ /D_WIN32_WINNT=0x0400 /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
+CPP_PROJ=$(CPP_PROJ_BASE) /Yu"stdafx.h"
 
 .c{$(INTDIR)}.obj::
    $(CPP) @<<
@@ -163,12 +167,13 @@ CPP_PROJ=/nologo /Gz /MT /W3 /GX /O2 $(DDKINC) /DNDEBUG /DWIN32 /D_WINDOWS /D_MB
 
 MTL_PROJ=/nologo /D "NDEBUG" /mktyplib203 /win32 
 	
-LINK32_FLAGS=$(BaseDir)\Lib\i386\Free\ntoskrnl.lib $(BaseDir)\Lib\i386\Free\int64.lib $(BaseDir)\Lib\i386\Free\Hal.lib $(BaseDir)\Lib\i386\Free\Ntdll.lib $(BaseDir)\Lib\i386\Free\ScsiPort.lib /nologo /entry:"DriverEntry" /incremental:no /debug /pdb:"$(OUTDIR)\IdeDma.pdb" /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /driver /pdbtype:sept /subsystem:native /opt:ref /opt:icf
+LINK32_FLAGS=$(BaseDir)\Lib\i386\Free\ntoskrnl.lib $(BaseDir)\Lib\i386\Free\int64.lib $(BaseDir)\Lib\i386\Free\Hal.lib $(BaseDir)\Lib\i386\Free\Ntdll.lib $(BaseDir)\Lib\i386\Free\ScsiPort.lib .\Lib\Release\CrossNtK.lib /nologo /entry:"DriverEntry" /incremental:no /debug /pdb:"$(OUTDIR)\IdeDma.pdb" /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /driver /pdbtype:sept /subsystem:native /opt:ref /opt:icf
 #LINK32_FLAGS=$(BaseDir)\Lib\i386\Free\ntoskrnl.lib $(BaseDir)\Lib\i386\Free\int64.lib $(BaseDir)\Lib\i386\Checked\Hal.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /driver /subsystem:native 
 
 !ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
 
-CPP_PROJ=/nologo /Gz /MTd /W3 /GX /Z7 /Od $(DDKINC) /D_DEBUG /DDBG /DWIN32 /D_WINDOWS /D_MBCS /D_USRDLL /DIdeDma_EXPORTS /D_X86_ /D_WIN32_WINNT=0x0400 /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
+CPP_PROJ_BASE=/nologo /Gz /MTd /W3 /GX /Z7 /Od $(DDKINC) /D_DEBUG /DDBG /DWIN32 /D_WINDOWS /D_MBCS /D_USRDLL /DIdeDma_EXPORTS /D_X86_ /D_WIN32_WINNT=0x0400 /Fp"$(INTDIR)\idedma.pch" /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
+CPP_PROJ=$(CPP_PROJ_BASE) /Yu"stdafx.h"
 
 .c{$(INTDIR)}.obj::
    $(CPP) @<<
@@ -187,8 +192,16 @@ CPP_PROJ=/nologo /Gz /MTd /W3 /GX /Z7 /Od $(DDKINC) /D_DEBUG /DDBG /DWIN32 /D_WI
 
 MTL_PROJ=/nologo /D "_DEBUG" /mktyplib203 /win32 
 
-LINK32_FLAGS=$(BaseDir)\Lib\i386\Checked\ntoskrnl.lib $(BaseDir)\Lib\i386\Checked\int64.lib $(BaseDir)\Lib\i386\Checked\Hal.lib $(BaseDir)\Lib\i386\Checked\Ntdll.lib $(BaseDir)\Lib\i386\Checked\ScsiPort.lib PostDbgMesgK.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /map:"$(INTDIR)\IdeDma.map" /debug /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /pdbtype:sept /driver /subsystem:native,4.00 
+LINK32_FLAGS=$(BaseDir)\Lib\i386\Checked\ntoskrnl.lib $(BaseDir)\Lib\i386\Checked\int64.lib $(BaseDir)\Lib\i386\Checked\Hal.lib $(BaseDir)\Lib\i386\Checked\Ntdll.lib $(BaseDir)\Lib\i386\Checked\ScsiPort.lib .\Lib\Debug\PostDbgMesgK.lib .\Lib\Debug\CrossNtK.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /map:"$(INTDIR)\IdeDma.map" /debug /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /pdbtype:sept /driver /subsystem:native,4.00 
 
+!ENDIF 
+
+!IF "$(NO_EXTERNAL_DEPS)" != "1"
+!IF EXISTS("idedma.dep")
+!INCLUDE "idedma.dep"
+!ELSE 
+!MESSAGE Warning: cannot find "idedma.dep"
+!ENDIF 
 !ENDIF 
 
 "$(OUTDIR)\IdeDma.sys" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
@@ -241,6 +254,17 @@ SRC=id_probe
 
 SRC=id_queue
 !INCLUDE build.mak
+
+SRC=id_sata
+!INCLUDE build.mak
+
+SRC=stdafx
+CPP_PROJ=$(CPP_PROJ_BASE) /Yc"stdafx.h"
+"$(INTDIR)\StdAfx.obj" "$(INTDIR)\idedma.pch" : $(SOURCE) "$(INTDIR)"
+	$(CPP) @<<
+  $(CPP_PROJ) $(SOURCE)
+<<
+
 
 SRC=idedma
 

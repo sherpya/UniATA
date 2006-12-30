@@ -45,18 +45,7 @@ Revision History:
 
 --*/
 
-extern "C" {
-
-#include <ntddk.h>
-//#include "miniport.h"
-
-};
-#include "stddef.h"
-
-#include "atapi.h"               // includes scsi.h
-#include "ntdddisk.h"
-#include "ntddscsi.h"
-#include "bsmaster.h"
+#include "stdafx.h"
 
 PBUSMASTER_CONTROLLER_INFORMATION BMList = NULL;
 ULONG         BMListLen = 0;
@@ -73,7 +62,7 @@ PDRIVER_OBJECT SavedDriverObject = NULL;
 // local routines 
 
 ULONG
-AtapiEnumBusMasterController__(
+UniataEnumBusMasterController__(
 /*    IN PVOID HwDeviceExtension,
     IN PVOID Context,
     IN PVOID BusInformation,
@@ -119,22 +108,24 @@ AtapiGetIoRange(
         (*ConfigInfo->AccessRanges)[rid].RangeInMemory
         ));
 
-    io_start =
-        // Get the system physical address for this IO range.
-        ((ULONG)ScsiPortGetDeviceBase(HwDeviceExtension,
-                    PCIBus /*ConfigInfo->AdapterInterfaceType*/,
-                    SystemIoBusNumber /*ConfigInfo->SystemIoBusNumber*/,
-                    ScsiPortConvertUlongToPhysicalAddress(
-                        (ScsiPortConvertPhysicalAddressToUlong((*ConfigInfo->AccessRanges)[rid].RangeStart) &
-                        ~0x07/*PCI_ADDRESS_IOMASK*/) + offset
-                                                         ),
-                    length,
-                    (BOOLEAN)!(*ConfigInfo->AccessRanges)[rid].RangeInMemory) 
-                           );
+    if((*ConfigInfo->AccessRanges)[rid].RangeInMemory) {
+        io_start =
+            // Get the system physical address for this IO range.
+            ((ULONG)ScsiPortGetDeviceBase(HwDeviceExtension,
+                        PCIBus /*ConfigInfo->AdapterInterfaceType*/,
+                        SystemIoBusNumber /*ConfigInfo->SystemIoBusNumber*/,
+                        ScsiPortConvertUlongToPhysicalAddress(
+                            (ScsiPortConvertPhysicalAddressToUlong((*ConfigInfo->AccessRanges)[rid].RangeStart) &
+                            ~0x07/*PCI_ADDRESS_IOMASK*/) + offset
+                                                             ),
+                        length,
+                        (BOOLEAN)!(*ConfigInfo->AccessRanges)[rid].RangeInMemory) 
+                               );
 
-    KdPrint2((PRINT_PREFIX "  AtapiGetIoRange: %#x\n", io_start));
-    if(io_start > offset) {
-        return io_start;
+        KdPrint2((PRINT_PREFIX "  AtapiGetIoRange: %#x\n", io_start));
+   //     if(io_start > offset) {
+            return io_start;
+   //     }
     }
 
     io_start = (pciData->u.type0.BaseAddresses[rid] & ~0x07/*PCI_ADDRESS_IOMASK*/) + offset;
@@ -171,14 +162,14 @@ AtapiGetIoRange(
     Hal routines directly in order to scan PCI bus.
 */
 VOID
-AtapiEnumBusMasterController(
+UniataEnumBusMasterController(
     IN PVOID DriverObject,
     PVOID Argument2
     )
 {
-    AtapiEnumBusMasterController__();
+    UniataEnumBusMasterController__();
 
-} // end AtapiEnumBusMasterController()
+} // end UniataEnumBusMasterController()
 
 
 /*
@@ -186,7 +177,7 @@ AtapiEnumBusMasterController(
     Builds PCI device list using Hal routines (not ScsiPort wrappers)
 */
 ULONG
-AtapiEnumBusMasterController__(
+UniataEnumBusMasterController__(
     )
 {
 //    PHW_DEVICE_EXTENSION  deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
@@ -295,7 +286,7 @@ AtapiEnumBusMasterController__(
                     }
                 }
 
-                //known = AtapiChipDetect(HwDeviceExtension, NULL, -1, ConfigInfo, &SimplexOnly);
+                //known = UniataChipDetect(HwDeviceExtension, NULL, -1, ConfigInfo, &SimplexOnly);
                 i = Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[0], VendorID, DeviceID, 0, NUM_BUSMASTER_ADAPTERS);
 
                 known = (i != -1);
@@ -521,7 +512,7 @@ AtapiEnumBusMasterController__(
         ExFreePool(deviceExtension);
     }
     return(SP_RETURN_NOT_FOUND);
-} // end AtapiEnumBusMasterController__()
+} // end UniataEnumBusMasterController__()
 
 
 /*
@@ -544,7 +535,8 @@ ScsiPortGetBusDataByOffset(
     if(Offset+Length > 256)
         return 0;
 
-    busDataRead = ScsiPortGetBusData(HwDeviceExtension,
+    busDataRead = HalGetBusData(
+        //ScsiPortGetBusData(HwDeviceExtension,
                                      BusDataType,
                                      BusNumber,
                                      SlotNumber,
@@ -612,7 +604,8 @@ AtapiFindListedDev(
         slotData.u.bits.DeviceNumber   = slotNumber;
         slotData.u.bits.FunctionNumber = funcNumber;
 
-        busDataRead = ScsiPortGetBusData(HwDeviceExtension,
+    busDataRead = HalGetBusData(
+            //ScsiPortGetBusData(HwDeviceExtension,
                                     PCIConfiguration, busNumber, slotData.u.AsULONG, 
                                     &pciData, PCI_COMMON_HDR_LENGTH);
         // no more buses (this should not happen)
@@ -667,7 +660,8 @@ AtapiFindDev(
         if(slotData.u.AsULONG == SlotNumber)
             continue;
 
-        busDataRead = ScsiPortGetBusData(HwDeviceExtension,
+        busDataRead = HalGetBusData(
+            //busDataRead = ScsiPortGetBusData(HwDeviceExtension,
                                          PCIConfiguration,
                                          BusNumber,
                                          slotData.u.AsULONG,
@@ -714,7 +708,7 @@ Return Value:
 
 --*/
 ULONG
-AtapiFindBusMasterController(
+UniataFindBusMasterController(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
     IN PVOID BusInformation,
@@ -765,6 +759,13 @@ AtapiFindBusMasterController(
     SCSI_PHYSICAL_ADDRESS IoBasePort1;
     SCSI_PHYSICAL_ADDRESS IoBasePort2;
 
+    PIDE_BUSMASTER_REGISTERS BaseIoAddressBM_0 = NULL;
+    PIDE_REGISTERS_1 BaseIoAddress1[IDE_MAX_CHAN];
+    PIDE_REGISTERS_2 BaseIoAddress2[IDE_MAX_CHAN];
+
+    RtlZeroMemory(&BaseIoAddress1, sizeof(BaseIoAddress1));
+    RtlZeroMemory(&BaseIoAddress2, sizeof(BaseIoAddress2));
+
     NTSTATUS status;
     PPORT_CONFIGURATION_INFORMATION_COMMON _ConfigInfo =
         (PPORT_CONFIGURATION_INFORMATION_COMMON)ConfigInfo;
@@ -799,7 +800,7 @@ AtapiFindBusMasterController(
 
     bm_offset = channel ? ATA_BM_OFFSET1 : 0;
 
-    KdPrint2((PRINT_PREFIX "AtapiFindBusMasterController\n"));
+    KdPrint2((PRINT_PREFIX "UniataFindBusMasterController\n"));
 
     if (!deviceExtension) {
         KdPrint2((PRINT_PREFIX "!deviceExtension => SP_RETURN_ERROR\n"));
@@ -820,7 +821,8 @@ AtapiFindBusMasterController(
     KdPrint2((PRINT_PREFIX "slotNumber=%#x\n",slotNumber));
 
     // this buffer must be global and already filled for UNIATA_CORE build
-    busDataRead = ScsiPortGetBusData(HwDeviceExtension,
+    busDataRead = HalGetBusData(
+        //busDataRead = ScsiPortGetBusData(HwDeviceExtension,
                                      PCIConfiguration,
                                      SystemIoBusNumber,
                                      slotNumber,
@@ -878,7 +880,7 @@ AtapiFindBusMasterController(
     }
     ConfigInfo->AlignmentMask = 0x00000003;
 
-    found = AtapiChipDetect(HwDeviceExtension, &pciData, i, ConfigInfo, &simplexOnly);
+    found = UniataChipDetect(HwDeviceExtension, &pciData, i, ConfigInfo, &simplexOnly);
     KdPrint2((PRINT_PREFIX "ForceSimplex = %d\n", simplexOnly));
     KdPrint2((PRINT_PREFIX "HwFlags = %x\n (0)", deviceExtension->HwFlags));
     switch(dev_id) {
@@ -900,6 +902,9 @@ AtapiFindBusMasterController(
         if(!Ata_is_supported_dev(&pciData)) {
             KdPrint2((PRINT_PREFIX "!Ata_is_supported_dev => found = FALSE\n"));
             found = FALSE;
+        } else {
+            KdPrint2((PRINT_PREFIX "Ata_is_supported_dev\n"));
+            found = TRUE;
         }
         deviceExtension->UnknownDev = TRUE;
         break;
@@ -922,7 +927,7 @@ AtapiFindBusMasterController(
     KdPrint2((PRINT_PREFIX "HwFlags = %x\n (3)", deviceExtension->HwFlags));
     if(deviceExtension->HwFlags & UNIATA_NO_DPC) {
         /* CMD 649, ROSB SWK33, ICH4 */
-        KdPrint2((PRINT_PREFIX "AtapiFindBusMasterController: UNIATA_NO_DPC (0)\n"));
+        KdPrint2((PRINT_PREFIX "UniataFindBusMasterController: UNIATA_NO_DPC (0)\n"));
         deviceExtension->UseDpc = FALSE;
     }
 
@@ -949,18 +954,27 @@ AtapiFindBusMasterController(
             }
         }
     }
-
-    if(!deviceExtension->MemIo) {
+    if(deviceExtension->AltRegMap) {
+        KdPrint2((PRINT_PREFIX "  Non-standard registers layout\n"));
+    } else {
         deviceExtension->BusMaster = FALSE;
         if(IsBusMaster(&pciData)) {
+
             KdPrint2((PRINT_PREFIX "IsBusMaster == TRUE\n"));
-            deviceExtension->BaseIoAddressBM_0 = (PIDE_BUSMASTER_REGISTERS)
+            BaseIoAddressBM_0 = (PIDE_BUSMASTER_REGISTERS)
                 (AtapiGetIoRange(HwDeviceExtension, ConfigInfo, &pciData, SystemIoBusNumber,
-                                4, bm_offset, MasterDev ? 0x08 : 0x10/*ATA_BMIOSIZE*/) - bm_offset); //range id
-            if(deviceExtension->BaseIoAddressBM_0) {
+                                4, bm_offset, MasterDev ? 0x08 : 0x10/*ATA_BMIOSIZE*/)/* - bm_offset*/); //range id
+            if(BaseIoAddressBM_0) {
+                UniataInitMapBM(deviceExtension,
+                                BaseIoAddressBM_0,
+                                (*ConfigInfo->AccessRanges)[4].RangeInMemory ? TRUE : FALSE);
                 deviceExtension->BusMaster = TRUE;
+                deviceExtension->BaseIoAddressBM_0.Addr  = (ULONG)BaseIoAddressBM_0;
+                if((*ConfigInfo->AccessRanges)[4].RangeInMemory) {
+                    deviceExtension->BaseIoAddressBM_0.MemIo = TRUE;
+                }
             }
-            KdPrint2((PRINT_PREFIX "  BusMasterAddress (base): %#x\n", deviceExtension->BaseIoAddressBM_0));
+            KdPrint2((PRINT_PREFIX "  BusMasterAddress (base): %#x\n", BaseIoAddressBM_0));
         }
 
         if(!deviceExtension->BusMaster) {
@@ -970,14 +984,23 @@ AtapiFindBusMasterController(
 
         if(deviceExtension->BusMaster && !MasterDev) {
             KdPrint2((PRINT_PREFIX "IsBusMaster == TRUE && !MasterDev\n"));
-            statusByte = AtapiReadPort1(NULL, (PUCHAR)&(deviceExtension->BaseIoAddressBM_0->Status));
+            statusByte = AtapiReadPort1(&(deviceExtension->chan[0]), IDX_BM_Status);
+            KdPrint2((PRINT_PREFIX "  statusByte = %x\n", statusByte));
+            if(statusByte == 0xff) {
+                KdPrint2((PRINT_PREFIX "  invalid port ?\n"));
+/*
+                if(BaseIoAddressBM_0) {
+                    ScsiPortFreeDeviceBase(HwDeviceExtension,
+                                           BaseIoAddressBM_0);
+                    BaseIoAddressBM_0 = NULL;
+                }
+*/
+            } else
             if(statusByte & BM_STATUS_SIMPLEX_ONLY) {
                 KdPrint2((PRINT_PREFIX "  BM_STATUS => simplexOnly\n"));
                 simplexOnly = TRUE;
             }
         }
-    } else {
-        KdPrint2((PRINT_PREFIX "  Using MEM i/o (1)\n"));
     }
 
     /*
@@ -993,7 +1016,7 @@ AtapiFindBusMasterController(
     }
 
     /* do extra chipset specific setups */
-    AtapiChipInit(HwDeviceExtension, i, -1);
+    AtapiChipInit(HwDeviceExtension, i, CHAN_NOT_SPECIFIED);
 
     simplexOnly |= deviceExtension->simplexOnly;
     deviceExtension->simplexOnly |= simplexOnly;
@@ -1010,6 +1033,11 @@ AtapiFindBusMasterController(
     if(simplexOnly || !MasterDev /*|| (WinVer_Id() > WinVer_NT)*/) {
         if(deviceExtension->NumberChannels < 2) {
             deviceExtension->NumberChannels = 2;
+            if(BaseIoAddressBM_0) {
+                UniataInitMapBM(deviceExtension,
+                                BaseIoAddressBM_0,
+                                (*ConfigInfo->AccessRanges)[4].RangeInMemory ? TRUE : FALSE);
+            }
         }
     }
     if((channel > 0) &&
@@ -1170,8 +1198,9 @@ AtapiFindBusMasterController(
 
         /* do extra channel-specific setups */
         AtapiChipInit(HwDeviceExtension, i, channel);
-
-        if(!deviceExtension->MemIo) {
+        if(deviceExtension->AltRegMap) {
+            KdPrint2((PRINT_PREFIX "  Non-standard registers layout\n"));
+        } else {
             // Check if the range specified is not used by another driver
             if(MasterDev) {
                 KdPrint2((PRINT_PREFIX "set AccessRanges\n"));
@@ -1251,15 +1280,16 @@ AtapiFindBusMasterController(
                 KdPrint2((PRINT_PREFIX "!ioSpace\n"));
                 continue;
             }
-
+/*
             if(deviceExtension->BusMaster) {
                 KdPrint2((PRINT_PREFIX "set BusMaster io-range in DO\n"));
-                // bm_offset already inludes (channel ? ATA_BM_OFFSET1 : 0)
+                // bm_offset already includes (channel ? ATA_BM_OFFSET1 : 0)
                 deviceExtension->BaseIoAddressBM[c] = (PIDE_BUSMASTER_REGISTERS)
                     ((ULONG)(deviceExtension->BaseIoAddressBM_0) + bm_offset + (c ? ATA_BM_OFFSET1 : 0));
             }
-
-            deviceExtension->BaseIoAddress1[c] = (PIDE_REGISTERS_1)(ioSpace);
+*/
+            //deviceExtension->BaseIoAddress1[c] = (PIDE_REGISTERS_1)(ioSpace);
+            BaseIoAddress1[c] = (PIDE_REGISTERS_1)(ioSpace);
 
             // Get the system physical address for the second IO range.
             ioSpace = (PUCHAR)ScsiPortGetDeviceBase(HwDeviceExtension,
@@ -1270,35 +1300,56 @@ AtapiFindBusMasterController(
                                             TRUE);
             KdPrint2((PRINT_PREFIX "IO range 2 %#x\n",ioSpace));
 
-            deviceExtension->BaseIoAddress2[c] = (PIDE_REGISTERS_2)(ioSpace);
-            if(!deviceExtension->BaseIoAddress2[c]) {
+            BaseIoAddress2[c] = (PIDE_REGISTERS_2)(ioSpace);
+            if(!ioSpace) {
                 // Release all allocated resources
                 KdPrint2((PRINT_PREFIX "!deviceExtension->BaseIoAddress2\n"));
-                ioSpace = (PUCHAR)(deviceExtension->BaseIoAddress1[c]);
+                //ioSpace = (PUCHAR)BaseIoAddress1[c];
     //            goto free_iospace_1;
                 found = FALSE;
                 goto exit_findbm;
             }
-        } else {
-            KdPrint2((PRINT_PREFIX "Using MEM i/o space.\n"));
+            UniataInitMapBase(chan, BaseIoAddress1[c], BaseIoAddress2[c]);
         }
-        ioSpace = (PUCHAR)(deviceExtension->BaseIoAddress1[c]);
+        //ioSpace = (PUCHAR)(deviceExtension->BaseIoAddress1[c]);
+
+        KdPrint2((PRINT_PREFIX "IDX_IO1 %x->%x(%s)\n",
+          IDX_IO1,
+          chan->RegTranslation[IDX_IO1].Addr,
+          chan->RegTranslation[IDX_IO1].MemIo ? "mem" : "io"));
+
+        KdPrint2((PRINT_PREFIX "IDX_IO2 %x->%x(%s)\n",
+          IDX_IO2,
+          chan->RegTranslation[IDX_IO2].Addr,
+          chan->RegTranslation[IDX_IO2].MemIo ? "mem" : "io"));
+
+        KdPrint2((PRINT_PREFIX "IDX_BM_IO %x->%x(%s)\n",
+          IDX_BM_IO,
+          chan->RegTranslation[IDX_BM_IO].Addr,
+          chan->RegTranslation[IDX_BM_IO].MemIo ? "mem" : "io"));
+
+        KdPrint2((PRINT_PREFIX "IDX_SATA_IO %x->%x(%s)\n",
+          IDX_SATA_IO,
+          chan->RegTranslation[IDX_SATA_IO].Addr,
+          chan->RegTranslation[IDX_SATA_IO].MemIo ? "mem" : "io"));
+
+        UniataDumpATARegs(chan);
 
 #ifndef UNIATA_CORE
 #ifdef UNIATA_INIT_ON_PROBE
         KdPrint2((PRINT_PREFIX "Check drive 0\n"));
         // Check master.
-        SelectDrive(chan, (PIDE_REGISTERS_1)ioSpace, 0);
+        SelectDrive(chan, 0);
         AtapiStallExecution(10);
-        GetBaseStatus(chan, (PIDE_REGISTERS_1)ioSpace, statusByte);
+        GetBaseStatus(chan);
         skip_find_dev = FALSE;
         if ((statusByte & 0xf8) == 0xf8 || 
             (statusByte == 0xa5)) {
             // Check slave.
             KdPrint2((PRINT_PREFIX "Check drive 1\n"));
-            SelectDrive(chan, (PIDE_REGISTERS_1)ioSpace, 1);
+            SelectDrive(chan, 1);
             AtapiStallExecution(1);
-            GetBaseStatus(chan, (PIDE_REGISTERS_1)ioSpace, statusByte);
+            GetBaseStatus(chan);
             if ((statusByte & 0xf8) == 0xf8 || 
                 (statusByte == 0xa5)) {
                 // No controller at this base address.
@@ -1355,23 +1406,23 @@ exit_findbm:
 #ifndef UNIATA_CORE
     if(!found) {
         KdPrint2((PRINT_PREFIX "exit: !found\n"));
-        if(deviceExtension->BaseIoAddress1[0])
+        if(BaseIoAddress1[0])
             ScsiPortFreeDeviceBase(HwDeviceExtension,
-                                   deviceExtension->BaseIoAddress1[0]);
-        if(deviceExtension->BaseIoAddress2[0])
+                                   BaseIoAddress1[0]);
+        if(BaseIoAddress2[0])
             ScsiPortFreeDeviceBase(HwDeviceExtension,
-                                   deviceExtension->BaseIoAddress2[0]);
+                                   BaseIoAddress2[0]);
 
-        if(deviceExtension->BaseIoAddress1[1])
+        if(BaseIoAddress1[1])
             ScsiPortFreeDeviceBase(HwDeviceExtension,
-                                   deviceExtension->BaseIoAddress1[1]);
-        if(deviceExtension->BaseIoAddress2[1])
+                                   BaseIoAddress1[1]);
+        if(BaseIoAddress2[1])
             ScsiPortFreeDeviceBase(HwDeviceExtension,
-                                   deviceExtension->BaseIoAddress2[1]);
+                                   BaseIoAddress2[1]);
 
-        if(deviceExtension->BaseIoAddressBM_0)
+        if(BaseIoAddressBM_0)
             ScsiPortFreeDeviceBase(HwDeviceExtension,
-                                   deviceExtension->BaseIoAddressBM_0);
+                                   BaseIoAddressBM_0);
         
         KdPrint2((PRINT_PREFIX "return SP_RETURN_NOT_FOUND\n"));
         return SP_RETURN_NOT_FOUND;
@@ -1381,8 +1432,6 @@ exit_findbm:
         //KeInitializeSpinLock(&(deviceExtension->DpcSpinLock));
         deviceExtension->ActiveDpcChan =
         deviceExtension->FirstDpcChan = -1;
-        deviceExtension->DpcTime1 =
-        deviceExtension->DpcTime2 = 0;
 
         BMList[i].Isr2Enable = FALSE;
 
@@ -1390,7 +1439,7 @@ exit_findbm:
             MasterDev, deviceExtension->NumberChannels, BMList[i].Isr2DevObj));
 
         // ConnectIntr2 should be moved to HwInitialize
-        status = AtapiConnectIntr2(HwDeviceExtension);
+        status = UniataConnectIntr2(HwDeviceExtension);
 
         if(!NT_SUCCESS(status)) {
             KdPrint2((PRINT_PREFIX "failed\n"));
@@ -1410,7 +1459,7 @@ exit_findbm:
 
     return SP_RETURN_FOUND;
 
-} // end AtapiFindBusMasterController()
+} // end UniataFindBusMasterController()
 
 #ifndef UNIATA_CORE
 /*++
@@ -1430,7 +1479,7 @@ Return Value:
 
 --*/
 NTSTATUS
-AtapiConnectIntr2(
+UniataConnectIntr2(
     IN PVOID HwDeviceExtension
     )
 {
@@ -1524,10 +1573,10 @@ AtapiConnectIntr2(
         return status;
     }
     return status;
-} // end AtapiConnectIntr2()
+} // end UniataConnectIntr2()
 
 NTSTATUS
-AtapiDisconnectIntr2(
+UniataDisconnectIntr2(
     IN PVOID HwDeviceExtension
     )
 {
@@ -1552,7 +1601,7 @@ AtapiDisconnectIntr2(
     BMList[i].Isr2DevObj          = NULL;
 
     return STATUS_SUCCESS;
-} // end AtapiDisconnectIntr2()
+} // end UniataDisconnectIntr2()
 
 #endif //UNIATA_CORE
 
@@ -1599,14 +1648,17 @@ AtapiFindController(
     UCHAR                statusByte;
     BOOLEAN              preConfig = FALSE;
     //
+    PIDE_REGISTERS_1 BaseIoAddress1;
+    PIDE_REGISTERS_2 BaseIoAddress2;
+
     // The following table specifies the ports to be checked when searching for
     // an IDE controller.  A zero entry terminates the search.
-    CONST ULONG AdapterAddresses[5] = {IO_WD1, IO_WD2, IO_WD1-8, IO_WD2-8, 0};
-    CONST UCHAR Channels[5] = {0, 1, 0, 1, 0};
+    static CONST ULONG AdapterAddresses[5] = {IO_WD1, IO_WD2, IO_WD1-8, IO_WD2-8, 0};
+//    CONST UCHAR Channels[5] = {0, 1, 0, 1, 0};
 
     // The following table specifies interrupt levels corresponding to the
     // port addresses in the previous table.
-    CONST ULONG InterruptLevels[5] = {14, 15, 11, 10, 0};
+    static CONST ULONG InterruptLevels[5] = {14, 15, 11, 10, 0};
 
     KdPrint2((PRINT_PREFIX "AtapiFindController:\n"));
 
@@ -1617,6 +1669,7 @@ AtapiFindController(
 
     KdPrint2((PRINT_PREFIX "  assume max PIO4\n"));
     deviceExtension->MaxTransferMode = ATA_PIO4;
+    deviceExtension->NumberChannels = 1;
 
 #ifndef UNIATA_CORE
 
@@ -1693,6 +1746,7 @@ AtapiFindController(
             }
 
         }// ConfigInfo check
+        BaseIoAddress1 = (PIDE_REGISTERS_1)ioSpace;
 
         // Update the adapter count.
         (*adapterCount)++;
@@ -1706,29 +1760,42 @@ AtapiFindController(
         if((ioSpace == (PUCHAR)IO_WD1) &&
            (ConfigInfo->AtdiskPrimaryClaimed)) {
             KdPrint2((PRINT_PREFIX "AtapiFindController: AtdiskPrimaryClaimed\n"));
-            continue;
+            goto not_found;
         } else
         if((ioSpace == (PUCHAR)IO_WD2) &&
            (ConfigInfo->AtdiskSecondaryClaimed)) {
             KdPrint2((PRINT_PREFIX "AtapiFindController: AtdiskSecondaryClaimed\n"));
-            continue;
+            goto not_found;
         }
+
+        // Get the system physical address for the second IO range.
+        if (BaseIoAddress1) {
+            ioSpace = (PUCHAR)ScsiPortGetDeviceBase(HwDeviceExtension,
+                                            ConfigInfo->AdapterInterfaceType,
+                                            ConfigInfo->SystemIoBusNumber,
+                                            ScsiPortConvertUlongToPhysicalAddress((ULONG)BaseIoAddress1 + ATA_ALTOFFSET),
+                                            ATA_ALTIOSIZE,
+                                            TRUE);
+        }
+        BaseIoAddress2 = (PIDE_REGISTERS_2)ioSpace;
+
+        UniataInitMapBase(chan, BaseIoAddress1, BaseIoAddress2);
 
 retryIdentifier:
 
         // Select master.
-        SelectDrive(chan, (PIDE_REGISTERS_1)ioSpace, 0);
+        SelectDrive(chan, 0);
 
         // Check if card at this address.
-        AtapiWritePort1(chan, &((PIDE_REGISTERS_1)ioSpace)->o.CylinderLow, 0xAA);
+        AtapiWritePort1(chan, IDX_IO1_o_CylinderLow, 0xAA);
 
         // Check if indentifier can be read back.
-        if ((statusByte = AtapiReadPort1(chan, &((PIDE_REGISTERS_1)ioSpace)->i.CylinderLow)) != 0xAA) {
+        if ((statusByte = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow)) != 0xAA) {
 
             KdPrint2((PRINT_PREFIX "AtapiFindController: Identifier read back from Master (%#x)\n",
                         statusByte));
 
-            statusByte = AtapiReadPort1(chan, &((PATAPI_REGISTERS_2)ioSpace)->AlternateStatus);
+            statusByte = AtapiReadPort1(chan, IDX_IO2_AltStatus);
 
             if (statusByte & IDE_STATUS_BUSY) {
 
@@ -1738,7 +1805,7 @@ retryIdentifier:
                 // warm boots don't clear.
                 do {
                     AtapiStallExecution(1000);
-                    statusByte = AtapiReadPort1(chan, &((PATAPI_REGISTERS_1)ioSpace)->i.Status);
+                    statusByte = AtapiReadPort1(chan, IDX_ATAPI_IO1_i_Status);
                     KdPrint2((PRINT_PREFIX 
                                 "AtapiFindController: First access to status %#x\n",
                                 statusByte));
@@ -1750,26 +1817,31 @@ retryIdentifier:
             }
 
             // Select slave.
-            SelectDrive(chan, (PIDE_REGISTERS_1)ioSpace, 1);
+            SelectDrive(chan, 1);
 
             // See if slave is present.
-            AtapiWritePort1(chan, &((PIDE_REGISTERS_1)ioSpace)->o.CylinderLow, 0xAA);
+            AtapiWritePort1(chan, IDX_IO1_o_CylinderLow, 0xAA);
 
-            if ((statusByte = AtapiReadPort1(chan, &((PIDE_REGISTERS_1)ioSpace)->i.CylinderLow)) != 0xAA) {
+            if ((statusByte = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow)) != 0xAA) {
 
                 KdPrint2((PRINT_PREFIX 
                             "AtapiFindController: Identifier read back from Slave (%#x)\n",
                             statusByte));
-
+not_found:
                 // No controller at this base address.
-                ScsiPortFreeDeviceBase(HwDeviceExtension,
-                                       ioSpace);
+                if(BaseIoAddress1) {
+                    ScsiPortFreeDeviceBase(HwDeviceExtension,
+                                           (PCHAR)BaseIoAddress1);
+                    BaseIoAddress1 = NULL;
+                }
+                if(BaseIoAddress2) {
+                    ScsiPortFreeDeviceBase(HwDeviceExtension,
+                                           (PCHAR)BaseIoAddress2);
+                    BaseIoAddress2 = NULL;
+                }
                 continue;
             }
         }
-
-        // Record base IO address.
-        deviceExtension->BaseIoAddress1[0] = (PIDE_REGISTERS_1)(ioSpace);
 
         // Fill in the access array information only if default params are not in there.
         if (preConfig == FALSE) {
@@ -1801,27 +1873,6 @@ retryIdentifier:
             }
         }
 
-        // Get the system physical address for the second IO range.
-        if (portBase) {
-            ioSpace = (PUCHAR)ScsiPortGetDeviceBase(HwDeviceExtension,
-                                            ConfigInfo->AdapterInterfaceType,
-                                            ConfigInfo->SystemIoBusNumber,
-                                            ScsiPortConvertUlongToPhysicalAddress(portBase + ATA_ALTOFFSET),
-                                            ATA_ALTIOSIZE,
-                                            TRUE);
-        } else {
-            ioSpace = (PUCHAR)ScsiPortGetDeviceBase(HwDeviceExtension,
-                                            ConfigInfo->AdapterInterfaceType,
-                                            ConfigInfo->SystemIoBusNumber,
-                                            ScsiPortConvertUlongToPhysicalAddress(AdapterAddresses[*adapterCount - 1] + ATA_ALTOFFSET),
-                                            ATA_ALTIOSIZE,
-                                            TRUE);
-        }
-
-        deviceExtension->BaseIoAddress2[0] = (PIDE_REGISTERS_2)(ioSpace);
-
-        deviceExtension->NumberChannels = 1;
-
         ConfigInfo->NumberOfBuses = 1;
         ConfigInfo->MaximumNumberOfTargets = 2;
 
@@ -1844,7 +1895,7 @@ retryIdentifier:
 
         KdPrint2((PRINT_PREFIX 
                    "AtapiFindController: Found IDE at %#x\n",
-                   deviceExtension->BaseIoAddress1[0]));
+                   BaseIoAddress1));
 
         // For Daytona, the atdisk driver gets the first shot at the
         // primary and secondary controllers.
@@ -1956,8 +2007,6 @@ CheckDevice(
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     PHW_CHANNEL          chan = &(deviceExtension->chan[Channel]);
-    PIDE_REGISTERS_1     baseIoAddress1 = deviceExtension->BaseIoAddress1[Channel];
-    PIDE_REGISTERS_2     baseIoAddress2 = deviceExtension->BaseIoAddress2[Channel];
     ULONG                ldev = GET_LDEV2(Channel, deviceNumber, 0);
     PHW_LU_EXTENSION     LunExt = &(deviceExtension->lun[ldev]);
 
@@ -1969,20 +2018,29 @@ CheckDevice(
     KdPrint2((PRINT_PREFIX "CheckDevice: Device %#x\n",
                deviceNumber));
     if(ResetDev) {
-        KdPrint2((PRINT_PREFIX "CheckDevice: reset bus\n"));
-        // Reset device
-        AtapiDisableInterrupts(deviceExtension, Channel);
-        AtapiSoftReset(chan, baseIoAddress1,deviceNumber);
-        AtapiEnableInterrupts(deviceExtension, Channel);
-        statusByte = WaitOnBusy(chan, baseIoAddress2);
+        KdPrint2((PRINT_PREFIX "CheckDevice: reset dev\n"));
+        if(deviceExtension->HwFlags & UNIATA_SATA) {
+            statusByte = UniataSataPhyEnable(HwDeviceExtension, Channel);
+            if(statusByte == 0xff) {
+                KdPrint2((PRINT_PREFIX "CheckDevice: status %#x (no dev)\n", statusByte));
+                LunExt->DeviceFlags = 0;
+                return 0;
+            }
+        } else {
+            // Reset device
+            AtapiDisableInterrupts(deviceExtension, Channel);
+            AtapiSoftReset(chan, deviceNumber);
+            AtapiEnableInterrupts(deviceExtension, Channel);
+            statusByte = WaitOnBusy(chan);
+        }
     }
     // Select the device.
-    SelectDrive(chan, baseIoAddress1, deviceNumber);
+    SelectDrive(chan, deviceNumber);
 
     AtapiStallExecution(10);
-    statusByte = WaitOnBaseBusyLong(chan, baseIoAddress1);
+    statusByte = WaitOnBaseBusyLong(chan);
 
-    GetBaseStatus(chan, baseIoAddress1, statusByte);
+    GetBaseStatus(chan, statusByte);
 
     KdPrint2((PRINT_PREFIX "CheckDevice: status %#x\n", statusByte));
     if(statusByte & IDE_STATUS_BUSY) {
@@ -1996,8 +2054,8 @@ CheckDevice(
     LunExt->RwSwitchMCost = REORDER_MCOST_SWITCH_RW_HDD;
     LunExt->SeekBackMCost = REORDER_MCOST_SEEK_BACK_HDD;
 
-    signatureLow = AtapiReadPort1(chan, &baseIoAddress1->i.CylinderLow);
-    signatureHigh = AtapiReadPort1(chan, &baseIoAddress1->i.CylinderHigh);
+    signatureLow = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow);
+    signatureHigh = AtapiReadPort1(chan, IDX_IO1_i_CylinderHigh);
 
     if (signatureLow == ATAPI_MAGIC_LSB && signatureHigh == ATAPI_MAGIC_MSB) {
 
@@ -2029,9 +2087,9 @@ CheckDevice(
                     deviceExtension->UseDpc = FALSE;
                 }
 
-                GetStatus(chan, baseIoAddress2, statusByte);
+                GetStatus(chan, statusByte);
                 if (statusByte & IDE_STATUS_ERROR) {
-                    AtapiSoftReset(chan, baseIoAddress1, deviceNumber);
+                    AtapiSoftReset(chan, deviceNumber);
                 }
 
             } else {
@@ -2043,7 +2101,7 @@ CheckDevice(
                 LunExt->DeviceFlags = 0;
                 RetVal = 0;
             }
-            GetBaseStatus(chan, baseIoAddress1, statusByte);
+            GetBaseStatus(chan, statusByte);
 
         }
 
@@ -2066,7 +2124,7 @@ CheckDevice(
             LunExt->DeviceFlags |= DFLAGS_DEVICE_PRESENT;
             LunExt->DeviceFlags &= ~DFLAGS_ATAPI_DEVICE;
         }
-        GetBaseStatus(chan, baseIoAddress1, statusByte);
+        GetBaseStatus(chan, statusByte);
     }
     KdPrint2((PRINT_PREFIX "CheckDevice: check status: %sfound\n", RetVal ? "" : "not "));
     return RetVal;
@@ -2100,8 +2158,6 @@ FindDevices(
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     PHW_CHANNEL          chan = &(deviceExtension->chan[Channel]);
-    PIDE_REGISTERS_1     baseIoAddress1 = deviceExtension->BaseIoAddress1[Channel];
-    PIDE_REGISTERS_2     baseIoAddress2 = deviceExtension->BaseIoAddress2[Channel];
     BOOLEAN              deviceResponded = FALSE,
                          skipSetParameters = FALSE;
     ULONG                waitCount = 10000;
@@ -2109,26 +2165,28 @@ FindDevices(
     ULONG                i;
     UCHAR                statusByte;
     ULONG                ldev;
+    ULONG                max_ldev;
 
     KdPrint2((PRINT_PREFIX "FindDevices:\n"));
 
     // Disable interrupts
     AtapiDisableInterrupts(deviceExtension, Channel);
-//    AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_DISABLE_INTERRUPTS | IDE_DC_A_4BIT );
+//    AtapiWritePort1(chan, IDX_IO2_o_Control,IDE_DC_DISABLE_INTERRUPTS | IDE_DC_A_4BIT );
 
     // Clear expecting interrupt flag and current SRB field.
     chan->ExpectingInterrupt = FALSE;
 //    chan->CurrentSrb = NULL;
+    max_ldev = (chan->ChannelCtrlFlags & CTRFLAGS_NO_SLAVE) ? 1 : 2;
 
     // Search for devices.
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < max_ldev; i++) {
         AtapiDisableInterrupts(deviceExtension, Channel);
         deviceResponded |= 
             (CheckDevice(HwDeviceExtension, Channel, i, TRUE) != 0);
         AtapiEnableInterrupts(deviceExtension, Channel);
     }
 
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < max_ldev; i++) {
         ldev = GET_LDEV2(Channel, i, 0);
 
         if ((  deviceExtension->lun[ldev].DeviceFlags & DFLAGS_DEVICE_PRESENT) &&
@@ -2189,11 +2247,11 @@ FindDevices(
             if (skipSetParameters)
                 continue;
 
-            statusByte = WaitOnBusy(chan, baseIoAddress2);
+            statusByte = WaitOnBusy(chan);
 
             // Select the device.
-            SelectDrive(chan, baseIoAddress1, i & 0x01);
-            GetStatus(chan, baseIoAddress2, statusByte);
+            SelectDrive(chan, i & 0x01);
+            GetStatus(chan, statusByte);
 
             if (statusByte & IDE_STATUS_ERROR) {
 
@@ -2201,27 +2259,27 @@ FindDevices(
                 KdPrint2((PRINT_PREFIX 
                             "FindDevices: Resetting controller before SetDriveParameters.\n"));
 
-                AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_RESET_CONTROLLER );
+                AtapiWritePort1(chan, IDX_IO2_o_Control, IDE_DC_RESET_CONTROLLER );
                 AtapiStallExecution(500 * 1000);
-                AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_REENABLE_CONTROLLER);
-                SelectDrive(chan, baseIoAddress1, i & 0x01);
+                AtapiWritePort1(chan, IDX_IO2_o_Control, IDE_DC_REENABLE_CONTROLLER);
+                SelectDrive(chan, i & 0x01);
 
                 do {
                     // Wait for Busy to drop.
                     AtapiStallExecution(100);
-                    GetStatus(chan, baseIoAddress2, statusByte);
+                    GetStatus(chan, statusByte);
 
                 } while ((statusByte & IDE_STATUS_BUSY) && waitCount--);
             }
 
-            statusByte = WaitOnBusy(chan, baseIoAddress2);
+            statusByte = WaitOnBusy(chan);
 
             KdPrint2((PRINT_PREFIX 
                         "FindDevices: Status before SetDriveParameters: (%#x) (%#x)\n",
                         statusByte,
-                        AtapiReadPort1(chan, &baseIoAddress1->i.DriveSelect)));
+                        AtapiReadPort1(chan, IDX_IO1_i_DriveSelect)));
 
-            GetBaseStatus(chan, baseIoAddress1, statusByte);
+            GetBaseStatus(chan, statusByte);
 
             // Use the IDENTIFY data to set drive parameters.
             if (!SetDriveParameters(HwDeviceExtension,i,Channel)) {
@@ -2254,43 +2312,43 @@ FindDevices(
     // and give the system enough time to settle.
     if (!deviceResponded) {
 
-        AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_RESET_CONTROLLER );
+        AtapiWritePort1(chan, IDX_IO2_o_Control,IDE_DC_RESET_CONTROLLER );
         AtapiStallExecution(50 * 1000);
-        AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus,IDE_DC_REENABLE_CONTROLLER);
+        AtapiWritePort1(chan, IDX_IO2_o_Control,IDE_DC_REENABLE_CONTROLLER);
     }
 */
     if(deviceResponded) {
-        for (i = 0; i < 2; i++) {
+        for (i = 0; i < max_ldev; i++) {
             ldev = GET_LDEV2(Channel, i, 0);
 
             if(deviceExtension->lun[ldev].DeviceFlags & DFLAGS_DEVICE_PRESENT) {
                 // Make sure some device (master is preferred) is selected on exit.
                 KdPrint2((PRINT_PREFIX 
                            "FindDevices: select %d dev to clear INTR\n", i));
-                SelectDrive(chan, baseIoAddress1, i);
-                GetBaseStatus(chan, baseIoAddress1, statusByte);
+                SelectDrive(chan, i);
+                GetBaseStatus(chan, statusByte);
                 KdPrint2((PRINT_PREFIX 
                            "FindDevices: statusByte=%#x\n", statusByte));
             }
         }
-        for (i = 0; i < 2; i++) {
+        for (i = 0; i < max_ldev; i++) {
             ldev = GET_LDEV2(Channel, i, 0);
 
             if(deviceExtension->lun[ldev].DeviceFlags & DFLAGS_DEVICE_PRESENT) {
                 // Make sure some device (master is preferred) is selected on exit.
                 KdPrint2((PRINT_PREFIX 
                            "FindDevices: select %d dev on exit\n", i));
-                SelectDrive(chan, baseIoAddress1, i);
+                SelectDrive(chan, i);
                 break;
             }
         }
     }
 
-    GetBaseStatus(chan, baseIoAddress1, statusByte);
+    GetBaseStatus(chan, statusByte);
     // Enable interrupts
     AtapiEnableInterrupts(deviceExtension, Channel);
-//    AtapiWritePort1(chan, &baseIoAddress2->AlternateStatus, IDE_DC_A_4BIT );
-    GetBaseStatus(chan, baseIoAddress1, statusByte);
+//    AtapiWritePort1(chan, IDX_IO2_o_Control, IDE_DC_A_4BIT );
+    GetBaseStatus(chan, statusByte);
 
     KdPrint2((PRINT_PREFIX 
                "FindDevices: returning %d\n",

@@ -6,7 +6,7 @@
     Perform reorder if necessary
  */
 VOID
-AtapiQueueRequest(
+UniataQueueRequest(
     IN PHW_CHANNEL chan,
     IN PSCSI_REQUEST_BLOCK Srb
     );
@@ -15,7 +15,7 @@ AtapiQueueRequest(
     Remove request from queue and get next request
  */
 VOID
-AtapiRemoveRequest(
+UniataRemoveRequest(
     IN PHW_CHANNEL chan,
     IN PSCSI_REQUEST_BLOCK Srb
     );
@@ -25,7 +25,7 @@ AtapiRemoveRequest(
     (from head of the queue)
  */
 PSCSI_REQUEST_BLOCK
-AtapiGetCurRequest(
+UniataGetCurRequest(
     IN PHW_CHANNEL chan
     );
 
@@ -34,7 +34,7 @@ AtapiGetCurRequest(
     (used in simplex mode only)
  */
 PHW_CHANNEL
-AtapiGetNextChannel(
+UniataGetNextChannel(
     IN PHW_CHANNEL chan
     );
 

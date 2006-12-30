@@ -1,4 +1,6 @@
 ..\driver\Dist
+..\driver\Lib
+..\driver\Inc
 ..\driver\atapi.h
 ..\driver\atapix.reg
 ..\driver\atapix_extrn.reg
@@ -12,6 +14,10 @@
 ..\driver\id_probe.cpp
 ..\driver\id_queue.cpp
 ..\driver\id_queue.h
+..\driver\id_sata.cpp
+..\driver\id_sata.h
+..\driver\stdafx.cpp
+..\driver\stdafx.h
 ..\driver\idedma.def
 ..\driver\idedma.dep
 ..\driver\idedma.mak
@@ -24,12 +30,11 @@
 ..\driver\*.BAT
 ..\driver\Makefile
 ..\driver\ntddscsi.h
-..\driver\perform.txt
 ..\driver\scsi.h
 ..\driver\srb.h
 ..\driver\todo.txt
 ..\driver\tools.h
-..\driver\pkg_files.*
+..\pkg_files.*
 ..\driver\uata_ctl.h
 ..\driver\uniata.mak
 ..\build_inf\build_inf.cpp

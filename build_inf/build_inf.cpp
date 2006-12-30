@@ -231,7 +231,9 @@ GetAtaTypeStr(
 /*        case ATA_UDMA7:
             return "ATA-166";*/
         case ATA_SA150:
-            return "Serial ATA";
+            return "SATA";
+        case ATA_SA300:
+            return "SATA2";
     }
     return "IDE";
 }

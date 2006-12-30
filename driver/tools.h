@@ -313,71 +313,8 @@ if((a)!=NULL) {                             \
 
 #endif //DBG
 
-/*
-#define CHECK_OUT_MDL()                                                 \
-if(irpStack->Parameters.DeviceIoControl.OutputBufferLength < length) {  \
-    KdPrint(("Output buffer (MDL) too small (%#x/%#x)\n", length, \
-                    irpStack->Parameters.DeviceIoControl.OutputBufferLength));   \
-    Irp->IoStatus.Information = 0;                                      \
-    status = STATUS_BUFFER_TOO_SMALL;                                   \
-    cddata->LastError = CDRW_ERR_INVALID_OUTPUT_BUFFER_SIZE;            \
-    goto CdRwSpecDevCtrlCompleteRequest;                                \
-}                                                                       \
-if ( Irp->MdlAddress == NULL ){                                         \
-    Irp->IoStatus.Information = 0;                                      \
-    status = STATUS_NOT_MAPPED_DATA;                                    \
-    cddata->LastError = CDRW_ERR_INVALID_IO_BUFFER_ADDRESS;             \
-    goto CdRwSpecDevCtrlCompleteRequest;                                \
-}
 
-#define CHECK_IN_MDL()                                                  \
-if(irpStack->Parameters.DeviceIoControl.InputBufferLength < length) {   \
-    KdPrint(("Input buffer (MDL) too small (%#x/%#x)\n", length, \
-                    irpStack->Parameters.DeviceIoControl.InputBufferLength));   \
-    Irp->IoStatus.Information = 0;                                      \
-    status = STATUS_INFO_LENGTH_MISMATCH;                               \
-    cddata->LastError = CDRW_ERR_INVALID_INPUT_BUFFER_SIZE;             \
-    goto CdRwSpecDevCtrlCompleteRequest;                                \
-}                                                                       \
-if ( Irp->MdlAddress == NULL ){                                         \
-    Irp->IoStatus.Information = 0;                                      \
-    status = STATUS_NOT_MAPPED_DATA;                                    \
-    cddata->LastError = CDRW_ERR_INVALID_IO_BUFFER_ADDRESS;             \
-    goto CdRwSpecDevCtrlCompleteRequest;                                \
-}
 
-#define CHECK_OUT_BUFFER()                                              \
-if(irpStack->Parameters.DeviceIoControl.OutputBufferLength < length) {  \
-    KdPrint(("Output buffer too small (%#x/%#x)\n", length, \
-                    irpStack->Parameters.DeviceIoControl.OutputBufferLength));   \
-    Irp->IoStatus.Information = 0;                                      \
-    status = STATUS_BUFFER_TOO_SMALL;                                   \
-    cddata->LastError = CDRW_ERR_INVALID_OUTPUT_BUFFER_SIZE;            \
-    goto CdRwSpecDevCtrlCompleteRequest;                                \
-}                                                                       \
-if ( Irp->AssociatedIrp.SystemBuffer == NULL ){                                         \
-    Irp->IoStatus.Information = 0;                                      \
-    status = STATUS_NOT_MAPPED_DATA;                                    \
-    cddata->LastError = CDRW_ERR_INVALID_IO_BUFFER_ADDRESS;             \
-    goto CdRwSpecDevCtrlCompleteRequest;                                \
-}
-
-#define CHECK_IN_BUFFER()                                               \
-if(irpStack->Parameters.DeviceIoControl.InputBufferLength < length) {   \
-    KdPrint(("Input buffer too small (%#x/%#x)\n", length, \
-                    irpStack->Parameters.DeviceIoControl.InputBufferLength));   \
-    Irp->IoStatus.Information = 0;                                      \
-    status = STATUS_INFO_LENGTH_MISMATCH;                               \
-    cddata->LastError = CDRW_ERR_INVALID_INPUT_BUFFER_SIZE;             \
-    goto CdRwSpecDevCtrlCompleteRequest;                                \
-}                                                                       \
-if ( Irp->AssociatedIrp.SystemBuffer == NULL ){                                         \
-    Irp->IoStatus.Information = 0;                                      \
-    status = STATUS_NOT_MAPPED_DATA;                                    \
-    cddata->LastError = CDRW_ERR_INVALID_IO_BUFFER_ADDRESS;             \
-    goto CdRwSpecDevCtrlCompleteRequest;                                \
-}
-*/
 #define WAIT_FOR_XXX_EMU_DELAY  DEF_I64(5000000)        //  0.5 s
 
 // neat little hacks to count number of bits set efficiently
@@ -395,14 +332,15 @@ __inline ULONG CountOfSetBitsULong(ULONG _X)
 #endif //min
 //#define abs(a) (((a) < 0) ? (-(a)) : (a))
 
-#ifdef __cplusplus
-};
-#endif //__cplusplus
-
 extern ULONG  MajorVersion;
 extern ULONG  MinorVersion;
 extern ULONG  BuildNumber;
 extern ULONG  SPVersion;
+
+#ifdef __cplusplus
+};
+#endif //__cplusplus
+
 #ifndef USER_MODE
 extern UNICODE_STRING SavedSPString;
 #endif //USER_MODE

@@ -92,6 +92,8 @@ Revision History:
 #define ATAPI_MAGIC_LSB			0x14
 #define ATAPI_MAGIC_MSB			0xeb
 
+#define AHCI_MAX_PORT                   32
+
 typedef struct _BUSMASTER_CTX {
     PBUSMASTER_CONTROLLER_INFORMATION* BMListPtr;
     ULONG* BMListLen;
@@ -127,6 +129,360 @@ typedef struct _IDE_BUSMASTER_REGISTERS {
 #define BM_COMMAND_READ		        0x00*/
 #define BM_COMMAND_WRITE		0x00
 #define BM_COMMAND_READ		        0x08
+
+#define IDX_BM_IO                       (IDX_IO2_o+IDX_IO2_o_SZ)
+#define IDX_BM_IO_SZ                    sizeof(IDE_BUSMASTER_REGISTERS)
+
+#define IDX_BM_Command                  (FIELD_OFFSET(IDE_BUSMASTER_REGISTERS, Command        )+IDX_BM_IO)
+#define IDX_BM_DeviceSpecific0          (FIELD_OFFSET(IDE_BUSMASTER_REGISTERS, DeviceSpecific0)+IDX_BM_IO)
+#define IDX_BM_Status                   (FIELD_OFFSET(IDE_BUSMASTER_REGISTERS, Status         )+IDX_BM_IO)
+#define IDX_BM_DeviceSpecific1          (FIELD_OFFSET(IDE_BUSMASTER_REGISTERS, DeviceSpecific1)+IDX_BM_IO)
+#define IDX_BM_PRD_Table                (FIELD_OFFSET(IDE_BUSMASTER_REGISTERS, PRD_Table      )+IDX_BM_IO)
+
+typedef struct _IDE_AHCI_REGISTERS {
+    // HBA Capabilities
+    struct {
+        ULONG NOP:5;   // number of ports
+        ULONG Reserved5_7:1;
+        ULONG NCS:5;   // number of command slots
+        ULONG PSC:1;   // partial state capable
+        ULONG SSC:1;   // slumber state capable
+        ULONG PMD:1;   // PIO multiple DRQ block
+        ULONG Reserved16:1;
+
+        ULONG SPM:1;   // port multiplier
+        ULONG SAM:1;   // AHCI mode only
+        ULONG SNZO:1;  // non-zero DMA offset
+        ULONG ISS:4;   // interface speed
+        ULONG SCLO:1;  // command list override
+        ULONG SAL:1;   // activity LED
+        ULONG SALP:1;  // aggressive link power management
+        ULONG SSS:1;   // staggered spin-up
+        ULONG SIS:1;   // interlock switch
+        ULONG Reserved29:1;
+        ULONG SNCQ:1;  // native command queue
+        ULONG S64A:1;  // 64bit addr
+    } CAP;
+
+    // Global HBA Control
+    struct {
+        ULONG HR:1;    // HBA Reset
+        ULONG IE:1;    // interrupt enable
+        ULONG Reserved2_30:1;
+        ULONG AE:1;    // AHCI enable
+    } GHC;
+    // Interrupt status (bit mask)
+    ULONG IS;
+    // Ports implemented (bit mask)
+    ULONG PI;
+    // AHCI Version
+    ULONG VS;
+    ULONG Reserved[3];
+
+    UCHAR Reserved2[0x80];
+
+    UCHAR VendorSpec[0x60];
+} IDE_AHCI_REGISTERS, *PIDE_AHCI_REGISTERS;
+
+
+typedef union _SATA_SSTATUS_REG {
+
+    struct {
+        ULONG DET:4; // Device Detection
+
+#define SStatus_DET_NoDev        0x00
+#define SStatus_DET_Dev_NoPhy    0x01
+#define SStatus_DET_Dev_Ok       0x03
+#define SStatus_DET_Offline      0x04
+
+        ULONG SPD:4; // Current Interface Speed
+
+#define SStatus_SPD_NoDev        0x00
+#define SStatus_SPD_Gen1         0x01
+#define SStatus_SPD_Gen2         0x02
+
+        ULONG IPM:4; // Interface Power Management
+
+#define SStatus_IPM_NoDev        0x00
+#define SStatus_IPM_Active       0x01
+#define SStatus_IPM_Partial      0x02
+#define SStatus_IPM_Slumber      0x06
+
+        ULONG Reserved:20;
+    };
+    ULONG Reg;
+
+} SATA_SSTATUS_REG, *PSATA_SSTATUS_REG;
+
+
+typedef union _SATA_SCONTROL_REG {
+
+    struct {
+        ULONG DET:4; // Device Detection Init
+
+#define SControl_DET_DoNothing   0x00
+#define SControl_DET_Idle        0x00
+#define SControl_DET_Init        0x01
+#define SControl_DET_Disable     0x04
+
+        ULONG SPD:4; // Speed Allowed
+
+#define SControl_SPD_NoRestrict  0x00
+#define SControl_SPD_LimGen1     0x01
+#define SControl_SPD_LimGen2     0x02
+
+        ULONG IPM:4; // Interface Power Management Transitions Allowed
+
+#define SControl_IPM_NoRestrict  0x00
+#define SControl_IPM_NoPartial   0x01
+#define SControl_IPM_NoSlumber   0x02
+#define SControl_IPM_NoPartialSlumber 0x03
+
+        ULONG SPM:4; // Select Power Management, unused by AHCI
+        ULONG PMP:4; // Port Multiplier Port, unused by AHCI
+        ULONG Reserved:12;
+    };
+    ULONG Reg;
+
+} SATA_SCONTROL_REG, *PSATA_SCONTROL_REG;
+
+
+typedef union _SATA_SERROR_REG {
+
+    struct {
+        struct {
+            ULONG I:1; // Recovered Data Integrity Error
+            ULONG M:1; // Recovered Communications Error
+            ULONG Reserved_2_7:6;
+            ULONG T:1; // Transient Data Integrity Error
+            ULONG C:1; // Persistent Communication or Data Integrity Error
+            ULONG P:1; // Protocol Error
+            ULONG E:1; // Internal Error
+            ULONG Reserved_12_15:4;
+        } ERR;
+
+        struct {
+            ULONG N:1; // PhyRdy Change, PIS.PRCS
+            ULONG I:1; // Phy Internal Error
+            ULONG W:1; // Comm Wake
+            ULONG B:1; // 10B to 8B Decode Error
+            ULONG D:1; // Disparity Error, not used by AHCI
+            ULONG C:1; // CRC Error
+            ULONG H:1; // Handshake Error
+            ULONG S:1; // Link Sequence Error
+            ULONG T:1; // Transport state transition error
+            ULONG F:1; // Unknown FIS Type
+            ULONG X:1; // Exchanged
+            ULONG Reserved_27_31:5;
+        } DIAG;
+    };
+    ULONG Reg;
+
+} SATA_SERROR_REG, *PSATA_SERROR_REG;
+
+
+typedef struct _IDE_SATA_REGISTERS {
+    union {
+        SATA_SSTATUS_REG   SStatus;
+        ULONG              SStatus_Reg;
+    };
+    union {
+        SATA_SERROR_REG    SError;
+        ULONG              SError_Reg;
+    };
+    union {
+        SATA_SCONTROL_REG  SControl;
+        ULONG              SControl_Reg;
+    };
+
+    // SATA 1.2
+
+    ULONG                  SActive;
+    union {
+        ULONG Reg;
+        struct {
+            USHORT PMN;     // PM Notify, bitmask
+            USHORT Reserved;
+        };
+    } SNTF;
+    ULONG                  SReserved[11];
+} IDE_SATA_REGISTERS, *PIDE_SATA_REGISTERS;
+
+#define IDX_SATA_IO                     (IDX_BM_IO+IDX_BM_IO_SZ)
+#define IDX_SATA_IO_SZ                  sizeof(IDE_SATA_REGISTERS)
+
+#define IDX_SATA_SStatus                (FIELD_OFFSET(IDE_SATA_REGISTERS, SStatus        )+IDX_SATA_IO)
+#define IDX_SATA_SError                 (FIELD_OFFSET(IDE_SATA_REGISTERS, SError         )+IDX_SATA_IO)
+#define IDX_SATA_SControl               (FIELD_OFFSET(IDE_SATA_REGISTERS, SControl       )+IDX_SATA_IO)
+#define IDX_SATA_SActive                (FIELD_OFFSET(IDE_SATA_REGISTERS, SActive        )+IDX_SATA_IO)
+#define IDX_SATA_SNTF_PMN               (FIELD_OFFSET(IDE_SATA_REGISTERS, SNTF.PMN       )+IDX_SATA_IO)
+
+#define IDX_MAX_REG                     (IDX_SATA_IO+IDX_SATA_IO_SZ)
+
+typedef struct _IDE_AHCI_PORT_REGISTERS {
+    union {
+        struct {
+            ULONG  CLB;   // command list base address
+            ULONG  CLBU;  // command list base address (upper 32bits)
+        };
+        ULONGLONG CLB64;
+    };
+
+    union {
+        struct {
+            ULONG  FB;   // FIS base address
+            ULONG  FBU;  // FIS base address (upper 32bits)
+        };
+        ULONGLONG FB64;
+    };
+
+    union {
+        ULONG Reg;            // interrupt status
+        struct {
+            ULONG DHRS:1;// Device to Host Register FIS Interrupt
+            ULONG PSS:1; // PIO Setup FIS Interrupt
+            ULONG DSS:1; // DMA Setup FIS Interrupt
+            ULONG SDBS:1;// Set Device Bits Interrupt
+            ULONG UFS:1; // Unknown FIS Interrupt
+            ULONG DPS:1; // Descriptor Processed
+            ULONG PCS:1; // Port Connect Change Status
+            ULONG DMPS:1;// Device Mechanical Presence Status
+
+            ULONG Reserved_8_21:14;
+            ULONG PRCS:1;// PhyRdy Change Status
+            ULONG IPMS:1;// Incorrect Port Multiplier Status
+
+            ULONG OFS:1; // Overflow Status
+            ULONG Reserved_25:1;
+            ULONG INFS:1;// Interface Non-fatal Error Status
+            ULONG IFS:1; // Interface Fatal Error Status
+            ULONG HBDS:1;// Host Bus Data Error Status
+            ULONG HBFS:1;// Host Bus Fatal Error Status
+            ULONG TFES:1;// Task File Error Status
+            ULONG CPDS:1;// Cold Port Detect Status
+        };
+    } IS;
+
+    union {
+        ULONG Reg;            // interrupt enable
+        struct {
+            ULONG DHRE:1;// Device to Host Register FIS Interrupt Enable
+            ULONG PSE:1; // PIO Setup FIS Interrupt Enable
+            ULONG DSE:1; // DMA Setup FIS Interrupt Enable
+            ULONG SDBE:1;// Set Device Bits FIS Interrupt Enable
+            ULONG UFE:1; // Unknown FIS Interrupt Enable
+            ULONG DPE:1; // Descriptor Processed Interrupt Enable
+            ULONG PCE:1; // Port Change Interrupt Enable
+            ULONG DPME:1;// Device Mechanical Presence Enable
+
+            ULONG Reserved_8_21:14;
+            ULONG PRCE:1;// PhyRdy Change Interrupt Enable
+            ULONG IPME:1;// Incorrect Port Multiplier Enable
+            ULONG OFE:1; // Overflow Enable
+            ULONG Reserved_25:1;
+            ULONG INFE:1;// Interface Non-fatal Error Enable
+            ULONG IFE:1; // Interface Fatal Error Enable
+            ULONG HBDE:1;// Host Bus Data Error Enable
+            ULONG HBFE:1;// Host Bus Fatal Error Enable
+            ULONG TFEE:1;// Task File Error Enable
+            ULONG CPDE:1;// Cold Port Detect Enable
+        };
+    } IE;
+
+    union {
+        ULONG Reg;           // command register
+        struct {
+
+            ULONG ST:1;  // Start
+            ULONG SUD:1; // Spin-Up Device
+            ULONG POD:1; // Power On Device
+            ULONG CLO:1; // Command List Override
+            ULONG FRE:1; // FIS Receive Enable
+            ULONG Reserved_5_7:3;
+
+            ULONG CCS:5; // Current Command Slot
+            ULONG MPSS:1;// Mechanical Presence Switch State
+            ULONG FR:1;  // FIS Receive Running
+            ULONG CR:1;  // Command List Running
+
+            ULONG CPS:1; // Cold Presence State
+            ULONG PMA:1; // Port Multiplier Attached
+            ULONG HPCP:1;// Hot Plug Capable Port
+            ULONG MPSP:1;// Mechanical Presence Switch Attached to Port
+            ULONG CPD:1; // Cold Presence Detection
+            ULONG ESP:1; // External SATA Port
+            ULONG Reserved_22_23:2;
+
+            ULONG ATAPI:1; // Device is ATAPI
+            ULONG DLAE:1;// Drive LED on ATAPI Enable
+            ULONG ALPE:1;// Aggressive Link Power Management Enable
+            ULONG ASP:1; // Aggressive Slumber / Partial
+            ULONG ICC:4; // Interface Communication Control
+
+#define SATA_CMD_ICC_Idle    0x00
+#define SATA_CMD_ICC_NoOp    0x00
+#define SATA_CMD_ICC_Active  0x01
+#define SATA_CMD_ICC_Partial 0x02
+#define SATA_CMD_ICC_Slumber 0x06
+        };
+    } CMD;
+
+    ULONG Reserved;
+
+    union {
+        ULONG Reg;           // Task File Data
+        struct {
+            struct {
+                ULONG ERR:1;
+                ULONG cs1:2;// command-specific
+                ULONG DRQ:1;
+                ULONG cs2:3;// command-specific
+                ULONG BSY:1;
+            } STS;
+            ULONG ERR; // Contains the latest copy of the task file error register.
+            ULONG Reserved[2];
+        };
+    } TFD;
+
+    union {
+        ULONG Reg;           // signature
+        struct {
+            UCHAR SectorCount;
+            UCHAR LbaLow;
+            UCHAR LbaMid;
+            UCHAR LbaHigh;
+        };
+    } SIG;
+    union {
+        ULONG             SStatus;      // SCR0
+        SATA_SSTATUS_REG  SSTS;
+    };
+    union {
+        ULONG             SControl;     // SCR2
+        SATA_SCONTROL_REG SCTL;
+    };
+    union {
+        ULONG             SError;       // SCR1
+        SATA_SERROR_REG   SERR;
+    };
+    union {
+        ULONG SACT;      // SCR3
+        ULONG SActive;   // bitmask
+    };
+    ULONG CI;            // Command issue, bitmask
+
+    // AHCI 1.1
+    union {
+        ULONG Reg;
+        struct {
+            USHORT PMN;     // PM Notify, bitmask
+            USHORT Reserved;
+        };
+    } SNTF;
+    ULONG FIS_Switching_Reserved[12];
+    UCHAR VendorSpec[16];
+
+} IDE_AHCI_PORT_REGISTERS, *PIDE_AHCI_PORT_REGISTERS;
 
 #define IsBusMaster(pciData) \
     ( ((pciData)->Command & (PCI_ENABLE_BUS_MASTER/* | PCI_ENABLE_IO_SPACE*/)) == \
@@ -240,6 +596,12 @@ typedef struct _ATA_REQ {
 struct _HW_DEVICE_EXTENSION;
 struct _HW_LU_EXTENSION;
 
+typedef struct _IORES {
+    ULONG Addr;
+    ULONG MemIo:1;
+    ULONG Reserved:31;
+} IORES, *PIORES;
+
 // Channel extension
 typedef struct _HW_CHANNEL {
 
@@ -251,7 +613,6 @@ typedef struct _HW_CHANNEL {
     ULONG               ChannelSelectWaitCount;
 
     UCHAR               DpcState;
-    UCHAR               Reserved[3];
 
     BOOLEAN             ExpectingInterrupt;    // Indicates expecting an interrupt
     BOOLEAN             RDP;    // Indicate last tape command was DSC Restrictive.
@@ -267,7 +628,10 @@ typedef struct _HW_CHANNEL {
     UCHAR               ReturningMediaStatus;
 
     BOOLEAN             CopyDmaBuffer;
-    BOOLEAN             MemIo;
+    //BOOLEAN             MemIo;
+    BOOLEAN             AltRegMap;
+
+    //UCHAR               Reserved[3];
 
     MECHANICAL_STATUS_INFORMATION_HEADER MechStatusData;
     SENSE_DATA          MechStatusSense;
@@ -288,6 +652,13 @@ typedef struct _HW_CHANNEL {
 #define CHECK_INTR_CHECK                0x01
 #define CHECK_INTR_IDLE                 0x00
 
+    ULONG       NextDpcChan;
+    PHW_TIMER   HwScsiTimer;
+    LONGLONG    DpcTime;
+/*
+    PHW_TIMER   HwScsiTimer1;
+    PHW_TIMER   HwScsiTimer2;
+    LONGLONG    DpcTime1;
 /*    PHW_TIMER           CurDpc;
     LARGE_INTEGER       ActivationTime;*/
 
@@ -315,11 +686,9 @@ typedef struct _HW_CHANNEL {
 //    PBM_DMA_ENTRY dma_tab;//[PAGE_SIZE/sizeof(BM_DMA_ENTRY)];	/* DMA transfer table */
 //    ULONG dma_base;
 
-    ULONG BaseMemAddress;
-    ULONG BaseMemAddressOffset;
-    ULONG RegTranslation[sizeof(IDE_REGISTERS_1) +
-                         sizeof(IDE_REGISTERS_2) +
-                         sizeof(IDE_BUSMASTER_REGISTERS)];
+    //ULONG BaseMemAddress;
+    //ULONG BaseMemAddressOffset;
+    IORES RegTranslation[IDX_MAX_REG];
 
 } HW_CHANNEL, *PHW_CHANNEL;
 
@@ -331,6 +700,7 @@ typedef struct _HW_CHANNEL {
 #define CTRFLAGS_ENABLE_INTR_REQ        0x0020
 #define CTRFLAGS_LBA48                  0x0040
 #define CTRFLAGS_DSC_BSY                0x0080
+#define CTRFLAGS_NO_SLAVE               0x0100
 
 #define GEOM_AUTO                       0xffffffff
 #define GEOM_STD                        0x0000
@@ -396,8 +766,8 @@ typedef struct _HW_LU_EXTENSION {
 // Device extension
 typedef struct _HW_DEVICE_EXTENSION {
     CHAR Signature[32];
-    PIDE_REGISTERS_1 BaseIoAddress1[IDE_MAX_CHAN];    // Base register locations
-    PIDE_REGISTERS_2 BaseIoAddress2[IDE_MAX_CHAN];
+    //PIDE_REGISTERS_1 BaseIoAddress1[IDE_MAX_CHAN];    // Base register locations
+    //PIDE_REGISTERS_2 BaseIoAddress2[IDE_MAX_CHAN];
     ULONG BusInterruptLevel;    // Interrupt level
     ULONG InterruptMode;        // Interrupt Mode (Level or Edge)
     ULONG BusInterruptVector;
@@ -408,7 +778,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     ULONG NumberChannels;
     ULONG FirstChannelToCheck;
     HW_LU_EXTENSION lun[IDE_MAX_LUN];
-    HW_CHANNEL chan[IDE_MAX_CHAN];
+    HW_CHANNEL chan[AHCI_MAX_PORT/*IDE_MAX_CHAN*/];
     UCHAR LastInterruptedChannel;
     // Indicates the number of blocks transferred per int. according to the
     // identify data.
@@ -420,19 +790,22 @@ typedef struct _HW_DEVICE_EXTENSION {
     // BusMaster specific data
 //    PBM_DMA_ENTRY dma_tab_0;
     //KSPIN_LOCK  DpcSpinLock;
+
     ULONG       ActiveDpcChan;
     ULONG       FirstDpcChan;
+/*
     PHW_TIMER   HwScsiTimer1;
     PHW_TIMER   HwScsiTimer2;
     LONGLONG    DpcTime1;
     LONGLONG    DpcTime2;
-
+*/
     ULONG          queue_depth;
 
     PDEVICE_OBJECT Isr2DevObj;
 
-    PIDE_BUSMASTER_REGISTERS  BaseIoAddressBM_0;
-    PIDE_BUSMASTER_REGISTERS  BaseIoAddressBM[IDE_MAX_CHAN];
+    //PIDE_BUSMASTER_REGISTERS  BaseIoAddressBM_0;
+    IORES                     BaseIoAddressBM_0;
+    //PIDE_BUSMASTER_REGISTERS  BaseIoAddressBM[IDE_MAX_CHAN];
 
     // Device identification
     ULONG DevID;
@@ -447,9 +820,11 @@ typedef struct _HW_DEVICE_EXTENSION {
 
     ULONG HbaCtrlFlags;
     BOOLEAN simplexOnly;
-    BOOLEAN MemIo;
+    //BOOLEAN MemIo;
+    BOOLEAN AltRegMap;
     BOOLEAN UnknownDev;
     BOOLEAN MasterDev;
+    //UCHAR   Reserved1[3];
 
     LONG  ReCheckIntr;
 
@@ -459,7 +834,14 @@ typedef struct _HW_DEVICE_EXTENSION {
     ULONG MaximumDmaTransferLength;
     ULONG AlignmentMask;
 
-    ULONG BaseMemAddress;
+    //ULONG BaseMemAddress;
+
+    //PIDE_SATA_REGISTERS       BaseIoAddressSATA_0;
+    IORES                     BaseIoAddressSATA_0;
+    //PIDE_SATA_REGISTERS       BaseIoAddressSATA[IDE_MAX_CHAN];
+
+    //PIDE_AHCI_REGISTERS       BaseIoAHCI_0;
+    //PIDE_AHCI_PORT_REGISTERS  BaseIoAHCIPort[AHCI_MAX_PORT];
 
     BOOLEAN        opt_AtapiDmaZeroTransfer; // default FALSE
     BOOLEAN        opt_AtapiDmaControlCmd;   // default FALSE
@@ -484,13 +866,13 @@ extern const CHAR retry_Wdma[MAX_RETRIES+1];
 extern const CHAR retry_Udma[MAX_RETRIES+1];
 
 extern VOID
-AtapiEnumBusMasterController(
+UniataEnumBusMasterController(
     IN PVOID DriverObject,
     PVOID Argument2
     );
 
 extern ULONG DDKAPI
-AtapiFindBusMasterController(
+UniataFindBusMasterController(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
     IN PVOID BusInformation,
@@ -500,12 +882,12 @@ AtapiFindBusMasterController(
     );
 
 extern NTSTATUS
-AtapiConnectIntr2(
+UniataConnectIntr2(
     IN PVOID HwDeviceExtension
     );
 
 extern NTSTATUS
-AtapiDisconnectIntr2(
+UniataDisconnectIntr2(
     IN PVOID HwDeviceExtension
     );
 
@@ -616,7 +998,7 @@ AtapiInterrupt2(
 extern PDRIVER_OBJECT SavedDriverObject;
 
 extern BOOLEAN
-AtapiChipDetect(
+UniataChipDetect(
     IN PVOID HwDeviceExtension,
     IN PPCI_COMMON_CONFIG pciData, // optional
     IN ULONG DeviceNumber,
@@ -731,7 +1113,7 @@ AtapiGetIoRange(
 
 #ifndef GetDmaStatus
 #define GetDmaStatus(de, c) \
-    (((de)->BaseIoAddressBM[c]) ? ScsiPortReadPortUchar(&((de)->BaseIoAddressBM[c]->Status)) : 0)
+    (((de)->BusMaster) ? AtapiReadPort1(&((de)->chan[c]), IDX_BM_Status) : 0)
 #endif //GetDmaStatus
 
 #ifdef USE_OWN_DMA
@@ -744,23 +1126,44 @@ AtapiGetIoRange(
 #endif //USE_OWN_DMA
 
 VOID
+DDKFASTAPI
 AtapiWritePort4(
     IN PHW_CHANNEL chan,
-    IN PULONG port,
+    IN ULONG port,
     IN ULONG data
     );
 
 VOID
+DDKFASTAPI
 AtapiWritePort2(
     IN PHW_CHANNEL chan,
-    IN PUSHORT port,
+    IN ULONG port,
     IN USHORT data
     );
 
 VOID
+DDKFASTAPI
 AtapiWritePort1(
     IN PHW_CHANNEL chan,
-    IN PUCHAR port,
+    IN ULONG port,
+    IN UCHAR data
+    );
+
+VOID
+DDKFASTAPI
+AtapiWritePortEx4(
+    IN PHW_CHANNEL chan,
+    IN ULONG port,
+    IN ULONG offs,
+    IN ULONG data
+    );
+
+VOID
+DDKFASTAPI
+AtapiWritePortEx1(
+    IN PHW_CHANNEL chan,
+    IN ULONG port,
+    IN ULONG offs,
     IN UCHAR data
     );
 
@@ -768,28 +1171,44 @@ ULONG
 DDKFASTAPI
 AtapiReadPort4(
     IN PHW_CHANNEL chan,
-    IN PULONG port
+    IN ULONG port
     );
 
 USHORT
 DDKFASTAPI
 AtapiReadPort2(
     IN PHW_CHANNEL chan,
-    IN PUSHORT port
+    IN ULONG port
     );
 
 UCHAR
 DDKFASTAPI
 AtapiReadPort1(
     IN PHW_CHANNEL chan,
-    IN PUCHAR port
+    IN ULONG port
+    );
+
+ULONG
+DDKFASTAPI
+AtapiReadPortEx4(
+    IN PHW_CHANNEL chan,
+    IN ULONG port,
+    IN ULONG offs
+    );
+
+UCHAR
+DDKFASTAPI
+AtapiReadPortEx1(
+    IN PHW_CHANNEL chan,
+    IN ULONG port,
+    IN ULONG offs
     );
 
 VOID
 DDKFASTAPI
 AtapiWriteBuffer4(
     IN PHW_CHANNEL chan,
-    IN PULONG _port,
+    IN ULONG _port,
     IN PVOID Buffer,
     IN ULONG Count
     );
@@ -798,7 +1217,7 @@ VOID
 DDKFASTAPI
 AtapiWriteBuffer2(
     IN PHW_CHANNEL chan,
-    IN PUSHORT _port,
+    IN ULONG _port,
     IN PVOID Buffer,
     IN ULONG Count
     );
@@ -807,7 +1226,7 @@ VOID
 DDKFASTAPI
 AtapiReadBuffer4(
     IN PHW_CHANNEL chan,
-    IN PULONG _port,
+    IN ULONG _port,
     IN PVOID Buffer,
     IN ULONG Count
     );
@@ -816,7 +1235,7 @@ VOID
 DDKFASTAPI
 AtapiReadBuffer2(
     IN PHW_CHANNEL chan,
-    IN PUSHORT _port,
+    IN ULONG _port,
     IN PVOID Buffer,
     IN ULONG Count
     );
@@ -836,7 +1255,8 @@ AtapiReadBuffer2(
         chan->lChannel        = c; \
         chan->lun[0] = &(deviceExtension->lun[c*2+0]); \
         chan->lun[1] = &(deviceExtension->lun[c*2+1]); \
-        chan->MemIo  = deviceExtension->MemIo; \
+        chan->AltRegMap       = deviceExtension->AltRegMap; \
+        chan->NextDpcChan     = -1; \
 }
 
 extern ULONG SkipRaids;

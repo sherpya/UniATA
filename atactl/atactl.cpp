@@ -258,8 +258,11 @@ ata_mode_to_str(
     int mode
     )
 {
+    if(mode >= ATA_SA300) {
+        sprintf(str, "SATA-300");
+    } else
     if(mode >= ATA_SA150) {
-        sprintf(str, "SATA");
+        sprintf(str, "SATA-150");
     } else
     if(mode >= ATA_UDMA0) {
         sprintf(str, "UDMA%d", mode-ATA_UDMA0);
@@ -488,6 +491,41 @@ ata_check_unit(
     return FALSE;
 } // end ata_check_unit()
 
+BOOLEAN
+ata_adapter_info(
+    int bus_id,
+    int print_info
+    )
+{
+    char dev_name[64];
+    HANDLE h;
+    ADAPTERINFO AdapterInfo;
+    ULONG status;
+    ULONG returned;
+    SCSI_ADDRESS addr;
+
+    sprintf(dev_name, "\\\\.\\Scsi%d:", bus_id);
+    h = ata_open_dev(dev_name);
+    if(!h)
+        return FALSE;
+    addr.PortNumber = bus_id;
+
+    memset(&AdapterInfo, 0, sizeof(AdapterInfo));
+
+    status = ata_send_ioctl(h, &addr, "-UNIATA-",
+                            IOCTL_SCSI_MINIPORT_UNIATA_ADAPTER_INFO,
+                            &AdapterInfo, sizeof(AdapterInfo),
+                            NULL, 0,
+                            &returned);
+    if(print_info) {
+        if(!status) {
+            printf("Can't get adapter info\n");
+        }
+    }
+    ata_close_dev(h);
+    return ata_adapter_info ? TRUE : FALSE;
+} // end ata_adapter_info()
+
 int
 ata_check_controller(
     HANDLE h,    // handle to ScsiXXX:
@@ -506,7 +544,7 @@ ata_check_controller(
                              &returned,
                              FALSE);
     return status;
-}
+} // end ata_check_controller()
 
 BOOLEAN
 ata_list(
@@ -516,6 +554,7 @@ ata_list(
 {
     char dev_name[64];
     HANDLE h;
+    BOOLEAN uniata_driven;
 
     if(bus_id == -1) {
         for(bus_id=0; TRUE; bus_id++) {
@@ -524,12 +563,13 @@ ata_list(
         }
         return TRUE;
     }
+    uniata_driven = ata_adapter_info(bus_id, FALSE);
     sprintf(dev_name, "\\\\.\\Scsi%d:", bus_id);
     h = ata_open_dev(dev_name);
     if(!h)
         return FALSE;
     if(dev_id == -1) {
-        printf("Scsi%d:\n", bus_id);
+        printf("Scsi%d: %s\n", bus_id, uniata_driven ? "[UniATA]" : "");
         ata_check_controller(h, &g_capabilities);
         ata_check_unit(h, -1);
         ata_close_dev(h);
@@ -581,7 +621,7 @@ ata_mode(
     }
     ata_close_dev(h);
     return status ? TRUE : FALSE;
-} // end ata_list()
+} // end ata_mode()
 
 BOOLEAN
 ata_reset(
@@ -644,7 +684,7 @@ main (
     int mode=-1;
 
     printf("Console ATA control utility for Windows NT/2000/XP with UniATA installed\n"
-           "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2005\n"
+           "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2006\n"
            "Home site: http://alter.org.ua\n");
 
     for(i=1; i<argc; i++) {

@@ -1,6 +1,7 @@
 # UniATA Dependency File, included by idedma.mak
 
-.\id_ata.cpp : \
+id_ata.cpp : \
+	".\stdafx.h"\
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
@@ -12,8 +13,10 @@
 	".\bsmaster.h"\
 	".\id_queue.h"\
 	".\uniata_ver.h"\
+	".\id_sata.h"\
 	
-.\id_dma.cpp : \
+id_dma.cpp : \
+	".\stdafx.h"\
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
@@ -24,8 +27,10 @@
 	".\uata_ctl.h"\
 	".\id_queue.h"\
 	".\bsmaster.h"\
+	".\id_sata.h"\
 	
-.\id_init.cpp : \
+id_init.cpp : \
+	".\stdafx.h"\
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
@@ -36,8 +41,10 @@
 	".\uata_ctl.h"\
 	".\id_queue.h"\
 	".\bsmaster.h"\
+	".\id_sata.h"\
 	
-.\id_probe.cpp : \
+id_probe.cpp : \
+	".\stdafx.h"\
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
@@ -48,8 +55,10 @@
 	".\uata_ctl.h"\
 	".\id_queue.h"\
 	".\bsmaster.h"\
+	".\id_sata.h"\
 	
-.\id_queue.cpp : \
+id_queue.cpp : \
+	".\stdafx.h"\
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
@@ -60,9 +69,40 @@
 	".\uata_ctl.h"\
 	".\id_queue.h"\
 	".\bsmaster.h"\
+	".\id_sata.h"\
 
+id_sata.cpp : \
+	".\stdafx.h"\
+	".\config.h"\
+	".\tools.h"\
+	".\atapi.h"\
+	".\bm_devs.h"\
+	".\ntddscsi.h"\
+	".\scsi.h"\
+	".\srb.h"\
+	".\uata_ctl.h"\
+	".\bsmaster.h"\
+	".\id_queue.h"\
+	".\uniata_ver.h"\
+	".\id_sata.h"\
+	
+stdafx.cpp : \
+	".\stdafx.h"\
+	".\config.h"\
+	".\tools.h"\
+	".\atapi.h"\
+	".\bm_devs.h"\
+	".\ntddscsi.h"\
+	".\scsi.h"\
+	".\srb.h"\
+	".\uata_ctl.h"\
+	".\bsmaster.h"\
+	".\id_queue.h"\
+	".\uniata_ver.h"\
+	".\id_sata.h"\
+	
 BusMaster_v$(VER).rar : \
 	"Debug\idedma.sys"\
-	".\pkg_files.dist"\
-	".\pkg_files.src"\
+	"..\pkg_files.dist"\
+	"..\pkg_files.src"\
 	"Release\idedma.sys"\
