@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2005 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2007 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     id_probe.cpp
@@ -30,8 +30,8 @@ Notes:
 
 Revision History:
 
-    Some parts of hardware-specific code were taken from FreeBSD 4.3 ATA driver by
-         Søren Schmidt, Copyright (c) 1998,1999,2000,2001
+    Some parts of hardware-specific code were taken from FreeBSD 4.3-6.1 ATA driver by
+         Søren Schmidt, Copyright (c) 1998-2007
 
     Some parts of device detection code were taken from from standard ATAPI.SYS from NT4 DDK by
          Mike Glass (MGlass)
@@ -855,6 +855,7 @@ UniataFindBusMasterController(
     deviceExtension->SystemIoBusNumber = SystemIoBusNumber;
     deviceExtension->DevID = dev_id;
     deviceExtension->RevID = RevID;
+    deviceExtension->NumberChannels = 2; // default
 
     _snprintf(deviceExtension->Signature, sizeof(deviceExtension->Signature),
               "UATA%8.8x/%1.1x@%8.8x", dev_id, channel, slotNumber);
@@ -931,12 +932,12 @@ UniataFindBusMasterController(
         deviceExtension->UseDpc = FALSE;
     }
 
-    deviceExtension->NumberChannels = 1;
     MasterDev = IsMasterDev(&pciData);
 
     if(MasterDev) {
         KdPrint2((PRINT_PREFIX "MasterDev\n"));
         deviceExtension->MasterDev = TRUE;
+        deviceExtension->NumberChannels = 1;
     }
 
     if(MasterDev) {

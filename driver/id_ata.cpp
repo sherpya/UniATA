@@ -1,13 +1,13 @@
 /*++
 
-Copyright (c) 2002-2006 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2007 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     id_ata.cpp
 
 Abstract:
     This is the miniport driver for ATA/ATAPI IDE controllers
-    with Busmaster DMA support
+    with Busmaster DMA and Serial ATA support
 
 Author:
     Alexander A. Telyatnikov (Alter)
@@ -34,11 +34,11 @@ Revision History:
          Mike Glass (MGlass)
          Chuck Park (ChuckP)
 
-    Some parts of code were taken from FreeBSD 4.3-4.6 ATA driver by
-         Søren Schmidt, Copyright (c) 1998,1999,2000,2001
+    Some parts of code were taken from FreeBSD 4.3-6.1 ATA driver by
+         Søren Schmidt, Copyright (c) 1998-2007
 
     All parts of code are greatly changed/updated by
-         Alter, Copyright (c) 2002-2006:
+         Alter, Copyright (c) 2002-2007:
 
     1. Internal command queueing/reordering
     2. Drive identification
@@ -47,6 +47,7 @@ Revision History:
     5. W2k support (binary compatibility)
     6. HDD hot swap under NT4
     7. XP support (binary compatibility)
+    8. Serial ATA (SATA/SATA2) support
     
     etc. (See todo.txt)
 
@@ -712,14 +713,16 @@ AtaCommand48(
     KdPrint2((PRINT_PREFIX "AtaCommand48: cntrlr %#x:%#x ldev %#x, cmd %#x, lba %#I64x count %#x feature %#x\n",
                  deviceExtension->DevIndex, deviceExtension->Channel, ldev, command, lba, count, feature ));
 
-    SelectDrive(chan, DeviceNumber);
+    if(!(deviceExtension->HwFlags & UNIATA_SATA)) {
+        SelectDrive(chan, DeviceNumber);
 
-    statusByte = WaitOnBusy(chan);
+        statusByte = WaitOnBusy(chan);
 
-    /* ready to issue command ? */
-    if (statusByte & IDE_STATUS_BUSY) {
-        KdPrint2((PRINT_PREFIX "  Returning BUSY status\n"));
-        return statusByte;
+        /* ready to issue command ? */
+        if (statusByte & IDE_STATUS_BUSY) {
+            KdPrint2((PRINT_PREFIX "  Returning BUSY status\n"));
+            return statusByte;
+        }
     }
     // !!! We should not check ERROR condition here
     // ERROR bit may be asserted durring previous operation
@@ -1190,31 +1193,33 @@ IssueIdentify(
             // No reset here !!!
             KdPrint2((PRINT_PREFIX "IssueIdentify: statusByte != IDE_STATUS_IDLE\n"));
 
-            SelectDrive(chan, DeviceNumber);
-            WaitOnBusyLong(chan);
+            if(!(deviceExtension->HwFlags & UNIATA_SATA)) {
+                SelectDrive(chan, DeviceNumber);
+                WaitOnBusyLong(chan);
 
-            signatureLow = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow);
-            signatureHigh = AtapiReadPort1(chan, IDX_IO1_i_CylinderHigh);
+                signatureLow = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow);
+                signatureHigh = AtapiReadPort1(chan, IDX_IO1_i_CylinderHigh);
 
-            if (signatureLow == ATAPI_MAGIC_LSB &&
-                signatureHigh == ATAPI_MAGIC_MSB) {
-                // Device is Atapi.
-                KdPrint2((PRINT_PREFIX "IssueIdentify: this is ATAPI (ldev %d)\n", ldev));
-                return FALSE;
+                if (signatureLow == ATAPI_MAGIC_LSB &&
+                    signatureHigh == ATAPI_MAGIC_MSB) {
+                    // Device is Atapi.
+                    KdPrint2((PRINT_PREFIX "IssueIdentify: this is ATAPI (ldev %d)\n", ldev));
+                    return FALSE;
+                }
+
+                // We really should wait up to 31 seconds
+                // The ATA spec. allows device 0 to come back from BUSY in 31 seconds!
+                // (30 seconds for device 1)
+                do {
+                    // Wait for Busy to drop.
+                    AtapiStallExecution(100);
+                    GetStatus(chan, statusByte);
+
+                } while ((statusByte & IDE_STATUS_BUSY) && waitCount--);
+                GetBaseStatus(chan, statusByte2);
+
+                SelectDrive(chan, DeviceNumber);
             }
-
-            // We really should wait up to 31 seconds
-            // The ATA spec. allows device 0 to come back from BUSY in 31 seconds!
-            // (30 seconds for device 1)
-            do {
-                // Wait for Busy to drop.
-                AtapiStallExecution(100);
-                GetStatus(chan, statusByte);
-
-            } while ((statusByte & IDE_STATUS_BUSY) && waitCount--);
-            GetBaseStatus(chan, statusByte2);
-
-            SelectDrive(chan, DeviceNumber);
             // Another check for signature, to deal with one model Atapi that doesn't assert signature after
             // a soft reset.
             signatureLow = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow);
@@ -1236,8 +1241,10 @@ IssueIdentify(
         }
     } else {
         KdPrint2((PRINT_PREFIX "IssueIdentify: Checking for ATAPI. Status (%#x)\n", statusByte));
-        statusByte = WaitForIdleLong(chan);
-        KdPrint2((PRINT_PREFIX "IssueIdentify: Checking for ATAPI (2). Status (%#x)\n", statusByte));
+        if(!(deviceExtension->HwFlags & UNIATA_SATA)) {
+            statusByte = WaitForIdleLong(chan);
+            KdPrint2((PRINT_PREFIX "IssueIdentify: Checking for ATAPI (2). Status (%#x)\n", statusByte));
+        }
     }
 
     for (j = 0; j < 4*2; j++) {
@@ -2902,6 +2909,7 @@ AtapiCallBack__(
         UCHAR Lun      = srb->Lun;
 
         KdPrint2((PRINT_PREFIX "AtapiCallBack: Found DSC for RDP - %#x\n", srb->Cdb[0]));
+        AtapiDmaDBSync(chan, srb);
         UniataRemoveRequest(chan, srb);
         ScsiPortNotification(RequestComplete, deviceExtension, srb);
         // Clear current SRB.
@@ -3582,7 +3590,9 @@ check_unknown:
         }
     }
 skip_dma_stat_check:
-    AtapiStallExecution(1);
+    if(!(ChipFlags & UNIATA_SATA)) {
+        AtapiStallExecution(1);
+    }
 
     /* if drive is busy it didn't interrupt */
     /* the exception is DCS + BSY state of ATAPI dvices */
@@ -3904,7 +3914,9 @@ ServiceInterrupt:
     if((!LunExt->IdentifyData.MajorRevision || (deviceExtension->lun[DeviceNumber].TransferMode < ATA_PIO4))
              &&
        !InDpc &&
-       !atapiDev) {
+       !atapiDev &&
+       !(deviceExtension->HwFlags & UNIATA_SATA)
+       ) {
         KdPrint2((PRINT_PREFIX "  additional delay 10us for old devices\n"));
         AtapiStallExecution(10);
     }
@@ -3963,9 +3975,12 @@ try_dpc_wait:
             }
         }
     } else {
+        // IDE
         if(!LunExt->IdentifyData.MajorRevision &&
             InDpc &&
-            !atapiDev) {
+            !atapiDev &&
+            !(deviceExtension->HwFlags & UNIATA_SATA)
+            ) {
             KdPrint2((PRINT_PREFIX "  additional delay 10us for old devices (2)\n"));
             AtapiStallExecution(10);
         }
@@ -4830,6 +4845,7 @@ IntrCompleteReq:
 
                         srb->SrbStatus |= SRB_STATUS_AUTOSENSE_VALID;
                     }
+                    AtapiDmaDBSync(chan, srb);
                     KdPrint2((PRINT_PREFIX "AtapiInterrupt: remove srb %#x, status %x\n", srb, status));
                     UniataRemoveRequest(chan, srb);
                     KdPrint2((PRINT_PREFIX "AtapiInterrupt: RequestComplete, srb %#x\n", srb));
@@ -6796,10 +6812,12 @@ reject_srb:
                 lChannel, ldev, GET_CDEV(Srb), deviceExtension->chan[0].lun[0]);
             PrintNtConsole("Function %#x, PATH:LUN:TID = %#x:%#x:%#x\n",
                        Srb->Function, Srb->PathId, Srb->Lun, Srb->TargetId);
+/*
             int i;
             for(i=0; i<1000; i++) {
                 AtapiStallExecution(3*1000);
             }
+*/
             goto reject_srb;
         }
 #endif //_DEBUG
@@ -6979,6 +6997,7 @@ reject_srb:
 
                     tmpSrb->SrbStatus |= SRB_STATUS_AUTOSENSE_VALID;
                 }
+                AtapiDmaDBSync(chan, tmpSrb);
                 UniataRemoveRequest(chan, tmpSrb);
                 // Indicate command complete.
                 ScsiPortNotification(RequestComplete,
@@ -7421,6 +7440,7 @@ complete_req:
             // Set status in SRB.
             Srb->SrbStatus = (UCHAR)status;
 
+            AtapiDmaDBSync(chan, Srb);
             UniataRemoveRequest(chan, Srb);
             // Indicate command complete.
             ScsiPortNotification(RequestComplete,

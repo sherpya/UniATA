@@ -234,6 +234,7 @@ UniataRemoveRequest(
 
     if(!LunExt)
         return;
+
 /*
     ASSERT(chan->queue_depth ==
             (chan->lun[0]->queue_depth + chan->lun[1]->queue_depth));

@@ -164,6 +164,9 @@ typedef struct _IDE_AHCI_REGISTERS {
         ULONG S64A:1;  // 64bit addr
     } CAP;
 
+#define AHCI_CAP_NOP_MASK    0x0000001f
+#define AHCI_CAP_S64A        0x80000000
+
     // Global HBA Control
     struct {
         ULONG HR:1;    // HBA Reset
@@ -171,6 +174,11 @@ typedef struct _IDE_AHCI_REGISTERS {
         ULONG Reserved2_30:1;
         ULONG AE:1;    // AHCI enable
     } GHC;
+
+#define AHCI_GHC_HR    0x00000001
+#define AHCI_GHC_IE    0x00000002
+#define AHCI_GHC_AE    0x80000000
+
     // Interrupt status (bit mask)
     ULONG IS;
     // Ports implemented (bit mask)
@@ -183,6 +191,12 @@ typedef struct _IDE_AHCI_REGISTERS {
 
     UCHAR VendorSpec[0x60];
 } IDE_AHCI_REGISTERS, *PIDE_AHCI_REGISTERS;
+
+#define IDX_AHCI_CAP                    (FIELD_OFFSET(IDE_AHCI_REGISTERS, CAP))
+#define IDX_AHCI_GHC                    (FIELD_OFFSET(IDE_AHCI_REGISTERS, GHC))
+#define IDX_AHCI_IS                     (FIELD_OFFSET(IDE_AHCI_REGISTERS, IS))
+#define IDX_AHCI_VS                     (FIELD_OFFSET(IDE_AHCI_REGISTERS, VS))
+#define IDX_AHCI_PI                     (FIELD_OFFSET(IDE_AHCI_REGISTERS, PI))
 
 
 typedef union _SATA_SSTATUS_REG {
@@ -433,14 +447,14 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
         ULONG Reg;           // Task File Data
         struct {
             struct {
-                ULONG ERR:1;
-                ULONG cs1:2;// command-specific
-                ULONG DRQ:1;
-                ULONG cs2:3;// command-specific
-                ULONG BSY:1;
+                UCHAR ERR:1;
+                UCHAR cs1:2;// command-specific
+                UCHAR DRQ:1;
+                UCHAR cs2:3;// command-specific
+                UCHAR BSY:1;
             } STS;
-            ULONG ERR; // Contains the latest copy of the task file error register.
-            ULONG Reserved[2];
+            UCHAR ERR; // Contains the latest copy of the task file error register.
+            UCHAR Reserved[2];
         };
     } TFD;
 
@@ -483,6 +497,23 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
     UCHAR VendorSpec[16];
 
 } IDE_AHCI_PORT_REGISTERS, *PIDE_AHCI_PORT_REGISTERS;
+
+typedef struct _IDE_AHCI_PRD_ENTRY {
+    union {
+        ULONG base;
+        ULONGLONG base64;
+        struct {
+            ULONG DBA;
+            ULONG DBAU;
+        };
+    };
+    ULONG Reserved1;
+
+    ULONG DBC:22;
+    ULONG Reserved2:9;
+    ULONG I:1;
+
+} IDE_AHCI_PRD_ENTRY, *PIDE_AHCI_PRD_ENTRY;
 
 #define IsBusMaster(pciData) \
     ( ((pciData)->Command & (PCI_ENABLE_BUS_MASTER/* | PCI_ENABLE_IO_SPACE*/)) == \
@@ -534,7 +565,8 @@ typedef struct _ATA_REQ {
 #define     REQ_FLAG_READ                   0x08
 #define     REQ_FLAG_WRITE                  0x00
 #define REQ_FLAG_FORCE_DOWNRATE_LBA48   0x10
-//#define REQ_FLAG_DPC_DISABLED_INTR      0x20
+#define REQ_FLAG_DMA_DBUF               0x20
+#define REQ_FLAG_DMA_DBUF_PRD           0x40
 
 // Request states
 #define REQ_STATE_NONE                  0x00
@@ -670,6 +702,12 @@ typedef struct _HW_CHANNEL {
     struct _HW_DEVICE_EXTENSION* DeviceExtension;
     struct _HW_LU_EXTENSION* lun[2];
 
+    // Double-buffering support
+    PVOID   DB_PRD;
+    ULONG   DB_PRD_PhAddr;
+    PVOID   DB_IO;
+    ULONG   DB_IO_PhAddr;
+
     PUCHAR              DmaBuffer;
 
 #ifdef QUEUE_STATISTICS
@@ -680,11 +718,6 @@ typedef struct _HW_CHANNEL {
     LONGLONG TryReorderHeadCount;
     LONGLONG TryReorderTailCount; /* in-order requests */
 #endif //QUEUE_STATISTICS
-
-    //PBM_DMA_ENTRY dma_tab;//[PAGE_SIZE/sizeof(BM_DMA_ENTRY)];	/* DMA transfer table */
-//    BM_DMA_ENTRY _dma_tab[PAGE_SIZE/sizeof(BM_DMA_ENTRY)];	/* DMA transfer table */
-//    PBM_DMA_ENTRY dma_tab;//[PAGE_SIZE/sizeof(BM_DMA_ENTRY)];	/* DMA transfer table */
-//    ULONG dma_base;
 
     //ULONG BaseMemAddress;
     //ULONG BaseMemAddressOffset;
@@ -824,7 +857,8 @@ typedef struct _HW_DEVICE_EXTENSION {
     BOOLEAN AltRegMap;
     BOOLEAN UnknownDev;
     BOOLEAN MasterDev;
-    //UCHAR   Reserved1[3];
+    BOOLEAN Host64;
+    UCHAR   Reserved1[3];
 
     LONG  ReCheckIntr;
 
@@ -840,7 +874,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     IORES                     BaseIoAddressSATA_0;
     //PIDE_SATA_REGISTERS       BaseIoAddressSATA[IDE_MAX_CHAN];
 
-    //PIDE_AHCI_REGISTERS       BaseIoAHCI_0;
+    IORES                     BaseIoAHCI_0;
     //PIDE_AHCI_PORT_REGISTERS  BaseIoAHCIPort[AHCI_MAX_PORT];
 
     BOOLEAN        opt_AtapiDmaZeroTransfer; // default FALSE
@@ -945,6 +979,12 @@ AtapiDmaPioSync(
     PSCSI_REQUEST_BLOCK Srb,
     PUCHAR data,
     ULONG  count
+    );
+
+extern BOOLEAN
+AtapiDmaDBSync(
+    PHW_CHANNEL chan,
+    PSCSI_REQUEST_BLOCK Srb
     );
 
 extern VOID
@@ -1117,10 +1157,10 @@ AtapiGetIoRange(
 #endif //GetDmaStatus
 
 #ifdef USE_OWN_DMA
-#define AtapiVirtToPhysAddr(hwde, srb, phaddr, plen) \
-    AtapiVirtToPhysAddr_(hwde, srb, phaddr, plen);
+#define AtapiVirtToPhysAddr(hwde, srb, phaddr, plen, phaddru) \
+    AtapiVirtToPhysAddr_(hwde, srb, phaddr, plen, phaddru);
 #else
-#define AtapiVirtToPhysAddr(hwde, srb, phaddr, plen) \
+#define AtapiVirtToPhysAddr(hwde, srb, phaddr, plen, phaddru) \
     (ScsiPortConvertPhysicalAddressToUlong/*(ULONG)ScsiPortGetVirtualAddress*/(/*hwde,*/  \
                     ScsiPortGetPhysicalAddress(hwde, srb, phaddr, plen)))
 #endif //USE_OWN_DMA

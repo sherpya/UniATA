@@ -41,6 +41,8 @@ Revision History:
 #define DEVLIST_NAME     ";DEVLIST"
 #define DEVNAMELIST_NAME ";DEVNAMELIST"
 
+BOOLEAN g_html=FALSE;
+
 #define MAX_NEW_NUM_BUSMASTER_ADAPTERS  64
 ULONG NewBusmasterCount=0;
 BUSMASTER_CONTROLLER_INFORMATION NewBusMasterAdapters[MAX_NEW_NUM_BUSMASTER_ADAPTERS];
@@ -250,7 +252,23 @@ void main (int argc, char* argv[]) {
     
     if(argc < 2)
         exit(-1);
-    h = CreateFile(argv[1], GENERIC_READ | GENERIC_WRITE,
+
+    i=1;
+    if(!strcmp(argv[i], "--html")) {
+        ULONG prev_ven=-1;
+        g_html = TRUE;
+        for(k=0; k<NUM_BUSMASTER_ADAPTERS; k++) {
+            if(prev_ven != BusMasterAdapters[k].nVendorId) {
+                printf("\n<li>");
+            } else {
+                printf("\n,");
+            }
+            printf("%s %s", BusMasterAdapters[k].FullDevName, GetAtaTypeStr(k));
+        }
+        printf("\n");
+        exit(0);
+    }
+    h = CreateFile(argv[i], GENERIC_READ | GENERIC_WRITE,
                    FILE_SHARE_READ | FILE_SHARE_WRITE,
                    NULL,
                    OPEN_EXISTING,

@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2005 Alexander A. Telyatnikov (Alter)
+Copyright (c) 2002-2007 Alexander A. Telyatnikov (Alter)
 
 Module Name:
     id_dma.cpp
@@ -30,15 +30,15 @@ Notes:
 
 Revision History:
 
-    This module is a port from FreeBSD 4.3-5.2 ATA driver (ata-dma.c) by
-         Søren Schmidt, Copyright (c) 1998-2004
+    This module is a port from FreeBSD 4.3-6.1 ATA driver (ata-dma.c, ata-chipset.c) by
+         Søren Schmidt, Copyright (c) 1998-2007
 
     Changed defaulting-to-generic-PIO/DMA policy
     Added PIO settings for VIA
     Optimized VIA/AMD/nVidia init part
     Optimized Promise TX2 init part
     Optimized Intel init part
-         by Alex A. Telyatnikov (Alter) (c) 2002-2005
+         by Alex A. Telyatnikov (Alter) (c) 2002-2007
 
 
 --*/
@@ -49,6 +49,8 @@ static const ULONG valid_udma[7] = {0,0,2,0,4,5,6};
 
 static const CHAR retry_Wdma[MAX_RETRIES+1] = {2, 2, 2,-1,-1,-1};
 static const CHAR retry_Udma[MAX_RETRIES+1] = {6, 2,-1,-1,-1,-1};
+
+PHYSICAL_ADDRESS ph4gb = {0xFFFFFFFF, 0};
 
 VOID
 cyrix_timing (
@@ -86,48 +88,30 @@ hpt_cable80(
 
 #define ATAPI_DEVICE(de, ldev)    (de->lun[ldev].DeviceFlags & DFLAGS_ATAPI_DEVICE)
 
-VOID
-AtapiDmaAlloc(
-    IN PVOID HwDeviceExtension,
-    IN PPORT_CONFIGURATION_INFORMATION ConfigInfo,
-    IN ULONG lChannel          // logical channel,
-    )
-{
-#ifdef USE_OWN_DMA
-    PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
-    ULONG c = lChannel;
-
-    deviceExtension->chan[c].CopyDmaBuffer = FALSE;
-#endif //USE_OWN_DMA
-
-    return;
-} // end AtapiDmaAlloc()
-
-//#ifdef USE_OWN_DMA
 ULONG
 AtapiVirtToPhysAddr_(
     IN PVOID HwDeviceExtension,
     IN PSCSI_REQUEST_BLOCK Srb,
     IN PUCHAR data,
-    IN PULONG count
+    IN PULONG count,
+   OUT PULONG ph_addru
     )
 {
     PHYSICAL_ADDRESS ph_addr;
     ULONG addr;
 
-    //__try {
-        ph_addr = MmGetPhysicalAddress(data);
-    //} __except(EXCEPTION_EXECUTE_HANDLER) {
-    //    ph_addr.QuadPart = 0;
-    //}
-    if(ph_addr.HighPart) {
+    ph_addr = MmGetPhysicalAddress(data);
+    if(!ph_addru && ph_addr.HighPart) {
         // do so until we add 64bit address support
         // or some workaround
         *count = 0;
-        return 0;
+        return -1;
     }
-    addr = ScsiPortConvertPhysicalAddressToUlong(ph_addr);
-    if(!addr) {
+
+    (*ph_addru) = ph_addr.HighPart;
+    //addr = ScsiPortConvertPhysicalAddressToUlong(ph_addr);
+    addr = ph_addr.LowPart;
+    if(!addr && !ph_addr.HighPart) {
         *count = 0;
         return 0;
     }
@@ -137,8 +121,64 @@ AtapiVirtToPhysAddr_(
         *count = PAGE_SIZE - (addr & (PAGE_SIZE-1));
     }
     return addr;
-}
-//#endif
+} // end AtapiVirtToPhysAddr_()
+
+VOID
+AtapiDmaAlloc(
+    IN PVOID HwDeviceExtension,
+    IN PPORT_CONFIGURATION_INFORMATION ConfigInfo,
+    IN ULONG lChannel          // logical channel,
+    )
+{
+#ifdef USE_OWN_DMA
+    PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
+    PHW_CHANNEL chan = &(deviceExtension->chan[lChannel]);
+    ULONG c = lChannel;
+    ULONG i;
+    ULONG ph_addru;
+
+    deviceExtension->chan[c].CopyDmaBuffer = FALSE;
+
+    if(!deviceExtension->Host64 && (WinVer_Id() > WinVer_NT)) {
+        KdPrint2((PRINT_PREFIX "AtapiDmaAlloc: allocate tmp buffers below 4Gb\n"));
+        chan->DB_PRD = MmAllocateContiguousMemory(sizeof(((PATA_REQ)NULL)->dma_tab), ph4gb);
+        if(chan->DB_PRD) {
+            chan->DB_PRD_PhAddr = AtapiVirtToPhysAddr(HwDeviceExtension, NULL, (PUCHAR)(chan->DB_PRD), &i, &ph_addru);
+            if(!chan->DB_PRD_PhAddr || !i || ((LONG)(chan->DB_PRD_PhAddr) == -1)) {
+                KdPrint2((PRINT_PREFIX "AtapiDmaAlloc: No DB PRD BASE\n" ));
+                chan->DB_PRD = NULL;
+                chan->DB_PRD_PhAddr = 0;
+                return;
+            }
+            if(ph_addru) {
+                KdPrint2((PRINT_PREFIX "AtapiDmaAlloc: No DB PRD below 4Gb\n" ));
+                goto err_1;
+            }
+        }
+        chan->DB_IO = MmAllocateContiguousMemory(deviceExtension->MaximumDmaTransferLength, ph4gb);
+        if(chan->DB_IO) {
+            chan->DB_IO_PhAddr = AtapiVirtToPhysAddr(HwDeviceExtension, NULL, (PUCHAR)(chan->DB_IO), &i, &ph_addru);
+            if(!chan->DB_IO_PhAddr || !i || ((LONG)(chan->DB_IO_PhAddr) == -1)) {
+                KdPrint2((PRINT_PREFIX "AtapiDmaAlloc: No DB IO BASE\n" ));
+err_1:
+                MmFreeContiguousMemory(chan->DB_PRD);
+                chan->DB_PRD = NULL;
+                chan->DB_PRD_PhAddr = 0;
+                chan->DB_IO = NULL;
+                chan->DB_IO_PhAddr = 0;
+                return;
+            }
+            if(ph_addru) {
+                KdPrint2((PRINT_PREFIX "AtapiDmaAlloc: No DB IO below 4Gb\n" ));
+                MmFreeContiguousMemory(chan->DB_IO);
+                goto err_1;
+            }
+        }
+    }
+#endif //USE_OWN_DMA
+
+    return;
+} // end AtapiDmaAlloc()
 
 BOOLEAN
 AtapiDmaSetup(
@@ -151,10 +191,12 @@ AtapiDmaSetup(
     )
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
-    ULONG dma_count, dma_base;
+    ULONG dma_count, dma_base, dma_baseu;
     ULONG i;
     PHW_CHANNEL chan = &(deviceExtension->chan[lChannel]);
     PATA_REQ AtaReq = (PATA_REQ)(Srb->SrbExtension);
+    BOOLEAN use_DB_IO = FALSE;
+    ULONG orig_count = count;
 
     AtaReq->Flags &= ~REQ_FLAG_DMA_OPERATION;
 
@@ -176,20 +218,35 @@ AtapiDmaSetup(
         return FALSE;
     }
 
-    dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, NULL, (PUCHAR)&(AtaReq->dma_tab) /*chan->dma_tab*/, &i);
-
+    // NOTE: This code is intended for 32-bit capable controllers only.
+    // 64-bit capable controllers shall be handled separately.
+    dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, NULL, (PUCHAR)&(AtaReq->dma_tab) /*chan->dma_tab*/, &i, &dma_baseu);
+    if(dma_baseu) {
+        KdPrint2((PRINT_PREFIX "AtapiDmaSetup: SRB built-in PRD above 4Gb: %8.8x%8.8x\n", dma_baseu, dma_base));
+        dma_base = chan->DB_PRD_PhAddr;
+        AtaReq->Flags |= REQ_FLAG_DMA_DBUF_PRD;
+        i = 1;
+    } else
     if(!dma_base || !i || ((LONG)(dma_base) == -1)) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: No BASE\n" ));
         return FALSE;
     }
     AtaReq->dma_base = dma_base;
 
-    dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, Srb, data, &dma_count);
+    dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, Srb, data, &dma_count, &dma_baseu);
+    if(dma_baseu) {
+        KdPrint2((PRINT_PREFIX "AtapiDmaSetup: 1st block of buffer above 4Gb: %8.8x%8.8x\n", dma_baseu, dma_base));
+retry_DB_IO:
+        use_DB_IO = TRUE;
+        dma_base = chan->DB_IO_PhAddr;
+        data = (PUCHAR)(chan->DB_IO);
+    } else
     if(!dma_count || ((LONG)(dma_base) == -1)) {
         AtaReq->dma_base = NULL;
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: No 1st block\n" ));
         return FALSE;
     }
+
     dma_count = min(count, (PAGE_SIZE - ((ULONG)data & PAGE_MASK)));
     data += dma_count;
     count -= dma_count;
@@ -204,8 +261,17 @@ AtapiDmaSetup(
             KdPrint2((PRINT_PREFIX "too many segments in DMA table\n" ));
             return FALSE;
         }
-        dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, Srb, data, &dma_count);
-        if(!dma_count || ((LONG)(dma_base) == -1)) {
+        dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, Srb, data, &dma_count, &dma_baseu);
+        if(dma_baseu) {
+            KdPrint2((PRINT_PREFIX "AtapiDmaSetup: block of buffer above 4Gb: %8.8x%8.8x\n", dma_baseu, dma_base));
+            if(use_DB_IO) {
+                KdPrint2((PRINT_PREFIX "AtapiDmaSetup: *ERROR* special buffer above 4Gb: %8.8x%8.8x\n", dma_baseu, dma_base));
+                return FALSE;
+            }
+            count = orig_count;
+            goto retry_DB_IO;
+        } else
+        if(!dma_count || !dma_base || ((LONG)(dma_base) == -1)) {
             AtaReq->dma_base = NULL;
             KdPrint2((PRINT_PREFIX "AtapiDmaSetup: No NEXT block\n" ));
             return FALSE;
@@ -218,6 +284,9 @@ AtapiDmaSetup(
     AtaReq->dma_tab[i].base = dma_base;
     AtaReq->dma_tab[i].count = (dma_count & 0xffff) | ATA_DMA_EOT;
 
+    if(use_DB_IO) {
+        AtaReq->Flags |= REQ_FLAG_DMA_DBUF;
+    }
     AtaReq->Flags |= REQ_FLAG_DMA_OPERATION;
 
     KdPrint2((PRINT_PREFIX "AtapiDmaSetup: OK\n" ));
@@ -289,6 +358,25 @@ AtapiDmaPioSync(
     return TRUE;
 } // end AtapiDmaPioSync()
 
+BOOLEAN
+AtapiDmaDBSync(
+    PHW_CHANNEL chan,
+    PSCSI_REQUEST_BLOCK Srb
+    )
+{
+    PATA_REQ AtaReq;
+
+    AtaReq = (PATA_REQ)(Srb->SrbExtension);
+    if((Srb->SrbFlags & SRB_FLAGS_DATA_IN) &&
+       (AtaReq->Flags & REQ_FLAG_DMA_DBUF)) {
+        ASSERT(FALSE);
+        KdPrint2((PRINT_PREFIX "  DBUF (Read)\n"));
+        RtlCopyMemory(AtaReq->DataBuffer, chan->DB_IO,
+                              Srb->DataTransferLength);
+    }
+    return TRUE;
+} // end AtapiDmaDBSync()
+
 VOID
 AtapiDmaStart(
     IN PVOID HwDeviceExtension,
@@ -312,6 +400,18 @@ AtapiDmaStart(
     if(!AtaReq->dma_base) {
         KdPrint2((PRINT_PREFIX "AtapiDmaStart: *** !AtaReq->dma_base\n"));
         return;
+    }
+    if(AtaReq->Flags & REQ_FLAG_DMA_DBUF_PRD) {
+        ASSERT(FALSE);
+        KdPrint2((PRINT_PREFIX "  DBUF_PRD\n"));
+        RtlCopyMemory(chan->DB_PRD, &(AtaReq->dma_tab), sizeof(AtaReq->dma_tab));
+    }
+    if(!(Srb->SrbFlags & SRB_FLAGS_DATA_IN) &&
+       (AtaReq->Flags & REQ_FLAG_DMA_DBUF)) {
+        ASSERT(FALSE);
+        KdPrint2((PRINT_PREFIX "  DBUF (Write)\n"));
+        RtlCopyMemory(chan->DB_IO, AtaReq->DataBuffer,
+                              Srb->DataTransferLength);
     }
 
     // set flag
