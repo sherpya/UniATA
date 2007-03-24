@@ -18,6 +18,9 @@ UniataSataConnect(
     UCHAR                Status;
 
     KdPrint2((PRINT_PREFIX "UniataSataConnect:\n"));
+    /* clear SATA error register, some controllers need this */
+    AtapiWritePort4(chan, IDX_SATA_SError,
+        AtapiReadPort4(chan, IDX_SATA_SError));
     /* wait up to 1 second for "connect well" */
     for(i=0; i<100; i++) {
         SStatus.Reg = AtapiReadPort4(chan, IDX_SATA_SStatus);
@@ -58,7 +61,6 @@ UniataSataPhyEnable(
     )
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
-    ULONG Channel = deviceExtension->Channel + lChannel;
     PHW_CHANNEL chan = &deviceExtension->chan[lChannel];
     SATA_SCONTROL_REG SControl;
     int loop, retry;
@@ -102,6 +104,49 @@ UniataSataPhyEnable(
     KdPrint2((PRINT_PREFIX "UniataSataPhyEnable: failed\n"));
     return 0xff;
 } // end UniataSataPhyEnable()
+
+BOOLEAN
+UniataSataClearErr(
+    IN PVOID HwDeviceExtension,
+    IN ULONG lChannel,          // logical channel
+    IN BOOLEAN do_connect
+    )
+{
+    PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
+    PHW_CHANNEL chan = &deviceExtension->chan[lChannel];
+    ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
+    SATA_SSTATUS_REG SStatus;
+    SATA_SERROR_REG  SError;
+
+    if(ChipFlags & UNIATA_SATA) {
+
+        SStatus.Reg = AtapiReadPort4(chan, IDX_SATA_SStatus);
+        SError.Reg  = AtapiReadPort4(chan, IDX_SATA_SError); 
+
+        if(SStatus.Reg) {
+            KdPrint2((PRINT_PREFIX "  SStatus %x\n", SStatus.Reg));
+        }
+        if(SError.Reg) {
+            KdPrint2((PRINT_PREFIX "  SError %x\n", SError.Reg));
+            /* clear error bits/interrupt */
+            AtapiWritePort4(chan, IDX_SATA_SError, SError.Reg);
+
+            if(do_connect) {
+                /* if we have a connection event deal with it */
+                if(SError.DIAG.N) {
+                    KdPrint2((PRINT_PREFIX "  catch SATA connect/disconnect\n"));
+                    if(SStatus.SPD >= SStatus_SPD_Gen1) {
+                        UniataSataEvent(deviceExtension, lChannel, UNIATA_SATA_EVENT_ATTACH);
+                    } else {
+                        UniataSataEvent(deviceExtension, lChannel, UNIATA_SATA_EVENT_DETACH);
+                    }
+                    return TRUE;
+                }
+            }
+        }
+    }
+    return FALSE;
+} // end UniataSataClearErr()
 
 BOOLEAN
 UniataSataEvent(

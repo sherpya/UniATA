@@ -308,7 +308,6 @@ if((a)!=NULL) {                             \
 #define DbgFreePool(x) ExFreePool(x)
 #define DbgAllocatePoolWithTag(a,b,c) ExAllocatePoolWithTag(a,b,c)
 
-#define UDFBreakPoint() {}
 #define BrutePoint() {}
 
 #endif //DBG

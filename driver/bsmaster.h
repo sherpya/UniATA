@@ -31,7 +31,7 @@ Notes:
 Revision History:
 
     Code was created by
-         Alter, Copyright (c) 2002-2004
+         Alter, Copyright (c) 2002-2007
 
     Some definitions were taken from FreeBSD 4.3-4.6 ATA driver by
          Søren Schmidt, Copyright (c) 1998,1999,2000,2001
@@ -130,8 +130,16 @@ typedef struct _IDE_BUSMASTER_REGISTERS {
 #define BM_COMMAND_WRITE		0x00
 #define BM_COMMAND_READ		        0x08
 
+#define BM_DS0_SII_DMA_ENABLE           (1 << 0)  /* DMA run switch */
+#define BM_DS0_SII_IRQ	                (1 << 3)  /* ??? */
+#define BM_DS0_SII_DMA_SATA_IRQ	        (1 << 4)  /* OR of all SATA IRQs */
+#define BM_DS0_SII_DMA_ERROR	        (1 << 17) /* PCI bus error */
+#define BM_DS0_SII_DMA_COMPLETE	        (1 << 18) /* cmd complete / IRQ pending */
+
+
 #define IDX_BM_IO                       (IDX_IO2_o+IDX_IO2_o_SZ)
-#define IDX_BM_IO_SZ                    sizeof(IDE_BUSMASTER_REGISTERS)
+//#define IDX_BM_IO_SZ                    sizeof(IDE_BUSMASTER_REGISTERS)
+#define IDX_BM_IO_SZ                    5
 
 #define IDX_BM_Command                  (FIELD_OFFSET(IDE_BUSMASTER_REGISTERS, Command        )+IDX_BM_IO)
 #define IDX_BM_DeviceSpecific0          (FIELD_OFFSET(IDE_BUSMASTER_REGISTERS, DeviceSpecific0)+IDX_BM_IO)
@@ -265,29 +273,31 @@ typedef union _SATA_SERROR_REG {
 
     struct {
         struct {
-            ULONG I:1; // Recovered Data Integrity Error
-            ULONG M:1; // Recovered Communications Error
-            ULONG Reserved_2_7:6;
-            ULONG T:1; // Transient Data Integrity Error
-            ULONG C:1; // Persistent Communication or Data Integrity Error
-            ULONG P:1; // Protocol Error
-            ULONG E:1; // Internal Error
-            ULONG Reserved_12_15:4;
+            UCHAR I:1; // Recovered Data Integrity Error
+            UCHAR M:1; // Recovered Communications Error
+            UCHAR Reserved_2_7:6;
+
+            UCHAR T:1; // Transient Data Integrity Error
+            UCHAR C:1; // Persistent Communication or Data Integrity Error
+            UCHAR P:1; // Protocol Error
+            UCHAR E:1; // Internal Error
+            UCHAR Reserved_12_15:4;
         } ERR;
 
         struct {
-            ULONG N:1; // PhyRdy Change, PIS.PRCS
-            ULONG I:1; // Phy Internal Error
-            ULONG W:1; // Comm Wake
-            ULONG B:1; // 10B to 8B Decode Error
-            ULONG D:1; // Disparity Error, not used by AHCI
-            ULONG C:1; // CRC Error
-            ULONG H:1; // Handshake Error
-            ULONG S:1; // Link Sequence Error
-            ULONG T:1; // Transport state transition error
-            ULONG F:1; // Unknown FIS Type
-            ULONG X:1; // Exchanged
-            ULONG Reserved_27_31:5;
+            UCHAR N:1; // PhyRdy Change, PIS.PRCS
+            UCHAR I:1; // Phy Internal Error
+            UCHAR W:1; // Comm Wake
+            UCHAR B:1; // 10B to 8B Decode Error
+            UCHAR D:1; // Disparity Error, not used by AHCI
+            UCHAR C:1; // CRC Error
+            UCHAR H:1; // Handshake Error
+            UCHAR S:1; // Link Sequence Error
+
+            UCHAR T:1; // Transport state transition error
+            UCHAR F:1; // Unknown FIS Type
+            UCHAR X:1; // Exchanged
+            UCHAR Reserved_27_31:5;
         } DIAG;
     };
     ULONG Reg;
@@ -323,13 +333,14 @@ typedef struct _IDE_SATA_REGISTERS {
 } IDE_SATA_REGISTERS, *PIDE_SATA_REGISTERS;
 
 #define IDX_SATA_IO                     (IDX_BM_IO+IDX_BM_IO_SZ)
-#define IDX_SATA_IO_SZ                  sizeof(IDE_SATA_REGISTERS)
+//#define IDX_SATA_IO_SZ                  sizeof(IDE_SATA_REGISTERS)
+#define IDX_SATA_IO_SZ                  5
 
-#define IDX_SATA_SStatus                (FIELD_OFFSET(IDE_SATA_REGISTERS, SStatus        )+IDX_SATA_IO)
-#define IDX_SATA_SError                 (FIELD_OFFSET(IDE_SATA_REGISTERS, SError         )+IDX_SATA_IO)
-#define IDX_SATA_SControl               (FIELD_OFFSET(IDE_SATA_REGISTERS, SControl       )+IDX_SATA_IO)
-#define IDX_SATA_SActive                (FIELD_OFFSET(IDE_SATA_REGISTERS, SActive        )+IDX_SATA_IO)
-#define IDX_SATA_SNTF_PMN               (FIELD_OFFSET(IDE_SATA_REGISTERS, SNTF.PMN       )+IDX_SATA_IO)
+#define IDX_SATA_SStatus                (0+IDX_SATA_IO)
+#define IDX_SATA_SError                 (1+IDX_SATA_IO)
+#define IDX_SATA_SControl               (2+IDX_SATA_IO)
+#define IDX_SATA_SActive                (3+IDX_SATA_IO)
+#define IDX_SATA_SNTF_PMN               (4+IDX_SATA_IO)
 
 #define IDX_MAX_REG                     (IDX_SATA_IO+IDX_SATA_IO_SZ)
 
@@ -816,7 +827,6 @@ typedef struct _HW_DEVICE_EXTENSION {
     // Indicates the number of blocks transferred per int. according to the
     // identify data.
     BOOLEAN DriverMustPoll;    // Driver is being used by the crash dump utility or ntldr.
-//    BOOLEAN DWordIO;         // Indicates use of 32-bit PIO
     BOOLEAN BusMaster;
     BOOLEAN UseDpc;            // Indicates use of DPC on long waits
     IDENTIFY_DATA FullIdentifyData;    // Identify data for device
@@ -858,7 +868,8 @@ typedef struct _HW_DEVICE_EXTENSION {
     BOOLEAN UnknownDev;
     BOOLEAN MasterDev;
     BOOLEAN Host64;
-    UCHAR   Reserved1[3];
+    BOOLEAN DWordIO;         // Indicates use of 32-bit PIO
+    UCHAR   Reserved1[2];
 
     LONG  ReCheckIntr;
 
@@ -1298,6 +1309,13 @@ AtapiReadBuffer2(
         chan->AltRegMap       = deviceExtension->AltRegMap; \
         chan->NextDpcChan     = -1; \
 }
+
+BOOLEAN
+AtapiReadChipConfig(
+    IN PVOID HwDeviceExtension,
+    IN ULONG DeviceNumber,
+    IN ULONG channel // physical channel
+    );
 
 extern ULONG SkipRaids;
 extern ULONG ForceSimplex;

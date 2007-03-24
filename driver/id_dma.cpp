@@ -369,6 +369,7 @@ AtapiDmaDBSync(
     AtaReq = (PATA_REQ)(Srb->SrbExtension);
     if((Srb->SrbFlags & SRB_FLAGS_DATA_IN) &&
        (AtaReq->Flags & REQ_FLAG_DMA_DBUF)) {
+        KdPrint2((PRINT_PREFIX "  AtapiDmaDBSync is issued.\n"));
         ASSERT(FALSE);
         KdPrint2((PRINT_PREFIX "  DBUF (Read)\n"));
         RtlCopyMemory(AtaReq->DataBuffer, chan->DB_IO,
@@ -402,14 +403,14 @@ AtapiDmaStart(
         return;
     }
     if(AtaReq->Flags & REQ_FLAG_DMA_DBUF_PRD) {
-        ASSERT(FALSE);
         KdPrint2((PRINT_PREFIX "  DBUF_PRD\n"));
+        ASSERT(FALSE);
         RtlCopyMemory(chan->DB_PRD, &(AtaReq->dma_tab), sizeof(AtaReq->dma_tab));
     }
     if(!(Srb->SrbFlags & SRB_FLAGS_DATA_IN) &&
        (AtaReq->Flags & REQ_FLAG_DMA_DBUF)) {
-        ASSERT(FALSE);
         KdPrint2((PRINT_PREFIX "  DBUF (Write)\n"));
+        ASSERT(FALSE);
         RtlCopyMemory(chan->DB_IO, AtaReq->DataBuffer,
                               Srb->DataTransferLength);
     }
@@ -652,9 +653,9 @@ AtaSetTransferMode(
     if(statusByte & IDE_STATUS_ERROR) {
         return FALSE;
     }
-    if(mode <= ATA_UDMA6) {
+    //if(mode <= ATA_UDMA6) {
         LunExt->TransferMode = (UCHAR)mode;
-    }
+    //}
     return TRUE;
 } // end AtaSetTransferMode()
 
@@ -695,6 +696,7 @@ AtapiDmaInit(
     LunExt->TransferMode = ATA_PIO;
 //    if(!deviceExtension->BaseIoAddressBM[lChannel]) {
     if(!deviceExtension->BusMaster) {
+        KdPrint2((PRINT_PREFIX "  !deviceExtension->BusMaster: NO DMA\n"));
         wdmamode = udmamode = -1;
     }
 
@@ -742,12 +744,6 @@ AtapiDmaInit(
         apiomode = 0;
     }
 
-    if (udmamode > 2 && !LunExt->IdentifyData.HwResCableId) {
-        KdPrint2((PRINT_PREFIX "AtapiDmaInit: DMA limited to UDMA33, non-ATA66 compliant cable\n"));
-        udmamode = 2;
-        apiomode = min( apiomode, (CHAR)(LunExt->LimitedTransferMode - ATA_PIO));
-    }
-
     SelectDrive(chan, DeviceNumber);
     GetStatus(chan, statusByte);
     // we can see here IDE_STATUS_ERROR status after previous operation
@@ -782,7 +778,14 @@ AtapiDmaInit(
                 udmamode = min(udmamode, 5);
 
             } else {
-                udmamode = min(udmamode, 5);
+                KdPrint2((PRINT_PREFIX "SATA -> PATA adapter ?\n"));
+                if (udmamode > 2 && !LunExt->IdentifyData.HwResCableId) {
+                    KdPrint2((PRINT_PREFIX "AtapiDmaInit: DMA limited to UDMA33, non-ATA66 compliant cable\n"));
+                    udmamode = 2;
+                    apiomode = min( apiomode, (CHAR)(LunExt->LimitedTransferMode - ATA_PIO));
+                } else {
+                    udmamode = min(udmamode, 5);
+                }
             }
         }
         if(udmamode >= 0) {
@@ -800,6 +803,12 @@ AtapiDmaInit(
         AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ModeByte);
         return;
     }
+    if (udmamode > 2 && !LunExt->IdentifyData.HwResCableId) {
+        KdPrint2((PRINT_PREFIX "AtapiDmaInit: DMA limited to UDMA33, non-ATA66 compliant cable\n"));
+        udmamode = 2;
+        apiomode = min( apiomode, (CHAR)(LunExt->LimitedTransferMode - ATA_PIO));
+    }
+
     KdPrint2((PRINT_PREFIX "Setup chip a:w:u=%d:%d:%d\n",
         apiomode,
         wdmamode,

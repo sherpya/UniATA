@@ -1,5 +1,7 @@
 ..\driver\Dist
 ..\driver\Lib
+..\driver\Lib\Debug
+..\driver\Lib\Release
 ..\driver\Inc
 ..\driver\atapi.h
 ..\driver\atapix.reg
@@ -29,6 +31,7 @@
 ..\driver\idedmb.reg
 ..\driver\*.BAT
 ..\driver\Makefile
+..\driver\ntddk_ex.h
 ..\driver\ntddscsi.h
 ..\driver\scsi.h
 ..\driver\srb.h

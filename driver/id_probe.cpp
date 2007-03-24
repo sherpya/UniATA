@@ -957,6 +957,10 @@ UniataFindBusMasterController(
     }
     if(deviceExtension->AltRegMap) {
         KdPrint2((PRINT_PREFIX "  Non-standard registers layout\n"));
+        if(deviceExtension->HwFlags & UNIATA_SATA) {
+            KdPrint2((PRINT_PREFIX "UNIATA_SATA -> IsBusMaster == TRUE\n"));
+            deviceExtension->BusMaster = TRUE;
+        }
     } else {
         deviceExtension->BusMaster = FALSE;
         if(IsBusMaster(&pciData)) {
@@ -1017,6 +1021,7 @@ UniataFindBusMasterController(
     }
 
     /* do extra chipset specific setups */
+    AtapiReadChipConfig(HwDeviceExtension, i, CHAN_NOT_SPECIFIED);
     AtapiChipInit(HwDeviceExtension, i, CHAN_NOT_SPECIFIED);
 
     simplexOnly |= deviceExtension->simplexOnly;
@@ -1198,7 +1203,8 @@ UniataFindBusMasterController(
         AtapiSetupLunPtrs(chan, deviceExtension, c);
 
         /* do extra channel-specific setups */
-        AtapiChipInit(HwDeviceExtension, i, channel);
+        AtapiReadChipConfig(HwDeviceExtension, i, channel);
+        //AtapiChipInit(HwDeviceExtension, i, channel);
         if(deviceExtension->AltRegMap) {
             KdPrint2((PRINT_PREFIX "  Non-standard registers layout\n"));
         } else {
@@ -1338,41 +1344,47 @@ UniataFindBusMasterController(
 
 #ifndef UNIATA_CORE
 #ifdef UNIATA_INIT_ON_PROBE
-        KdPrint2((PRINT_PREFIX "Check drive 0\n"));
-        // Check master.
-        SelectDrive(chan, 0);
-        AtapiStallExecution(10);
-        GetBaseStatus(chan);
-        skip_find_dev = FALSE;
-        if ((statusByte & 0xf8) == 0xf8 || 
-            (statusByte == 0xa5)) {
-            // Check slave.
-            KdPrint2((PRINT_PREFIX "Check drive 1\n"));
-            SelectDrive(chan, 1);
-            AtapiStallExecution(1);
-            GetBaseStatus(chan);
-            if ((statusByte & 0xf8) == 0xf8 || 
-                (statusByte == 0xa5)) {
-                // No controller at this base address.
-                KdPrint2((PRINT_PREFIX "Empty channel\n"));
-                skip_find_dev = TRUE;
+//        if(deviceExtension->HwFlags & UNIATA_SATA) {
+//#endif //UNIATA_INIT_ON_PROBE
+            KdPrint2((PRINT_PREFIX "Check drive 0\n"));
+            // Check master.
+            SelectDrive(chan, 0);
+            AtapiStallExecution(10);
+            GetBaseStatus(chan, statusByte);
+            skip_find_dev = FALSE;
+            if(!(deviceExtension->HwFlags & UNIATA_SATA)) {
+                if ((statusByte & 0xf8) == 0xf8 || 
+                    (statusByte == 0xa5)) {
+                    // Check slave.
+                    KdPrint2((PRINT_PREFIX "Check drive 1\n"));
+                    SelectDrive(chan, 1);
+                    AtapiStallExecution(1);
+                    GetBaseStatus(chan, statusByte);
+                    if ((statusByte & 0xf8) == 0xf8 || 
+                        (statusByte == 0xa5)) {
+                        // No controller at this base address.
+                        KdPrint2((PRINT_PREFIX "Empty channel\n"));
+                        skip_find_dev = TRUE;
+                    }
+                }
             }
-        }
 
-        // Search for devices on this controller.
-        if (!skip_find_dev &&
-            FindDevices(HwDeviceExtension,
-                    FALSE,
-                    c)) {
-            KdPrint2((PRINT_PREFIX "Found some devices\n"));
-            found = TRUE;
-        } else {
-            KdPrint2((PRINT_PREFIX "no devices\n"));
-/*            KeBugCheckEx(0xc000000e,
-                         ScsiPortConvertPhysicalAddressToUlong(IoBasePort1),
-                         ScsiPortConvertPhysicalAddressToUlong(IoBasePort2), 
-                         (ULONG)(deviceExtension->BaseIoAddressBM[c]), skip_find_dev);*/
-        }
+            // Search for devices on this controller.
+            if (!skip_find_dev &&
+                FindDevices(HwDeviceExtension,
+                        FALSE,
+                        c)) {
+                KdPrint2((PRINT_PREFIX "Found some devices\n"));
+                found = TRUE;
+            } else {
+                KdPrint2((PRINT_PREFIX "no devices\n"));
+    /*            KeBugCheckEx(0xc000000e,
+                             ScsiPortConvertPhysicalAddressToUlong(IoBasePort1),
+                             ScsiPortConvertPhysicalAddressToUlong(IoBasePort2), 
+                             (ULONG)(deviceExtension->BaseIoAddressBM[c]), skip_find_dev);*/
+            }
+//#ifdef UNIATA_INIT_ON_PROBE
+//        }
 #endif //UNIATA_INIT_ON_PROBE
         found = TRUE;
 
@@ -1442,6 +1454,9 @@ exit_findbm:
         // ConnectIntr2 should be moved to HwInitialize
         status = UniataConnectIntr2(HwDeviceExtension);
 
+        KdPrint2((PRINT_PREFIX "MasterDev=%#x, NumberChannels=%#x, Isr2DevObj=%#x\n",
+            MasterDev, deviceExtension->NumberChannels, BMList[i].Isr2DevObj));
+
         if(!NT_SUCCESS(status)) {
             KdPrint2((PRINT_PREFIX "failed\n"));
             found = FALSE;
@@ -1493,7 +1508,6 @@ UniataConnectIntr2(
 
     KdPrint2((PRINT_PREFIX "Init ISR:\n"));
 
-//            __asm int 3;
     if(BMList[i].Isr2DevObj) {
         KdPrint2((PRINT_PREFIX "Already initialized %#x\n", BMList[i].Isr2DevObj));
         return STATUS_SUCCESS;
@@ -1520,7 +1534,7 @@ UniataConnectIntr2(
     devname.MaximumLength = devname.Length;
     devname.Buffer = devname_str;
 
-    KdPrint2((PRINT_PREFIX "DO name:  %d, %d, %S\n", devname.Length, devname.MaximumLength, devname.Buffer));
+    KdPrint2((PRINT_PREFIX "DO name:  len(%d, %d), %S\n", devname.Length, devname.MaximumLength, devname.Buffer));
 
     status = IoCreateDevice(SavedDriverObject, sizeof(ISR2_DEVICE_EXTENSION),
                             /*NULL*/ &devname, FILE_DEVICE_UNKNOWN,
@@ -1535,6 +1549,7 @@ UniataConnectIntr2(
     KdPrint2((PRINT_PREFIX "  OrigAdapterInterfaceType=%d\n", deviceExtension->OrigAdapterInterfaceType));
     KdPrint2((PRINT_PREFIX "  SystemIoBusNumber=%d\n", deviceExtension->SystemIoBusNumber));
     KdPrint2((PRINT_PREFIX "  BusInterruptLevel=%d\n", deviceExtension->BusInterruptLevel));
+    KdPrint2((PRINT_PREFIX "  BusInterruptVector=%d\n", deviceExtension->BusInterruptVector));
     BMList[i].Isr2Vector = HalGetInterruptVector(
         deviceExtension->OrigAdapterInterfaceType,
         deviceExtension->SystemIoBusNumber,
@@ -1549,6 +1564,8 @@ UniataConnectIntr2(
 
     KdPrint2((PRINT_PREFIX "isr2_de %#x\n", Isr2DevExt));
     KdPrint2((PRINT_PREFIX "isr2_vector %#x\n", BMList[i].Isr2Vector));
+    KdPrint2((PRINT_PREFIX "isr2_irql %#x\n", BMList[i].Isr2Irql));
+    KdPrint2((PRINT_PREFIX "isr2_affinity %#x\n", BMList[i].Isr2Affinity));
 
 //            deviceExtension->QueueNewIrql = BMList[i].Isr2Irql;
     
@@ -1573,6 +1590,9 @@ UniataConnectIntr2(
         BMList[i].Isr2InterruptObject = NULL;
         return status;
     }
+
+    //deviceExtension->Isr2DevObj = BMList[i].Isr2DevObj;
+
     return status;
 } // end UniataConnectIntr2()
 
@@ -1587,7 +1607,6 @@ UniataDisconnectIntr2(
 
     KdPrint2((PRINT_PREFIX "Deinit ISR:\n"));
 
-//            __asm int 3;
     if(!BMList[i].Isr2DevObj) {
         KdPrint2((PRINT_PREFIX "Already uninitialized %#x\n"));
         return STATUS_SUCCESS;
@@ -1600,6 +1619,7 @@ UniataDisconnectIntr2(
     IoDeleteDevice(BMList[i].Isr2DevObj);
 
     BMList[i].Isr2DevObj          = NULL;
+    //deviceExtension->Isr2DevObj   = NULL;
 
     return STATUS_SUCCESS;
 } // end UniataDisconnectIntr2()
@@ -1675,7 +1695,8 @@ AtapiFindController(
 #ifndef UNIATA_CORE
 
     /* do extra chipset specific setups */
-    AtapiChipInit(HwDeviceExtension, -1, -1);
+    AtapiReadChipConfig(HwDeviceExtension, DEVNUM_NOT_SPECIFIED, CHAN_NOT_SPECIFIED);
+    AtapiChipInit(HwDeviceExtension, DEVNUM_NOT_SPECIFIED, CHAN_NOT_SPECIFIED);
 
     // Check to see if this is a special configuration environment.
     portBase = irq = 0;
@@ -1892,7 +1913,8 @@ not_found:
         chan->lun[1] = &(deviceExtension->lun[1]);
 
         /* do extra channel-specific setups */
-        AtapiChipInit(HwDeviceExtension, -1, 0);
+        AtapiReadChipConfig(HwDeviceExtension, DEVNUM_NOT_SPECIFIED, 0);
+        AtapiChipInit(HwDeviceExtension, DEVNUM_NOT_SPECIFIED, 0);
 
         KdPrint2((PRINT_PREFIX 
                    "AtapiFindController: Found IDE at %#x\n",
@@ -2020,19 +2042,35 @@ CheckDevice(
                deviceNumber));
     if(ResetDev) {
         KdPrint2((PRINT_PREFIX "CheckDevice: reset dev\n"));
+
+        // Reset device
+        AtapiSoftReset(chan, deviceNumber);
+        statusByte = WaitOnBusy(chan);
+
+        if((statusByte | IDE_STATUS_BUSY) == 0xff) {
+            KdPrint2((PRINT_PREFIX 
+                        "CheckDevice: bad status %x\n", statusByte));
+        } else
+        if(statusByte != 0xff && (statusByte & IDE_STATUS_BUSY)) {
+            // Perform hard-reset.
+            KdPrint2((PRINT_PREFIX 
+                        "CheckDevice: BUSY\n"));
+            GetBaseStatus(chan, statusByte);
+        }
+
+        if((statusByte | IDE_STATUS_BUSY) == 0xff) {
+            KdPrint2((PRINT_PREFIX 
+                        "CheckDevice: no dev ?\n"));
+        } else
         if(deviceExtension->HwFlags & UNIATA_SATA) {
+            KdPrint2((PRINT_PREFIX 
+                        "CheckDevice: try enable SATA Phy\n"));
             statusByte = UniataSataPhyEnable(HwDeviceExtension, Channel);
             if(statusByte == 0xff) {
                 KdPrint2((PRINT_PREFIX "CheckDevice: status %#x (no dev)\n", statusByte));
                 LunExt->DeviceFlags = 0;
                 return 0;
             }
-        } else {
-            // Reset device
-            AtapiDisableInterrupts(deviceExtension, Channel);
-            AtapiSoftReset(chan, deviceNumber);
-            AtapiEnableInterrupts(deviceExtension, Channel);
-            statusByte = WaitOnBusy(chan);
         }
     }
     // Select the device.
@@ -2042,9 +2080,13 @@ CheckDevice(
     statusByte = WaitOnBaseBusyLong(chan);
 
     GetBaseStatus(chan, statusByte);
+    if(deviceExtension->HwFlags & UNIATA_SATA) {
+        UniataSataClearErr(HwDeviceExtension, Channel, UNIATA_SATA_IGNORE_CONNECT);
+    }
 
     KdPrint2((PRINT_PREFIX "CheckDevice: status %#x\n", statusByte));
-    if(statusByte & IDE_STATUS_BUSY) {
+    if(((statusByte | IDE_STATUS_BUSY) == 0xff) ||
+        (statusByte & IDE_STATUS_BUSY)) {
         KdPrint2((PRINT_PREFIX "CheckDevice: busy => return\n"));
         LunExt->DeviceFlags = 0;
         return 0;
@@ -2111,6 +2153,10 @@ CheckDevice(
         KdPrint2((PRINT_PREFIX "CheckDevice: IDE device check\n"));
         // Issue IDE Identify. If an Atapi device is actually present, the signature
         // will be asserted, and the drive will be recognized as such.
+        if(deviceExtension->DWordIO) {
+            KdPrint2((PRINT_PREFIX "  try 32bit IO\n"));
+            LunExt->DeviceFlags |= DFLAGS_DWORDIO_ENABLED;
+        }
         if (IssueIdentify(HwDeviceExtension,
                           deviceNumber,
                           Channel,
@@ -2178,6 +2224,7 @@ FindDevices(
     chan->ExpectingInterrupt = FALSE;
 //    chan->CurrentSrb = NULL;
     max_ldev = (chan->ChannelCtrlFlags & CTRFLAGS_NO_SLAVE) ? 1 : 2;
+    KdPrint2((PRINT_PREFIX "  max_ldev %d\n", max_ldev));
 
     // Search for devices.
     for (i = 0; i < max_ldev; i++) {

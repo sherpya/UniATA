@@ -32,7 +32,8 @@ Revision History:
 --*/
 
 #define IDE_MAX_CHAN          8
-#define IDE_MAX_LUN_PER_CHAN  2
+// Thanks to SATA Port Multipliers:
+#define IDE_MAX_LUN_PER_CHAN  16
 #define IDE_MAX_LUN           (AHCI_MAX_PORT*IDE_MAX_LUN_PER_CHAN)
 
 #define MAX_QUEUE_STAT        8
@@ -386,6 +387,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define SII4CH          0x0400
 #define SIISETCLK       0x0800
 #define SIIBUG          0x1000
+#define SIINOSATAIRQ    0x2000
 
 //#define SIS_SOUTH	1
 #define SISSATA		2
@@ -457,9 +459,9 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
     PCI_DEV_HW_SPEC_BM( 4349, 1002, 0x00, ATA_UDMA5, "ATI IXP200"       , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 4369, 1002, 0x00, ATA_UDMA6, "ATI IXP300"       , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 4376, 1002, 0x00, ATA_UDMA6, "ATI IXP400"       , 0                                       ),
-    PCI_DEV_HW_SPEC_BM( 436e, 1002, 0x00, ATA_SA150, "ATI IXP300"       , SIIMIO |          UNIATA_SATA           ),
-    PCI_DEV_HW_SPEC_BM( 4379, 1002, 0x00, ATA_SA150, "ATI IXP400"       , SIIMIO |          UNIATA_SATA           ),
-    PCI_DEV_HW_SPEC_BM( 437a, 1002, 0x00, ATA_SA150, "ATI IXP400"       , SIIMIO |          UNIATA_SATA           ),
+    PCI_DEV_HW_SPEC_BM( 436e, 1002, 0x00, ATA_SA150, "ATI IXP300"       , SIIMIO |                UNIATA_SATA     ),
+    PCI_DEV_HW_SPEC_BM( 4379, 1002, 0x00, ATA_SA150, "ATI IXP400"       , SIIMIO | SIINOSATAIRQ | UNIATA_SATA     ),
+    PCI_DEV_HW_SPEC_BM( 437a, 1002, 0x00, ATA_SA150, "ATI IXP400"       , SIIMIO | SIINOSATAIRQ | UNIATA_SATA     ),
 
     PCI_DEV_HW_SPEC_BM( 0004, 1103, 0x05, ATA_UDMA6, "HighPoint HPT372" , HPT372 | 0x00   | UNIATA_RAID_CONTROLLER),
     PCI_DEV_HW_SPEC_BM( 0004, 1103, 0x03, ATA_UDMA5, "HighPoint HPT370" , HPT370 | 0x00   | UNIATA_RAID_CONTROLLER),

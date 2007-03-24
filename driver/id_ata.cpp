@@ -76,6 +76,9 @@ ULONG  SPVersion = 0;
 ULONG  SkipRaids = 1;
 ULONG  ForceSimplex = 0;
 
+LONGLONG g_Perf = 0;
+ULONG    g_PerfDt = 0;
+
 #ifdef _DEBUG
 ULONG  g_LogToDisplay = 0;
 #endif //_DEBUG
@@ -272,6 +275,28 @@ AtapiRegGetStringParameterValue(
 
 #endif //UNIATA_CORE
 
+VOID
+DDKFASTAPI
+UniataNanoSleep(
+    ULONG nano
+    )
+{
+    LONGLONG t;
+    LARGE_INTEGER t0;
+
+    if(!nano || !g_Perf || !g_PerfDt)
+        return;
+    t = (g_Perf * nano) / g_PerfDt / 1000;
+    if(!t) {
+        t = 1;
+    }
+    do {
+        KeQuerySystemTime(&t0);
+        t--;
+    } while(t);
+} // end UniataNanoSleep()
+
+
 #define AtapiWritePortN_template(_type, _Type, sz) \
 VOID \
 DDKFASTAPI \
@@ -399,39 +424,51 @@ AtapiReadPortExN_template(ULONG,  Ulong,  4);
 //AtapiReadPortExN_template(USHORT, Ushort, 2);
 AtapiReadPortExN_template(UCHAR,  Uchar,  1);
 
-#define AtapiDoPortBufferN_template(action, type, Type, sz) \
+#define AtapiReadPortBufferN_template(type, Type, sz) \
 VOID \
 DDKFASTAPI \
-Atapi##action##Buffer##sz( \
+AtapiReadBuffer##sz( \
     IN PHW_CHANNEL chan, \
     IN ULONG _port, \
     IN PVOID Buffer, \
     IN ULONG Count   \
     ) \
 { \
-    PIORES res; \
-    if(_port >= IDX_MAX_REG) { \
-        res = (PIORES)(_port);  \
-    } else \
-    if(chan) { \
-        res = &chan->RegTranslation[_port];  \
-    } else {                                     \
-        KdPrint(("invalid io buffer request @ ch %x, res* %x\n", chan, _port)); \
-        return; \
+    ULONG i=0; \
+    while(Count) { \
+        ((type*)Buffer)[i] = AtapiReadPort##sz(chan, _port); \
+        i++; \
+        Count--; \
+        UniataNanoSleep(0); \
     } \
-    if(!res->MemIo) {             \
-        ScsiPort##action##PortBuffer##Type((type*)(res->Addr), (type*)Buffer, Count); \
-    } else {                                      \
-        ScsiPort##action##RegisterBuffer##Type((type*)(res->Addr), (type*)Buffer, Count); \
-    }                                                        \
     return;                                                  \
 }
 
-AtapiDoPortBufferN_template(Write, ULONG,  Ulong,  4);
-AtapiDoPortBufferN_template(Write, USHORT, Ushort, 2);
+#define AtapiWritePortBufferN_template(type, Type, sz) \
+VOID \
+DDKFASTAPI \
+AtapiWriteBuffer##sz( \
+    IN PHW_CHANNEL chan, \
+    IN ULONG _port, \
+    IN PVOID Buffer, \
+    IN ULONG Count   \
+    ) \
+{ \
+    ULONG i=0; \
+    while(Count) { \
+        AtapiWritePort##sz(chan, _port, ((type*)Buffer)[i]); \
+        i++; \
+        Count--; \
+        UniataNanoSleep(0); \
+    } \
+    return;                                                  \
+}
 
-AtapiDoPortBufferN_template(Read,  ULONG,  Ulong,  4);
-AtapiDoPortBufferN_template(Read,  USHORT, Ushort, 2);
+AtapiWritePortBufferN_template(ULONG,  Ulong,  4);
+AtapiWritePortBufferN_template(USHORT, Ushort, 2);
+
+AtapiReadPortBufferN_template(ULONG,  Ulong,  4);
+AtapiReadPortBufferN_template(USHORT, Ushort, 2);
 
 
 UCHAR
@@ -683,6 +720,9 @@ AtapiSoftReset(
         KdPrint2((PRINT_PREFIX "  clear unexpected DMA intr on ATAPI reset\n"));
         AtapiDmaDone(chan->DeviceExtension, DeviceNumber, chan->lChannel, NULL);
         GetBaseStatus(chan, statusByte2);
+    }
+    if(chan->DeviceExtension->HwFlags & UNIATA_SATA) {
+        UniataSataClearErr(chan->DeviceExtension, chan->lChannel, UNIATA_SATA_IGNORE_CONNECT);
     }
     return;
 
@@ -1121,10 +1161,18 @@ UniataDumpATARegs(
     GetStatus(chan, statusByteAlt);
     KdPrint2((PRINT_PREFIX "  AltStatus (%#x)\n", statusByteAlt));
 
-    for(j=0; j<IDX_IO1_SZ; j++) {
+    for(j=1; j<IDX_IO1_SZ; j++) {
         statusByteAlt = AtapiReadPort1(chan, IDX_IO1+j);
         KdPrint2((PRINT_PREFIX 
                    "  Reg_%#x (%#x) = %#x\n",
+                   j,
+                   chan->RegTranslation[j].Addr,
+                   statusByteAlt));
+    }
+    for(j=0; j<IDX_BM_IO_SZ-1; j++) {
+        statusByteAlt = AtapiReadPort1(chan, IDX_BM_IO+j);
+        KdPrint2((PRINT_PREFIX 
+                   "  BM_%#x (%#x) = %#x\n",
                    j,
                    chan->RegTranslation[j].Addr,
                    statusByteAlt));
@@ -1166,6 +1214,7 @@ IssueIdentify(
     UCHAR                statusByte2;
     UCHAR                signatureLow,
                          signatureHigh;
+    BOOLEAN              atapiDev = FALSE;
     ULONG                ldev = (lChannel * 2) + DeviceNumber;
     PHW_LU_EXTENSION     LunExt = &(deviceExtension->lun[ldev]);
 
@@ -1219,6 +1268,8 @@ IssueIdentify(
                 GetBaseStatus(chan, statusByte2);
 
                 SelectDrive(chan, DeviceNumber);
+            } else {
+                GetBaseStatus(chan, statusByte2);
             }
             // Another check for signature, to deal with one model Atapi that doesn't assert signature after
             // a soft reset.
@@ -1245,9 +1296,15 @@ IssueIdentify(
             statusByte = WaitForIdleLong(chan);
             KdPrint2((PRINT_PREFIX "IssueIdentify: Checking for ATAPI (2). Status (%#x)\n", statusByte));
         }
+        atapiDev = TRUE;
     }
 
-    for (j = 0; j < 4*2; j++) {
+    if(deviceExtension->HwFlags & UNIATA_SATA) {
+        j = 4;
+    } else {
+        j = 0;
+    }
+    for (; j < 4*2; j++) {
         // Send IDENTIFY command.
         statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel, Command, 0, 0, 0, (j >= 4) ? 0x200 : 0, 0, ATA_WAIT_INTR);
         // Clear interrupt
@@ -1307,6 +1364,7 @@ IssueIdentify(
     // after receiving the Packet Identify command.
     statusByte = WaitForDrq(chan);
     statusByte = WaitOnBusyLong(chan);
+        KdPrint2((PRINT_PREFIX "IssueIdentify: statusByte %#x\n", statusByte));
 
     if (!(statusByte & IDE_STATUS_DRQ)) {
         KdPrint2((PRINT_PREFIX "IssueIdentify: !IDE_STATUS_DRQ (2) (%#x)\n", statusByte));
@@ -1314,13 +1372,50 @@ IssueIdentify(
         return FALSE;
     }
     GetBaseStatus(chan, statusByte);
+    KdPrint2((PRINT_PREFIX "IssueIdentify: BASE statusByte %#x\n", statusByte));
 
-    ReadBuffer(chan, (PUSHORT)&deviceExtension->FullIdentifyData, 256);
-    // Work around for some IDE and one model Atapi that will present more than
-    // 256 bytes for the Identify data.
-    statusByte = AtapiSuckPort2(chan);
+    if (atapiDev || !(LunExt->DeviceFlags & DFLAGS_DWORDIO_ENABLED) /*!deviceExtension->DWordIO*/) {
+        
+        KdPrint2((PRINT_PREFIX "  use 16bit IO\n"));
+#if 0
+        USHORT w;
+        ULONG i;
+        // ATI/SII chipsets with memory-mapped IO hangs when
+        // I call ReadBuffer(), probably due to PCI burst/prefetch enabled
+        // Unfortunately, I don't know yet how to workaround it except the way you see below.
+        KdPrint2((PRINT_PREFIX 
+                   "  IO_%#x (%#x), %s:\n",
+                   IDX_IO1_i_Data,
+                   chan->RegTranslation[IDX_IO1_i_Data].Addr,
+                   chan->RegTranslation[IDX_IO1_i_Data].MemIo ? "Mem" : "IO"));
+        for(i=0; i<256; i++) {
+/*
+            KdPrint2((PRINT_PREFIX 
+                       "  IO_%#x (%#x):\n",
+                       IDX_IO1_i_Data,
+                       chan->RegTranslation[IDX_IO1_i_Data].Addr));
+*/
+            w = AtapiReadPort2(chan, IDX_IO1_i_Data);
+            KdPrint2((PRINT_PREFIX 
+                       "    %x\n", w));
+            AtapiStallExecution(1);
+            ((PUSHORT)&deviceExtension->FullIdentifyData)[i] = w;
+        }
+#else
+        ReadBuffer(chan, (PUSHORT)&deviceExtension->FullIdentifyData, 256);
+#endif
+        // Work around for some IDE and one model Atapi that will present more than
+        // 256 bytes for the Identify data.
+        KdPrint2((PRINT_PREFIX "IssueIdentify: suck data port\n", statusByte));
+        statusByte = AtapiSuckPort2(chan);
+    } else {
+        KdPrint2((PRINT_PREFIX "  use 32bit IO\n"));
+        ReadBuffer2(chan, (PUSHORT)&deviceExtension->FullIdentifyData, 256/2);
+    }
 
+    KdPrint2((PRINT_PREFIX "IssueIdentify: statusByte %#x\n", statusByte));
     statusByte = WaitForDrq(chan);
+    KdPrint2((PRINT_PREFIX "IssueIdentify: statusByte %#x\n", statusByte));
     GetBaseStatus(chan, statusByte);
 
     KdPrint2((PRINT_PREFIX "IssueIdentify: Status after read words %#x\n", statusByte));
@@ -1401,7 +1496,6 @@ IssueIdentify(
                deviceExtension->FullIdentifyData.FeaturesEnabled.Address48 &&
                (deviceExtension->FullIdentifyData.UserAddressableSectors48 > NumOfSectors)
                ) {
-    //            BrutePoint();
                 KdPrint2((PRINT_PREFIX "LBA48\n"));
                 cylinders = 
                     (deviceExtension->FullIdentifyData.UserAddressableSectors48 /
@@ -1903,7 +1997,6 @@ AtapiResetController__(
         case ATA_NVIDIA_ID: {
             if(!(ChipFlags & UNIATA_SATA))
                 goto default_reset;
-            UniataSataPhyEnable(HwDeviceExtension, j);
             break; }
         case ATA_SILICON_IMAGE_ID: {
             ULONG offset;
@@ -1912,7 +2005,9 @@ AtapiResetController__(
                 goto default_reset;
             offset = ((Channel & 1) << 7) + ((Channel & 2) << 8);
             /* disable PHY state change interrupt */
-            AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0), 0x148 + offset, ~(1 << 16));
+            AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0), 0x148 + offset, 0);
+
+            UniataSataClearErr(HwDeviceExtension, j, UNIATA_SATA_IGNORE_CONNECT);
 
             /* reset controller part for this channel */
             AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0), 0x48,
@@ -1921,14 +2016,15 @@ AtapiResetController__(
             AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0), 0x48,
                  AtapiReadPortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0), 0x48) & ~(0xc0 >> Channel));
 
-            UniataSataPhyEnable(HwDeviceExtension, j);
-            /* enable PHY state change interrupt */
-            AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0), 0x148 + offset, (1 << 16));
 
             break; }
         case ATA_PROMISE_ID: {
             break; }
         default:
+            if(ChipFlags & UNIATA_SATA) {
+                KdPrint2((PRINT_PREFIX "  SATA generic reset\n"));
+                UniataSataClearErr(HwDeviceExtension, j, UNIATA_SATA_IGNORE_CONNECT);
+            }
 default_reset:
             AtapiWritePort1(chan, IDX_IO2_o_Control, IDE_DC_DISABLE_INTERRUPTS |
                                                                     IDE_DC_RESET_CONTROLLER );
@@ -1951,6 +2047,8 @@ default_reset:
             }
         }
 
+        // all these shall be performed inside AtapiHwInitialize__() ?
+#if 1
         // Do special processing for ATAPI and IDE disk devices.
         for (i = 0; i < max_ldev; i++) {
 
@@ -2020,6 +2118,7 @@ default_reset:
             // force DMA mode reinit
             deviceExtension->lun[i + (j * 2)].DeviceFlags |= DFLAGS_REINIT_DMA;
         }
+#endif //0
 
         // Enable interrupts, note, the we can have here recursive disable
         AtapiStallExecution(10);
@@ -2354,6 +2453,9 @@ MapError(
         if (deviceExtension->lun[ldev].ErrorCount >= MAX_ERRORS) {
 //            deviceExtension->DWordIO = FALSE;
 
+            KdPrint2((PRINT_PREFIX 
+                        "MapError: ErrorCount >= MAX_ERRORS\n"));
+
             deviceExtension->lun[ldev].DeviceFlags &= ~DFLAGS_DWORDIO_ENABLED;
             deviceExtension->lun[ldev].MaximumBlockXfer = 0;
             BrutePoint();
@@ -2440,10 +2542,18 @@ AtapiHwInitialize(
 
     KdPrint2((PRINT_PREFIX "AtapiHwInitialize: (base)\n"));
 
+    /* do extra chipset specific setups */
+    AtapiChipInit(HwDeviceExtension, DEVNUM_NOT_SPECIFIED, CHAN_NOT_SPECIFIED);
+/*
+    if(deviceExtension->Isr2DevObj && (deviceExtension->HwFlags & UNIATA_SATA)) {
+        KdPrint2((PRINT_PREFIX " enable ISR2 to catch unexpected interrupts\n"));
+        BMList[deviceExtension->DevIndex].Isr2Enable = TRUE;
+    }
+*/
     for (c = 0; c < numberChannels; c++) {
-        FindDevices(HwDeviceExtension, FALSE, c);
         AtapiHwInitialize__(deviceExtension, c);
     }
+    KdPrint2((PRINT_PREFIX "AtapiHwInitialize: (base) done\n"));
     return TRUE;
 } // end AtapiHwInitialize()
 
@@ -2459,6 +2569,9 @@ AtapiHwInitialize__(
     PHW_LU_EXTENSION     LunExt;
 //    ULONG tmp32;
     ULONG PreferedMode = 0xffffffff;
+
+    AtapiChipInit(deviceExtension, DEVNUM_NOT_SPECIFIED, lChannel);
+    FindDevices(deviceExtension, FALSE, lChannel);
 
     for (i = lChannel*2; i < (lChannel+1)*2; i++) {
 
@@ -3150,13 +3263,10 @@ AtapiInterrupt2(
     ULONG c_count = 0;
     ULONG i_res;
 
-//    i2c++;
-/*    if(i2c > 0x200) {
-        __asm int 3;
-    }*/
-
-    if(!BMList[deviceExtension->DevIndex].Isr2Enable)
+    if(!BMList[deviceExtension->DevIndex].Isr2Enable) {
+        KdPrint2((PRINT_PREFIX "AtapiInterrupt2: NOT ACTIVE cntrlr %#x chan %#x\n",deviceExtension->DevIndex, deviceExtension->Channel));
         return FALSE;
+    }
 
     for(c=0; c<deviceExtension->NumberChannels; c++) {
         KdPrint2((PRINT_PREFIX "AtapiInterrupt2: cntrlr %#x chan %#x\n",deviceExtension->DevIndex, c));
@@ -3170,7 +3280,7 @@ AtapiInterrupt2(
                                       (PVOID)CHECK_INTR_CHECK,
                                       (PVOID)CHECK_INTR_IDLE) != CHECK_INTR_IDLE) {
             KdPrint2((PRINT_PREFIX "AtapiInterrupt2: !CHECK_INTR_IDLE\n"));
-            // hunt on unexpected intr (Some devices generte double interrupts,
+            // hunt on unexpected intr (Some devices generate double interrupts,
             // some controllers (at least CMD649) interrupt twice with small delay.
             // If interrupts are disabled, they queue interrupt and re-issue it later,
             // when we do not expect it.
@@ -3371,6 +3481,7 @@ AtapiCheckInterrupt__(
     ULONG pr_status;
     UCHAR dma_status = 0;
     UCHAR reg8 = 0;
+    UCHAR reg32 = 0;
     UCHAR statusByte;
     ULONG slotNumber = deviceExtension->slotNumber;
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
@@ -3455,10 +3566,10 @@ AtapiCheckInterrupt__(
         }
         break; }
     case ATA_NVIDIA_ID: {
-        if (!DmaTransfer)
-            break;
         if(!(ChipFlags & UNIATA_SATA))
             break;
+
+        KdPrint2((PRINT_PREFIX "NVIDIA\n"));
 
         ULONG offs = (ChipFlags & NV4OFF) ? 0x0440 : 0x0010;
         ULONG shift = Channel << ((ChipFlags & NVQ) ? 4 : 2);
@@ -3471,6 +3582,7 @@ AtapiCheckInterrupt__(
             pr_status = AtapiReadPortEx1(chan, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),offs);
             AtapiWritePortEx1(chan, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),offs, (0x0f << shift));
         }
+        KdPrint2((PRINT_PREFIX "  pr_status %x\n", pr_status));
 
         /* check for and handle connect events */
         if(((pr_status & (0x0cUL << shift)) == (0x04UL << shift)) ) {
@@ -3485,46 +3597,54 @@ AtapiCheckInterrupt__(
         /* do we have any device action ? */
         if(!(pr_status & (0x01UL << shift))) {
             KdPrint2((PRINT_PREFIX "  nVidia unexpected\n"));
-            return FALSE;
-        }
-        return TRUE;
-
-        break; }
-    case ATA_SILICON_IMAGE_ID:
-
-        if(ChipFlags & UNIATA_SATA) {
-            SATA_SSTATUS_REG SStatus;
-            SATA_SERROR_REG  SError;
-
-            SStatus.Reg = AtapiReadPort4(chan, IDX_SATA_SStatus);
-            SError.Reg  = AtapiReadPort4(chan, IDX_SATA_SError); 
-
-            if(SError.Reg) {
-                KdPrint2((PRINT_PREFIX "  Sii SError %x\n", SError.Reg));
-                /* clear error bits/interrupt */
-                AtapiWritePort4(chan, IDX_SATA_SError, SError.Reg);
-
-                /* if we have a connection event deal with it */
-                if(SError.DIAG.N) {
-                    if(SStatus.SPD == SStatus_SPD_Gen1) {
-                        UniataSataEvent(deviceExtension, lChannel, UNIATA_SATA_EVENT_ATTACH);
-                    } else {
-                        UniataSataEvent(deviceExtension, lChannel, UNIATA_SATA_EVENT_DETACH);
-                    }
-                }
+            if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT)) {
+                OurInterrupt = 2;
+            } else {
+                return FALSE;
             }
         }
+
+        break; }
+    case ATA_ATI_ID:
+        KdPrint2((PRINT_PREFIX "ATI\n"));
         if(ChipType == SIIMIO) {
-            reg8 = AtapiReadPort1(chan, IDX_BM_DeviceSpecific0);
-            if(!(reg8 & 0x08)) {
+            // fall to SiI
+        } else {
+            break;
+        }
+    case ATA_SILICON_IMAGE_ID:
+
+        if(ChipType == SIIMIO) {
+
+            reg32 = AtapiReadPort1(chan, IDX_BM_DeviceSpecific0);
+            KdPrint2((PRINT_PREFIX "  Sii DS0 %x\n", reg32));
+            if(reg32 == 0xffffffff) {
                 KdPrint2((PRINT_PREFIX "  Sii mio unexpected\n"));
                 return FALSE;
             }
+            if(!(reg32 & (BM_DS0_SII_DMA_SATA_IRQ | BM_DS0_SII_DMA_COMPLETE | BM_DS0_SII_IRQ | BM_DS0_SII_DMA_ENABLE | BM_DS0_SII_DMA_ERROR))) {
+                KdPrint2((PRINT_PREFIX "  Sii mio unexpected (2)\n"));
+                return FALSE;
+            }
+
+            if(ChipFlags & UNIATA_SATA) {
+                if(reg32 & (BM_DS0_SII_DMA_SATA_IRQ | BM_DS0_SII_IRQ)) {
+
+                    /* SIEN doesn't mask SATA IRQs on some 3112s.  Those
+                    * controllers continue to assert IRQ as long as
+                    * SError bits are pending.  Clear SError immediately.
+                    */
+                    if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT)) {
+                        OurInterrupt = 2;
+                    }
+                }
+            }
+
             if (!DmaTransfer)
                 break;
             if (!((dma_status = GetDmaStatus(deviceExtension, lChannel)) & BM_STATUS_INTR)) {
-                KdPrint2((PRINT_PREFIX "  Sii mio unexpected (2)\n"));
-                return FALSE;
+                KdPrint2((PRINT_PREFIX "  Sii mio unexpected (3)\n"));
+                return OurInterrupt;
             }
             AtapiWritePort1(chan, IDX_BM_Status, dma_status & ~BM_STATUS_ERR);
             goto skip_dma_stat_check;
@@ -3559,6 +3679,12 @@ AtapiCheckInterrupt__(
         AtapiWritePort1(chan, IDX_BM_Command,
             AtapiReadPort1(chan, IDX_BM_Command) & ~BM_COMMAND_START_STOP);
         goto skip_dma_stat_check;
+    default:
+        if(ChipFlags & UNIATA_SATA) {
+            if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT)) {
+                OurInterrupt = 2;
+            }
+        }
     }
 check_unknown:
     KdPrint2((PRINT_PREFIX "  perform generic check\n"));
@@ -3599,6 +3725,9 @@ skip_dma_stat_check:
     KdPrint2((PRINT_PREFIX "  getting status...\n"));
     GetStatus(chan, statusByte);
     KdPrint2((PRINT_PREFIX "  status %#x\n", statusByte));
+    if (statusByte == 0xff) {
+        // interrupt from empty controller ?
+    } else 
     if (statusByte & IDE_STATUS_BUSY) {
         if(!chan->ExpectingInterrupt) {
             KdPrint2((PRINT_PREFIX "  unexpected intr + BUSY\n"));
@@ -3650,6 +3779,9 @@ skip_dma_stat_check:
     /* clear interrupt and get status */
     GetBaseStatus(chan, statusByte);
     KdPrint2((PRINT_PREFIX "  base status %#x\n", statusByte));
+    if (statusByte == 0xff) {
+        // interrupt from empty controller ?
+    } else 
     if(!(statusByte & (IDE_STATUS_DRQ | IDE_STATUS_DRDY))) {
         KdPrint2((PRINT_PREFIX "  no DRQ/DRDY set\n"));
         return OurInterrupt;
@@ -3829,6 +3961,7 @@ AtapiInterrupt__(
 
 #ifdef UNIATA_USE_XXableInterrupts
     if(InDpc) {
+        KdPrint2((PRINT_PREFIX "  Unexpected InDpc\n"));
         ASSERT(FALSE);
         // shall never get here
         TimerValue = 1;
@@ -6750,7 +6883,8 @@ AtapiStartIo__(
     BOOLEAN PostReq = FALSE;
     BOOLEAN atapiDev;
 
-    if(deviceExtension->Isr2DevObj) {
+    if(deviceExtension->Isr2DevObj && !BMList[deviceExtension->DevIndex].Isr2Enable) {
+        KdPrint2((PRINT_PREFIX "Isr2Enable -> 1\n"));
         BMList[deviceExtension->DevIndex].Isr2Enable = TRUE;
     }
 //    deviceExtension->QueueNewIrql = max(deviceExtension->QueueNewIrql, KeGetCurrentIrql());
@@ -6780,9 +6914,6 @@ AtapiStartIo__(
                    "** AtapiStartIo: Function %#x, PATH:LUN:TID = %#x:%#x:%#x\n",
                    Srb->Function, Srb->PathId, Srb->Lun, Srb->TargetId));
 
-//        if(Srb->PathId == 1) {
-//            __asm int 3;
-//        }
         if(GET_CDEV(Srb) >= 2 ||
            ldev >= deviceExtension->NumberChannels*2 ||
            lChannel >= deviceExtension->NumberChannels) {
@@ -6852,6 +6983,7 @@ reject_srb:
                 // Indicate no device found at this address.
                 KdPrint2((PRINT_PREFIX "SRB_STATUS_ERROR\n"));
                 status = SRB_STATUS_ERROR;
+                KdPrint2((PRINT_PREFIX "  *** Exception...\n"));
                 ASSERT(FALSE);
                 break;
             }
@@ -7515,6 +7647,8 @@ DriverEntry(
     BOOLEAN PrimaryClaimed   = FALSE;
     BOOLEAN SecondaryClaimed = FALSE;
 
+    LARGE_INTEGER t0, t1;
+
     Connect_DbgPrint();
     KdPrint2((PRINT_PREFIX (PCCHAR)ver_string));
     a = (WCHAR)strlen(ver_string);
@@ -7523,8 +7657,6 @@ DriverEntry(
     if(g_opt_Verbose) {
         _PrintNtConsole("Universal ATA driver v 0." UNIATA_VER_STR "\n");
     }
-
-//    __asm int 3;
 
     if(!SavedDriverObject) {
         SavedDriverObject = (PDRIVER_OBJECT)DriverObject;
@@ -7536,6 +7668,19 @@ DriverEntry(
         }
         CrNtPsGetVersion(&MajorVersion, &MinorVersion, &BuildNumber, &SavedSPString);
         KdPrint(("UniATA Init: OS ver %x.%x (%d)\n", MajorVersion, MinorVersion, BuildNumber));
+
+        KeQuerySystemTime(&t0);
+        do {
+            KeQuerySystemTime(&t1);
+        } while(t0.QuadPart == t1.QuadPart);
+        t0=t1;
+        g_Perf=0;
+        do {
+            KeQuerySystemTime(&t1);
+            g_Perf++;
+        } while(t0.QuadPart == t1.QuadPart);
+        g_PerfDt = (ULONG)((t1.QuadPart - t0.QuadPart)/10);
+        KdPrint(("Performance calibration: dt=%d, counter=%I64d\n", g_PerfDt, g_Perf ));
 
     } else {
         ReEnter = TRUE;
@@ -7584,8 +7729,6 @@ DriverEntry(
 #endif //_DEBUG
 
     statusToReturn = 0xffffffff;
-
-//    __asm int 3;
 
     // Zero out structure.
     RtlZeroMemory(((PCHAR)&hwInitializationData), sizeof(hwInitializationData));

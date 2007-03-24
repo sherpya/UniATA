@@ -13,6 +13,16 @@ UniataSataPhyEnable(
     IN ULONG lChannel          // logical channel
     );
 
+#define UNIATA_SATA_DO_CONNECT        TRUE
+#define UNIATA_SATA_IGNORE_CONNECT    FALSE
+
+BOOLEAN
+UniataSataClearErr(
+    IN PVOID HwDeviceExtension,
+    IN ULONG lChannel,          // logical channel
+    IN BOOLEAN do_connect
+    );
+
 #define UNIATA_SATA_EVENT_ATTACH      0x01
 #define UNIATA_SATA_EVENT_DETACH      0x02
 
