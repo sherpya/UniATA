@@ -63,14 +63,6 @@ static const CHAR ver_string[] = "\n\nATAPI IDE MiniPort Driver (UniATA) v 0." U
 UNICODE_STRING SavedRegPath;
 WCHAR SavedRegPathBuffer[256];
 
-UNICODE_STRING SavedSPString;
-WCHAR SavedSPStringBuffer[256];
-
-ULONG  MajorVersion = 0;
-ULONG  MinorVersion = 0;
-ULONG  BuildNumber  = 0;
-ULONG  SPVersion = 0;
-
 #endif //UNIATA_CORE
 
 ULONG  SkipRaids = 1;
@@ -5551,7 +5543,7 @@ Routine Description:
 Arguments:
     HwDeviceExtension - HBA miniport driver's adapter data storage
     Srb - IO request packet
-
+    `
 Return Value:
     SRB status
 
@@ -6397,7 +6389,7 @@ IdeSendCommand(
         KdPrint2((PRINT_PREFIX 
                    "IdeSendCommand: SCSIOP_MODE_SENSE PATH:LUN:TID = %#x:%#x:%#x\n",
                    Srb->PathId, Srb->Lun, Srb->TargetId));
-        // This is used to determine of the media is write-protected.
+        // This is used to determine if the media is write-protected.
         // Since IDE does not support mode sense then we will modify just the portion we need
         // so the higher level driver can determine if media is protected.
         if (deviceExtension->lun[ldev].DeviceFlags & DFLAGS_MEDIA_STATUS_ENABLED) {
@@ -6574,7 +6566,7 @@ IdeSendCommand(
        break;
 
     // Note: I don't implement this, because NTFS driver too often issues this command
-    // It is awful performance degrade. However, if somebody wants, I will implement
+    // It causes awful performance degrade. However, if somebody wants, I will implement
     // SCSIOP_FLUSH_BUFFER/SCSIOP_SYNCHRONIZE_CACHE optionally.
 
 #if 0
@@ -7660,13 +7652,13 @@ DriverEntry(
 
     if(!SavedDriverObject) {
         SavedDriverObject = (PDRIVER_OBJECT)DriverObject;
-
+        // we are here for the 1st time
+        // init CrossNT and get OS version
         if(!NT_SUCCESS(status = CrNtInit(SavedDriverObject, RegistryPath))) {
             KdPrint(("UniATA Init: CrNtInit failed with status %#x\n", status));
             //HalDisplayString((PUCHAR)"DbgPrnHkInitialize: CrNtInit failed\n");
             return status;
         }
-        CrNtPsGetVersion(&MajorVersion, &MinorVersion, &BuildNumber, &SavedSPString);
         KdPrint(("UniATA Init: OS ver %x.%x (%d)\n", MajorVersion, MinorVersion, BuildNumber));
 
         KeQuerySystemTime(&t0);
@@ -7687,32 +7679,6 @@ DriverEntry(
     }
 
     if(!ReEnter) {
-        // get OS version
-        //PsGetVersion(&MajorVersion, &MinorVersion, &BuildNumber, &SavedSPString);
-        //AtapiGetOsVersion(&MajorVersion, &MinorVersion, &BuildNumber, &SavedSPString);
-        SavedSPString.Length = min(255*sizeof(WCHAR), SavedSPString.Length);
-        SavedSPString.MaximumLength = 255*sizeof(WCHAR);
-        RtlCopyMemory(SavedSPStringBuffer, SavedSPString.Buffer, SavedSPString.Length);
-        SavedSPString.Buffer = (PWCHAR)&SavedSPStringBuffer;
-        SavedSPString.Buffer[SavedSPString.Length/sizeof(WCHAR)] = 0;
-        KdPrint2((PRINT_PREFIX "\n\nOS Version: %x.%x (%d), %ws\n",
-            MajorVersion, MinorVersion, BuildNumber, SavedSPString.Buffer));
-
-        if(SavedSPString.Length) {
-            for(i=SavedSPString.Length/sizeof(WCHAR)-1; i>0; i--) {
-                a = SavedSPString.Buffer[i];
-                if(a >= '0' && a <= '9') {
-                    SPVersion = (a - '0') << 8;
-                    if(i != SavedSPString.Length/sizeof(WCHAR)-1) {
-                        SPVersion++; // (0x0600 -> 0x0601) for sp6a
-                    }
-                    break;
-                }
-            }
-            KdPrint2((PRINT_PREFIX "ServicePack %d\n", SPVersion >> 8));
-        } else {
-            SPVersion = 0;
-        }
         // get registry path to settings
         RtlCopyMemory(&SavedRegPath, RegistryPath, sizeof(UNICODE_STRING));
         SavedRegPath.Buffer = (PWCHAR)&SavedRegPathBuffer;
@@ -8092,6 +8058,44 @@ AtapiRegCheckDevLunValue(
     }
     return val;
 } // end AtapiRegCheckDevLunValue()
+
+ULONG
+EncodeVendorStr(
+   OUT PWCHAR Buffer,
+    IN PUCHAR Str,
+    IN ULONG  Length
+    )
+{
+    ULONG i,j;
+    WCHAR a;
+
+    for(i=0, j=0; i<Length; i++, j++) {
+        a = Str[i];
+        if(!a) {
+            Buffer[j] = 0;
+            return j;
+        } else
+        if(a == ' ') {
+            Buffer[j] = '_';
+        } else
+        if((a == '_') ||
+           (a == '#') ||
+           (a == '\\') ||
+           (a == '\"') ||
+           (a == '\'') ||
+           (a <  ' ') ||
+           (a >= 127)) {
+            Buffer[j] = '#';
+            j++;
+            swprintf(Buffer+j, L"%2.2x", a);
+            j++;
+        } else {
+            Buffer[j] = a;
+        }
+    }
+    Buffer[j] = 0;
+    return j;
+} // end EncodeVendorStr()
 
 ULONG
 AtapiRegCheckDevValue(

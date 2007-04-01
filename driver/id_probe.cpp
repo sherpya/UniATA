@@ -302,6 +302,17 @@ UniataEnumBusMasterController__(
                     RaidFlags = 0;
                 }
 
+                switch(SubClass) {
+                case PCI_DEV_SUBCLASS_IDE:
+                case PCI_DEV_SUBCLASS_RAID:
+                case PCI_DEV_SUBCLASS_ATA:
+                case PCI_DEV_SUBCLASS_SATA:
+                    break;
+                default:
+                    KdPrint2((PRINT_PREFIX "Subclass not supported\n"));
+                    continue;
+                }
+
                 switch(dev_id) {
                 /* additional checks for some supported chipsets */
                 case 0xc6931080:
@@ -879,6 +890,19 @@ UniataFindBusMasterController(
         KdPrint2((PRINT_PREFIX "RAID support disabled\n"));
         return(SP_RETURN_NOT_FOUND);
     }
+
+    switch(SubClass) {
+    case PCI_DEV_SUBCLASS_IDE:
+    case PCI_DEV_SUBCLASS_RAID:
+    case PCI_DEV_SUBCLASS_ATA:
+    case PCI_DEV_SUBCLASS_SATA:
+        // ok
+        break;
+    default:
+        KdPrint2((PRINT_PREFIX "Subclass not supported\n"));
+        return(SP_RETURN_NOT_FOUND);
+    }
+
     ConfigInfo->AlignmentMask = 0x00000003;
 
     found = UniataChipDetect(HwDeviceExtension, &pciData, i, ConfigInfo, &simplexOnly);

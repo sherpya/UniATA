@@ -11,11 +11,14 @@
 
 #define DEFAULT_REMOVAL_LOCK_TIMEOUT 20
 
+int g_extended = 0;
+
 void print_help() {
     printf("Usage:\n"
            "  atactl -<switches> c|s<controller id>:b<bus id>:d<device id>[:l<lun>]\n"
            "Switches:\n"
            "  l         list devices on SCSI bus(es)\n"
+           "  x         show extended info\n"
 //           "  f         find new devices on SCSI bus(es)\n"
 //           "  h         hide device from SCSI bus\n"
            "  m [MODE]  set i/o mode for device or revert to default\n"
@@ -386,6 +389,8 @@ ata_check_unit(
     char mode_str[12];
     ULONG bus_id = (dev_id >> 24) & 0xff;
     BOOLEAN found = FALSE;
+    SENDCMDINPARAMS pin;
+    int io_mode = -1;
 
     if(dev_id != -1) {
         dev_id &= 0x00ffffff;
@@ -454,27 +459,33 @@ ata_check_unit(
                                         &IoMode, sizeof(IoMode),
                                         &returned);
                 if(status) {
-                    ata_mode_to_str(mode_str, max(IoMode.CurrentMode, IoMode.MaxMode));
-                    printf(" %.12s ", mode_str);
-                } else {
-                    SENDCMDINPARAMS pin;
+                    io_mode = max(IoMode.CurrentMode, IoMode.MaxMode);
+                }
 
-                    memset(&pin, 0, sizeof(pin));
-                    memset(buff, 0, sizeof(buff));
-                    pin.irDriveRegs.bCommandReg = ID_CMD;
-                    pin.bDriveNumber = inquiryData->TargetId;
+                memset(&pin, 0, sizeof(pin));
+                memset(buff, 0, sizeof(buff));
+                pin.irDriveRegs.bCommandReg = ID_CMD;
+                pin.bDriveNumber = inquiryData->TargetId;
 
-                    status = ata_send_ioctl(h, NULL, "SCSIDISK",
-                                            IOCTL_SCSI_MINIPORT_IDENTIFY,
-                                            &pin, sizeof(pin),
-                                            buff, sizeof(buff),
-                                            &returned);
-                    if(status) {
-                        ata_mode_to_str(mode_str, ata_cur_mode_from_ident(ident));
-                        printf(" %.12s ", mode_str);
+                status = ata_send_ioctl(h, NULL, "SCSIDISK",
+                                        IOCTL_SCSI_MINIPORT_IDENTIFY,
+                                        &pin, sizeof(pin),
+                                        buff, sizeof(buff),
+                                        &returned);
+                if(status) {
+                    if(io_mode == -1) {
+                        io_mode = ata_cur_mode_from_ident(ident);
                     }
                 }
+                if(io_mode != -1) {
+                    ata_mode_to_str(mode_str, io_mode);
+                    printf(" %.12s ", mode_str);
+                }
                 printf("\n");
+
+                if(status && g_extended) {
+                    printf("    SN: %20.20s\n", ident->SerialNumber);
+                }
             }
             if (inquiryData->NextInquiryDataOffset == 0) {
                 break;
@@ -683,8 +694,8 @@ main (
     int b_dev=-1, d_dev=-1, l_dev=0;
     int mode=-1;
 
-    printf("Console ATA control utility for Windows NT/2000/XP with UniATA installed\n"
-           "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2006\n"
+    printf("Console ATA control utility for Windows NT3.51/NT4/2000/XP/2003\n"
+           "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2007\n"
            "Home site: http://alter.org.ua\n");
 
     for(i=1; i<argc; i++) {
@@ -726,6 +737,9 @@ main (
                     print_help();
                 }
                 cmd = CMD_ATA_LIST;
+                break;
+            case 'x' :
+                g_extended = 1;
                 break;
             case 'f' :
                 if(cmd || lock>0) {

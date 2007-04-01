@@ -1,5 +1,5 @@
 #////////////////////////////////////////////////////////////////////
-#// Alexander A. Telyatnikov (Alter) 2002-2004. Kiev, Ukraine
+#// Alexander A. Telyatnikov (Alter) 2002-2007. Kiev, Ukraine
 #// All rights reserved
 #////////////////////////////////////////////////////////////////////
 
@@ -31,6 +31,7 @@ NULL=nul
 
 #makefile for nt4
 BaseDir=$(BASEDIR)
+BaseDirLib=$(BASEDIR351)
 DDKINC=/I $(BaseDir)\inc
 
 CPP=cl.exe
@@ -42,17 +43,18 @@ LINK32=link.exe
 
 OUTDIR=.\Release
 INTDIR=.\Release
+LibPath=$(BaseDirLib)\Lib\i386\Free\
 
 !ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
 
 OUTDIR=.\Debug
 INTDIR=.\Debug
+LibPath=$(BaseDirLib)\Lib\i386\Checked\
 
 !ENDIF 
 
 # Begin Custom Macros
 OutDir=$(OUTDIR)
-BaseDir=$(BASEDIR)
 DistDir=$(OUTDIR)_Dist
 SymDir=$(OUTDIR)_sym
 # End Custom Macros
@@ -167,7 +169,7 @@ CPP_PROJ=$(CPP_PROJ_BASE) /Yu"stdafx.h"
 
 MTL_PROJ=/nologo /D "NDEBUG" /mktyplib203 /win32 
 	
-LINK32_FLAGS=$(BaseDir)\Lib\i386\Free\ntoskrnl.lib $(BaseDir)\Lib\i386\Free\int64.lib $(BaseDir)\Lib\i386\Free\Hal.lib $(BaseDir)\Lib\i386\Free\Ntdll.lib $(BaseDir)\Lib\i386\Free\ScsiPort.lib .\Lib\Release\CrossNtK.lib /nologo /entry:"DriverEntry" /incremental:no /debug /pdb:"$(OUTDIR)\IdeDma.pdb" /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /driver /pdbtype:sept /subsystem:native /opt:ref /opt:icf
+LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\Lib\Release\CrossNtK.lib /nologo /entry:"DriverEntry" /incremental:no /debug /pdb:"$(OUTDIR)\IdeDma.pdb" /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /driver /pdbtype:sept /subsystem:native /opt:ref /opt:icf
 #LINK32_FLAGS=$(BaseDir)\Lib\i386\Free\ntoskrnl.lib $(BaseDir)\Lib\i386\Free\int64.lib $(BaseDir)\Lib\i386\Checked\Hal.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /driver /subsystem:native 
 
 !ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
@@ -192,7 +194,7 @@ CPP_PROJ=$(CPP_PROJ_BASE) /Yu"stdafx.h"
 
 MTL_PROJ=/nologo /D "_DEBUG" /mktyplib203 /win32 
 
-LINK32_FLAGS=$(BaseDir)\Lib\i386\Checked\ntoskrnl.lib $(BaseDir)\Lib\i386\Checked\int64.lib $(BaseDir)\Lib\i386\Checked\Hal.lib $(BaseDir)\Lib\i386\Checked\Ntdll.lib $(BaseDir)\Lib\i386\Checked\ScsiPort.lib .\Lib\Debug\PostDbgMesgK.lib .\Lib\Debug\CrossNtK.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /map:"$(INTDIR)\IdeDma.map" /debug /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /pdbtype:sept /driver /subsystem:native,4.00 
+LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\Lib\Debug\PostDbgMesgK.lib .\Lib\Debug\CrossNtK.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /map:"$(INTDIR)\IdeDma.map" /debug /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /pdbtype:sept /driver /subsystem:native,4.00 
 
 !ENDIF 
 

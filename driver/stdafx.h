@@ -20,3 +20,6 @@ extern "C" {
 #include "id_queue.h"
 
 #endif //UNIATA_CORE
+
+#include "badblock.h"
+

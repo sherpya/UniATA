@@ -100,7 +100,11 @@ typedef struct _BUSMASTER_CTX {
 } BUSMASTER_CTX, *PBUSMASTER_CTX;
 
 #define PCI_DEV_CLASS_STORAGE           0x01
+
 #define PCI_DEV_SUBCLASS_IDE            0x01
+#define PCI_DEV_SUBCLASS_RAID           0x04
+#define PCI_DEV_SUBCLASS_ATA            0x05
+#define PCI_DEV_SUBCLASS_SATA           0x06
 
 /* structure for holding DMA address data */
 typedef struct BM_DMA_ENTRY {
@@ -892,6 +896,9 @@ typedef struct _HW_DEVICE_EXTENSION {
     BOOLEAN        opt_AtapiDmaControlCmd;   // default FALSE
     BOOLEAN        opt_AtapiDmaRawRead;      // default TRUE
     BOOLEAN        opt_AtapiDmaReadWrite;    // default TRUE  
+
+    struct SBadBlockRange* arrBadBlocks;
+    ULONG           nBadBlocks;
 
 } HW_DEVICE_EXTENSION, *PHW_DEVICE_EXTENSION;
 
