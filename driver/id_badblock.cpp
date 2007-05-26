@@ -31,13 +31,13 @@ Notes:
 Revision History:
     2006/08/03 Initial implementation.
     2006/08/06 Added registry work.
-    2007/03/27 Added device serial to registry value name instead if LUN.
+    2007/03/27 Added device serial to registry value name instead of LUN.
 
 --*/
 
 #include "stdafx.h"
 
-#define MAX_BADBLOCKS_ITEMS 512
+//#define MAX_BADBLOCKS_ITEMS 512
 
 
 
@@ -46,14 +46,6 @@ Revision History:
 
 LIST_ENTRY BBList;
 BOOLEAN BBListInited = FALSE;
-
-typedef struct _SBadBlockList {
-    LIST_ENTRY       List;
-    PHW_LU_EXTENSION LunExt;
-    WCHAR            SerNumStr[64];
-    SBadBlockRange*  arrBadBlocks;
-    ULONG            nBadBlocks;
-} SBadBlockList, *PSBadBlockList;
 
 // RtlQueryRegistryValues callback function
 static NTSTATUS __stdcall
@@ -66,32 +58,67 @@ BadBlockQueryRoutine(
     IN PVOID EntryContext
     )
 {
+    PSBadBlockListItem cur;
+    PLIST_ENTRY      link;
+    ULONG i;
     // The ValueType should be REG_SZ
     // The ValueData is UNICODE string of the following format:
     //  "badblocks_start_from_lba  badblocks_end_at_lba"
 
-    PHW_LU_EXTENSION LunExt = (PHW_LU_EXTENSION)EntryContext;
-
     KdPrint(( "BadBlockQueryRoutine: S/N:%S\n type %#x, len %#x\n", ValueName, ValueType, ValueLength));
-    KdPrint(( "  LunExt %#x\n", LunExt));
+
+    if(!BBListInited)
+        return STATUS_SUCCESS;
 
     if((ValueType == REG_BINARY)  &&            // STRING
         ValueLength &&            // At least "0 0 0"
         !(ValueLength % sizeof(SBadBlockRange)))    // There is free space for the record
     {
-        LunExt->nBadBlocks = 0;
-        if(LunExt->arrBadBlocks) {
-            ExFreePool(LunExt->arrBadBlocks);
+        cur = NULL;
+        link = BBList.Flink;
+        while(link != &BBList) {
+            cur = CONTAINING_RECORD( link, SBadBlockListItem, List);
+            link = link->Flink;
+            if(!wcscmp(cur->SerNumStr, ValueName)) {
+                KdPrint(( "already loaded\n"));
+                if(cur->LunExt) {
+                    cur->LunExt->nBadBlocks   = 0;
+                    cur->LunExt->arrBadBlocks = NULL;
+                    cur->LunExt->bbListDescr  = NULL;
+                    cur->LunExt = NULL;
+                }
+                break;
+            }
         }
-        LunExt->arrBadBlocks = (SBadBlockRange*)ExAllocatePool(NonPagedPool, ValueLength);
-        if(!LunExt->arrBadBlocks)
-            return 0;
-        RtlCopyMemory(LunExt->arrBadBlocks, ValueData, ValueLength);
-        LunExt->nBadBlocks = ValueLength/sizeof(SBadBlockRange);
-    }
 
-    return 0;
-}
+        if(!cur) {
+            cur = (PSBadBlockListItem)ExAllocatePool(NonPagedPool, sizeof(SBadBlockListItem));
+            if(!cur)
+                return STATUS_SUCCESS;
+        } else {
+            if(cur->arrBadBlocks) {
+                ExFreePool(cur->arrBadBlocks);
+                cur->arrBadBlocks = NULL;
+            }
+        }
+        cur->arrBadBlocks = (SBadBlockRange*)ExAllocatePool(NonPagedPool, ValueLength);
+        if(!cur->arrBadBlocks) {
+            ExFreePool(cur);
+            return STATUS_SUCCESS;
+        }
+        RtlCopyMemory(cur->arrBadBlocks, ValueData, ValueLength);
+        wcsncpy(cur->SerNumStr, ValueName, 127);
+        cur->SerNumStr[127] = 0;
+        cur->nBadBlocks = ValueLength/sizeof(SBadBlockRange);
+        cur->LunExt = NULL;
+        InitializeListHead(&cur->List);
+        InsertTailList(&BBList, &(cur->List));
+        for(i=0; i<cur->nBadBlocks; i++) {
+            KdPrint(( "BB: %I64x - %I64x\n", cur->arrBadBlocks[i].m_lbaStart, cur->arrBadBlocks[i].m_lbaEnd-1));
+        }
+    }
+    return STATUS_SUCCESS;
+} // end BadBlockQueryRoutine()
 
 
 void
@@ -100,15 +127,16 @@ InitBadBlocks(
     )
 {
     RTL_QUERY_REGISTRY_TABLE QueryTable[2];    // Main record and zero filled end of array marker
-    WCHAR DevSerial[64];
+    WCHAR DevSerial[128];
     ULONG Length;
     PLIST_ENTRY      link;
-    PSBadBlockList   cur;
+    PSBadBlockListItem   cur;
     // Read from the registry necessary badblock pairs and fill in arrBadBlocks array
     // HKEY_LOCAL_MACHINE\System\CurrentControlSet\Services\UniATA\Parameters\BadBlocks
 
     if(!LunExt) {
         // init
+        KdPrint(( "InitBadBlocks general\n"));
         if(!BBListInited) {
             InitializeListHead(&BBList);
             BBListInited = TRUE;
@@ -134,7 +162,11 @@ InitBadBlocks(
         KdPrint(( "InitBadBlocks returned: %#x\n", status));
     } else {
 
-        Length = EncodeVendorStr(DevSerial, LunExt->IdentifyData.SerialNumber, sizeof(LunExt->IdentifyData.SerialNumber));
+        KdPrint(( "InitBadBlocks local\n"));
+        Length = EncodeVendorStr(DevSerial, (PUCHAR)LunExt->IdentifyData.ModelNumber, sizeof(LunExt->IdentifyData.ModelNumber));
+        DevSerial[Length] = '-';
+        Length++;
+        Length += EncodeVendorStr(DevSerial+Length, LunExt->IdentifyData.SerialNumber, sizeof(LunExt->IdentifyData.SerialNumber));
 
         KdPrint(( "LunExt %#x\n", LunExt));
         KdPrint(( "S/N:%S\n", DevSerial));
@@ -144,17 +176,23 @@ InitBadBlocks(
 
         link = BBList.Flink;
         while(link != &BBList) {
-            cur = CONTAINING_RECORD( link, SBadBlockList, List);
+            cur = CONTAINING_RECORD( link, SBadBlockListItem, List);
             link = link->Flink;
             if(cur->LunExt == LunExt) {
+                KdPrint(( "  deassociate BB list (by LunExt)\n"));
                 cur->LunExt->nBadBlocks   = 0;
                 cur->LunExt->arrBadBlocks = NULL;
+                cur->LunExt->bbListDescr  = NULL;
                 cur->LunExt = NULL;
-            }
+            } else
             if(!wcscmp(cur->SerNumStr, DevSerial)) {
-                cur->LunExt->nBadBlocks   = 0;
-                cur->LunExt->arrBadBlocks = NULL;
-                cur->LunExt = NULL;
+                KdPrint(( "  deassociate BB list (by Serial)\n"));
+                if(cur->LunExt) {
+                    cur->LunExt->nBadBlocks   = 0;
+                    cur->LunExt->arrBadBlocks = NULL;
+                    cur->LunExt->bbListDescr  = NULL;
+                    cur->LunExt = NULL;
+                }
             }
         }
 
@@ -162,52 +200,67 @@ InitBadBlocks(
 
             link = BBList.Flink;
             while(link != &BBList) {
-                cur = CONTAINING_RECORD( link, SBadBlockList, List);
+                cur = CONTAINING_RECORD( link, SBadBlockListItem, List);
                 link = link->Flink;
                 if(!wcscmp(cur->SerNumStr, DevSerial)) {
                     KdPrint(( "found BB:List\n"));
                     cur->LunExt = LunExt;
                     LunExt->arrBadBlocks = cur->arrBadBlocks;
                     LunExt->nBadBlocks   = cur->nBadBlocks;
+                    LunExt->bbListDescr  = cur;
                     return;
                 }
             }
         }
     }
     return;
-}
+} // end InitBadBlocks()
 
+
+void
+ForgetBadBlocks(
+    IN PHW_LU_EXTENSION LunExt
+    )
+{
+    if(LunExt->bbListDescr) {
+        LunExt->bbListDescr->LunExt = NULL;
+        LunExt->nBadBlocks   = 0;
+        LunExt->arrBadBlocks = NULL;
+        LunExt->bbListDescr  = NULL;
+    }
+} // end ForgetBadBlocks()
 
 bool
 CheckIfBadBlock(
     IN PHW_LU_EXTENSION LunExt,
-    IN UCHAR command,
+//    IN UCHAR command,
     IN ULONGLONG lba,
-    IN USHORT count
+    IN ULONG count
     )
 {
     if (LunExt->nBadBlocks == 0)
         return false;
+/*
+    // this is checked by caller
+    if(!(AtaCommandFlags[command] & ATA_CMD_FLAG_LBAsupp)) {
+        return false;
+*/
+    ULONG nBadBlocks = LunExt->nBadBlocks;
+    SBadBlockRange*  arrBadBlocks = LunExt->arrBadBlocks;
 
-    if (command == IDE_COMMAND_READ                ||
-        command == IDE_COMMAND_READ_MULTIPLE    ||
-        command == IDE_COMMAND_READ_DMA            ||
-        command == IDE_COMMAND_READ_DMA_Q        ||
-        command == IDE_COMMAND_WRITE            ||
-        command == IDE_COMMAND_WRITE_MULTIPLE    ||
-        command == IDE_COMMAND_WRITE_DMA        ||
-        command == IDE_COMMAND_WRITE_DMA_Q        ||
-        command == IDE_COMMAND_FLUSH_CACHE        ||
-        command == IDE_COMMAND_VERIFY)
+    // back transform for possibly CHS'ed LBA
+    lba = UniAtaCalculateLBARegsBack(LunExt, lba);
+
+    for (ULONG i = 0; i < nBadBlocks; i++)
     {
-        for (ULONG i = 0; i < nBadBlocks; i++)
-        {
-            if (lba + count > LunExt->arrBadBlocks[i].m_lbaStart  &&  
-                        lba < LunExt->arrBadBlocks[i].m_lbaEnd)
-                return true;
+        if (lba + count > arrBadBlocks->m_lbaStart  &&  
+                    lba < arrBadBlocks->m_lbaEnd) {
+            KdPrint(( "listed BB @ %I64x\n", lba));
+            return true;
         }
-    } // if
+        arrBadBlocks++;
+    }
 
     return false;
-//    return lba + count > 77000000  &&  lba < 80000000;
-}
+
+} // end CheckIfBadBlock()

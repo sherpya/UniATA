@@ -83,7 +83,6 @@ id_sata.cpp : \
 	".\uata_ctl.h"\
 	".\bsmaster.h"\
 	".\id_queue.h"\
-	".\uniata_ver.h"\
 	".\id_sata.h"\
 	
 stdafx.cpp : \

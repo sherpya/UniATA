@@ -335,7 +335,7 @@ UniataEnumBusMasterController__(
                     KdPrint2((PRINT_PREFIX "InterruptPin = %#x\n", pciData.u.type0.InterruptPin));
                     KdPrint2((PRINT_PREFIX "InterruptLine = %#x\n", pciData.u.type0.InterruptLine));
 
-                    if(!pass) {
+                    if(!pass && known) {
                         // Enable Busmastering, IO-space and Mem-space
                         KdPrint2((PRINT_PREFIX "Enabling Mem/Io spaces and busmastering...\n"));
                         KdPrint2((PRINT_PREFIX "Initial pciData.Command = %#x\n", pciData.Command));
@@ -1376,7 +1376,7 @@ UniataFindBusMasterController(
             AtapiStallExecution(10);
             GetBaseStatus(chan, statusByte);
             skip_find_dev = FALSE;
-            if(!(deviceExtension->HwFlags & UNIATA_SATA)) {
+            if(!(deviceExtension->HwFlags & UNIATA_NO_SLAVE)) {
                 if ((statusByte & 0xf8) == 0xf8 || 
                     (statusByte == 0xa5)) {
                     // Check slave.
@@ -2044,6 +2044,46 @@ not_found:
 
 } // end AtapiFindController()
 
+BOOLEAN
+UniataAnybodyHome(
+    IN PVOID   HwDeviceExtension,
+    IN ULONG   Channel,
+    IN ULONG   deviceNumber
+    )
+{
+    PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
+    PHW_CHANNEL          chan = &(deviceExtension->chan[Channel]);
+    ULONG                ldev = GET_LDEV2(Channel, deviceNumber, 0);
+    PHW_LU_EXTENSION     LunExt = &(deviceExtension->lun[ldev]);
+
+    UCHAR                signatureLow;
+
+    // Select the device.
+    SelectDrive(chan, deviceNumber);
+
+    AtapiStallExecution(10);
+
+    AtapiWritePort1(chan, IDX_IO1_o_BlockCount, 0x55);
+    AtapiStallExecution(5);
+    signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockCount);
+    if(signatureLow != 0x55) {
+        KdPrint2((PRINT_PREFIX "  nobody home! %#x != 0x55\n", signatureLow));
+        LunExt->DeviceFlags = 0;
+        return FALSE;
+    }
+
+    AtapiWritePort1(chan, IDX_IO1_o_BlockCount, 0xAA);
+    AtapiStallExecution(5);
+    signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockCount);
+    if(signatureLow != 0xAA) {
+        KdPrint2((PRINT_PREFIX "  nobody home! %#x != 0xAA\n", signatureLow));
+        LunExt->DeviceFlags = 0;
+        return FALSE;
+    }
+
+    return TRUE;
+} // end UniataAnybodyHome()
+
 ULONG
 CheckDevice(
     IN PVOID   HwDeviceExtension,
@@ -2069,6 +2109,10 @@ CheckDevice(
 
         // Reset device
         AtapiSoftReset(chan, deviceNumber);
+
+        if(!UniataAnybodyHome(HwDeviceExtension, Channel, deviceNumber)) {
+            return 0;
+        }
         statusByte = WaitOnBusy(chan);
 
         if((statusByte | IDE_STATUS_BUSY) == 0xff) {
@@ -2086,7 +2130,8 @@ CheckDevice(
             KdPrint2((PRINT_PREFIX 
                         "CheckDevice: no dev ?\n"));
         } else
-        if(deviceExtension->HwFlags & UNIATA_SATA) {
+        if(deviceExtension->BaseIoAddressSATA_0.Addr) {
+        //if(deviceExtension->HwFlags & UNIATA_SATA) {
             KdPrint2((PRINT_PREFIX 
                         "CheckDevice: try enable SATA Phy\n"));
             statusByte = UniataSataPhyEnable(HwDeviceExtension, Channel);
@@ -2100,7 +2145,10 @@ CheckDevice(
     // Select the device.
     SelectDrive(chan, deviceNumber);
 
-    AtapiStallExecution(10);
+    if(!UniataAnybodyHome(HwDeviceExtension, Channel, deviceNumber)) {
+        return 0;
+    }
+
     statusByte = WaitOnBaseBusyLong(chan);
 
     GetBaseStatus(chan, statusByte);

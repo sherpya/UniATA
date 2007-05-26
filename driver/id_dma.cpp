@@ -568,7 +568,7 @@ limit_lba48:
 limit_pio:
             // do not make extra work if we already use PIO
             KdPrint2((PRINT_PREFIX 
-                        "AtapiDmaReinit: set PIO mode on Device %d (%x -> %x)\n", ldev & 1, LunExt->TransferMode, apiomode));
+                        "AtapiDmaReinit: set PIO mode on Device %d (%x -> %x)\n", ldev & 1, LunExt->TransferMode, ATA_PIO0+apiomode));
             if(/*LunExt->TransferMode >= ATA_DMA*/
                LunExt->TransferMode != ATA_PIO0+apiomode
                ) {
@@ -647,11 +647,30 @@ AtaSetTransferMode(
     KdPrint2((PRINT_PREFIX 
                 "AtaSetTransferMode: Set %#x on Device %d/%d\n", mode, lChannel, DeviceNumber));
     LONG statusByte = 0;
+    CHAR apiomode;
+
     statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                         IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                         (UCHAR)((mode > ATA_UDMA6) ? ATA_UDMA6 : mode), ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
     if(statusByte & IDE_STATUS_ERROR) {
-        return FALSE;
+        KdPrint2((PRINT_PREFIX "  wait ready after error\n"));
+        if(LunExt->DeviceFlags & DFLAGS_ATAPI_DEVICE) {
+            AtapiStallExecution(10);
+        } else {
+            AtapiStallExecution(100);
+        }
+        apiomode = (CHAR)AtaPioMode(&(LunExt->IdentifyData));
+        if(  apiomode > 0 &&
+             (CHAR)AtaWmode(&(LunExt->IdentifyData))   > 0 &&
+             (CHAR)AtaUmode(&(LunExt->IdentifyData))   > 0
+          ) {
+            return FALSE;
+        }
+        if(mode > ATA_PIO2) {
+            return FALSE;
+        }
+        KdPrint2((PRINT_PREFIX "  assume that drive doesn't support mode swithingm using PIO%d\n", apiomode));
+        mode = ATA_PIO0 + apiomode;
     }
     //if(mode <= ATA_UDMA6) {
         LunExt->TransferMode = (UCHAR)mode;
@@ -761,7 +780,8 @@ AtapiDmaInit(
         goto try_generic_dma;
     }
 
-    if(ChipFlags & UNIATA_SATA) {
+    if(deviceExtension->BaseIoAddressSATA_0.Addr) {
+    //if(ChipFlags & UNIATA_SATA) {
         /****************/
         /* SATA Generic *
         /****************/
@@ -782,7 +802,7 @@ AtapiDmaInit(
                 if (udmamode > 2 && !LunExt->IdentifyData.HwResCableId) {
                     KdPrint2((PRINT_PREFIX "AtapiDmaInit: DMA limited to UDMA33, non-ATA66 compliant cable\n"));
                     udmamode = 2;
-                    apiomode = min( apiomode, (CHAR)(LunExt->LimitedTransferMode - ATA_PIO));
+                    apiomode = min( apiomode, (CHAR)(LunExt->LimitedTransferMode - ATA_PIO0));
                 } else {
                     udmamode = min(udmamode, 5);
                 }
@@ -959,6 +979,7 @@ set_new_acard:
             SetPciConfig1(reg-0x08, via_pio[apiomode]);
         }
         via82c_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
+        AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_PIO0 + apiomode);
         return;
 
         break; }

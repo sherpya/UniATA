@@ -58,8 +58,14 @@ extern "C" {
 #define IOCTL_SCSI_MINIPORT_UNIATA_SET_MAX_MODE    ((FILE_DEVICE_SCSI << 16) + 0x09a2)
 #define IOCTL_SCSI_MINIPORT_UNIATA_GET_MODE        ((FILE_DEVICE_SCSI << 16) + 0x09a3)
 #define IOCTL_SCSI_MINIPORT_UNIATA_ADAPTER_INFO    ((FILE_DEVICE_SCSI << 16) + 0x09a4)
-//#define IOCTL_SCSI_MINIPORT_UNIATA_LUN_IDENT       ((FILE_DEVICE_SCSI << 16) + 0x09a5)
+//#define IOCTL_SCSI_MINIPORT_UNIATA_LUN_IDENT       ((FILE_DEVICE_SCSI << 16) + 0x09a5) -> IOCTL_SCSI_MINIPORT_IDENTIFY
+#define IOCTL_SCSI_MINIPORT_UNIATA_RESETBB         ((FILE_DEVICE_SCSI << 16) + 0x09a5)
 #define IOCTL_SCSI_MINIPORT_UNIATA_RESET_DEVICE    ((FILE_DEVICE_SCSI << 16) + 0x09a6)
+#define IOCTL_SCSI_MINIPORT_UNIATA_REG_IO          ((FILE_DEVICE_SCSI << 16) + 0x09a7)
+
+typedef struct _ADDREMOVEDEV {
+    ULONG WaitForPhysicalLink; // us
+} ADDREMOVEDEV, *PADDREMOVEDEV;
 
 typedef struct _SETTRANSFERMODE {
     ULONG MaxMode;
@@ -126,15 +132,89 @@ typedef struct _ADAPTERINFO {
 
 } ADAPTERINFO, *PADAPTERINFO;
 
+#ifndef ATA_FLAGS_DRDY_REQUIRED
+
+//The ATA_PASS_THROUGH_DIRECT structure is used in conjunction with an IOCTL_ATA_PASS_THROUGH_DIRECT request to instruct the port driver to send an embedded ATA command to the target device.
+
+typedef struct _ATA_PASS_THROUGH_DIRECT {
+  USHORT  Length;
+  USHORT  AtaFlags;
+  UCHAR  PathId;
+  UCHAR  TargetId;
+  UCHAR  Lun;
+  UCHAR  ReservedAsUchar;
+  ULONG  DataTransferLength;
+  ULONG  TimeOutValue;
+  ULONG  ReservedAsUlong;
+  PVOID  DataBuffer;
+  UCHAR  PreviousTaskFile[8];
+  UCHAR  CurrentTaskFile[8];
+} ATA_PASS_THROUGH_DIRECT, *PATA_PASS_THROUGH_DIRECT;
+
+#define    ATA_FLAGS_DRDY_REQUIRED 0x01 // Wait for DRDY status from the device before sending the command to the device.
+#define    ATA_FLAGS_DATA_OUT 	   0x02 // Write data to the device.
+#define    ATA_FLAGS_DATA_IN 	   0x04 // Read data from the device.
+#define    ATA_FLAGS_48BIT_COMMAND 0x08 // The ATA command to be send uses the 48 bit LBA feature set.
+                                        //   When this flag is set, the contents of the PreviousTaskFile member in the
+                                        //   ATA_PASS_THROUGH_DIRECT structure should be valid.
+
+#endif //ATA_FLAGS_DRDY_REQUIRED
+
+#pragma pack(1)
+typedef struct _IDEREGS_EX {
+        UCHAR    bFeaturesReg;           // Used for specifying SMART "commands".
+        UCHAR    bSectorCountReg;        // IDE sector count register
+        UCHAR    bSectorNumberReg;       // IDE sector number register
+        UCHAR    bCylLowReg;             // IDE low order cylinder value
+        UCHAR    bCylHighReg;            // IDE high order cylinder value
+        UCHAR    bDriveHeadReg;          // IDE drive/head register
+        UCHAR    bCommandReg;            // Actual IDE command.
+        UCHAR    bOpFlags;               // 00 - send
+                                         // 01 - read regs
+                                         // 08 - lba48
+                                         // 10 - treat timeout as msec
+
+#define UNIATA_SPTI_EX_SND               0x00
+#define UNIATA_SPTI_EX_RCV               0x01
+#define UNIATA_SPTI_EX_LBA48             0x08
+#define UNIATA_SPTI_EX_SPEC_TO           0x10
+//#define UNIATA_SPTI_EX_FREEZE_TO         0x20 // do not reset device on timeout and keep interrupts disabled
+
+        UCHAR    bFeaturesRegH;          // feature (high part for LBA48 mode)
+        UCHAR    bSectorCountRegH;       // IDE sector count register (high part for LBA48 mode)
+        UCHAR    bSectorNumberRegH;      // IDE sector number register (high part for LBA48 mode)
+        UCHAR    bCylLowRegH;            // IDE low order cylinder value (high part for LBA48 mode)
+        UCHAR    bCylHighRegH;           // IDE high order cylinder value (high part for LBA48 mode)
+        UCHAR    bReserved;              // 0
+} IDEREGS_EX, *PIDEREGS_EX, *LPIDEREGS_EX;
+
+typedef struct _UNIATA_REG_IO {
+    USHORT RegIDX;
+    UCHAR  RegSz:2;   // 0=1, 1=2, 2=4, 3=2+2 (for lba48)
+    UCHAR  InOut:1;   // 0=in, 1=out
+    UCHAR  Reserved:5;
+    UCHAR  Reserved1;
+    ULONG  Data;
+} UNIATA_REG_IO, *PUNIATA_REG_IO;
+
+typedef struct _UNIATA_REG_IO_HDR {
+    ULONG          ItemCount;
+    UNIATA_REG_IO  r[1];
+} UNIATA_REG_IO_HDR, *PUNIATA_REG_IO_HDR;
+#pragma pack()
+
 typedef struct _UNIATA_CTL {
     SRB_IO_CONTROL hdr;
     SCSI_ADDRESS   addr;
     union {
-        UCHAR            RawData[1];
-        SETTRANSFERMODE  SetMode;
-        GETTRANSFERMODE  GetMode;
-        ADAPTERINFO      AdapterInfo;
-//        IDENTIFY_DATA2   LunIdent;
+        UCHAR                   RawData[1];
+        ADDREMOVEDEV            FindDelDev;
+        SETTRANSFERMODE         SetMode;
+        GETTRANSFERMODE         GetMode;
+        ADAPTERINFO             AdapterInfo;
+//        IDENTIFY_DATA2        LunIdent;
+//        ATA_PASS_THROUGH_DIRECT AtaDirect;
+        UNIATA_REG_IO_HDR       RegIo;
     };
 } UNIATA_CTL, *PUNIATA_CTL;
 

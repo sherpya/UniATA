@@ -40,12 +40,21 @@ Revision History:
 #define _BADBLOCK_H_INCLUDED_
 
 #pragma pack(push, 4)
-struct SBadBlockRange
+typedef struct _SBadBlockRange
 {
 //	ULONG		m_ldev;
 	ULONGLONG	m_lbaStart;
 	ULONGLONG	m_lbaEnd;
-};
+} SBadBlockRange, *PSBadBlockRange;
+
+typedef struct _SBadBlockListItem {
+    LIST_ENTRY       List;
+    PHW_LU_EXTENSION LunExt;
+    WCHAR            SerNumStr[128];
+    SBadBlockRange*  arrBadBlocks;
+    ULONG            nBadBlocks;
+} SBadBlockListItem, *PSBadBlockListItem;
+
 #pragma pack(pop)
 
 void
@@ -53,12 +62,17 @@ InitBadBlocks(
     IN PHW_LU_EXTENSION LunExt
     );
 
+void
+ForgetBadBlocks(
+    IN PHW_LU_EXTENSION LunExt
+    );
+
 bool
 CheckIfBadBlock(
-    IN HW_LU_EXTENSION LunExt,
-    IN UCHAR command,
+    IN PHW_LU_EXTENSION LunExt,
+//    IN UCHAR command,
     IN ULONGLONG lba,
-    IN USHORT count
+    IN ULONG count
     );
 
 #endif // _BADBLOCK_H_INCLUDED_

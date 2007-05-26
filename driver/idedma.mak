@@ -72,6 +72,7 @@ LINK32_OBJS= \
 	"$(INTDIR)\id_init.obj" \
 	"$(INTDIR)\id_queue.obj" \
 	"$(INTDIR)\id_sata.obj" \
+	"$(INTDIR)\id_badblock.obj" \
 	"$(INTDIR)\stdafx.obj" \
 	"$(INTDIR)\idedma.res"
 
@@ -258,6 +259,9 @@ SRC=id_queue
 !INCLUDE build.mak
 
 SRC=id_sata
+!INCLUDE build.mak
+
+SRC=id_badblock
 !INCLUDE build.mak
 
 SRC=stdafx

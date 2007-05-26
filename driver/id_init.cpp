@@ -746,6 +746,7 @@ for_ugly_chips:
         }
         /* SATA parts can be either compat or AHCI */
         if(ChipFlags & UNIATA_AHCI) {
+
             GetPciConfig1(0x90, tmp8);
             if(tmp8 & 0xc0) {
                 KdPrint2((PRINT_PREFIX "AHCI not supported yet\n"));
@@ -753,6 +754,24 @@ for_ugly_chips:
             }
             deviceExtension->HwFlags &= ~UNIATA_AHCI;
         }
+#if 0
+        if(ChipFlags & UNIATA_SATA) {
+            //BaseMemAddress = AtapiGetIoRange(HwDeviceExtension, ConfigInfo, pciData, SystemIoBusNumber,
+            //                        0, 0, 0x0c00);
+            BaseMemAddress = NULL; // HACK-HACK
+            if(!BaseMemAddress) {
+                KdPrint2((PRINT_PREFIX "Intel: no SATA I/O space, operate in PATA Compatible mode\n"));
+                deviceExtension->HwFlags &= ~UNIATA_SATA;
+                break;
+            }
+            if((*ConfigInfo->AccessRanges)[0].RangeInMemory) {
+                KdPrint2((PRINT_PREFIX "MemIo\n"));
+                MemIo = TRUE;
+            }
+            deviceExtension->BaseIoAddressSATA_0.Addr  = BaseMemAddress;
+            deviceExtension->BaseIoAddressSATA_0.MemIo = MemIo;
+        }
+#endif
         break; }
     case 0x1078:
         /* Cyrix 5530 ATA33 controller */
@@ -1293,6 +1312,7 @@ AtapiChipInit(
         if(ChipFlags & UNIATA_SATA) {
             if(c != CHAN_NOT_SPECIFIED)
                 break;
+#if 0
             /* force all ports active "the legacy way" */
             ChangePciConfig2(0x92, (a | 0x0f));
             /* enable PCI interrupt */
@@ -1312,6 +1332,10 @@ AtapiChipInit(
                     }
                 }
             }
+#else
+            /* enable PCI interrupt */
+            ChangePciConfig2(/*PCIR_COMMAND*/0x04, (a & ~0x0400));
+#endif 
             break;
         }
         if(deviceExtension->MaxTransferMode < ATA_UDMA2)

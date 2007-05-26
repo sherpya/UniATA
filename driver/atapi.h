@@ -290,17 +290,31 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_COMMAND_READ48           0x24
 #define IDE_COMMAND_READ_DMA48       0x25
 #define IDE_COMMAND_READ_DMA_Q48     0x26
-#define IDE_COMMAND_READ_NATIVE_SIZE48 0x27
-#define IDE_COMMAND_READ_MUL48       0x29
-#define IDE_COMMAND_WRITE            0x30
-#define IDE_COMMAND_WRITE48          0x34
-#define IDE_COMMAND_WRITE_DMA48      0x35
-#define IDE_COMMAND_WRITE_DMA_Q48    0x36
-#define IDE_COMMAND_SET_NATIVE_SIZE48  0x37
-#define IDE_COMMAND_WRITE_MUL48      0x39
-#define IDE_COMMAND_VERIFY           0x40
-#define IDE_COMMAND_VERIFY48         0x42
-#define IDE_COMMAND_SEEK             0x70
+#define IDE_COMMAND_READ_NATIVE_SIZE48   0x27
+#define IDE_COMMAND_READ_MUL48           0x29
+#define IDE_COMMAND_READ_STREAM_DMA48    0x2A
+#define IDE_COMMAND_READ_STREAM48        0x2B
+#define IDE_COMMAND_READ_LOG48           0x2f
+#define IDE_COMMAND_WRITE                0x30
+#define IDE_COMMAND_WRITE48              0x34
+#define IDE_COMMAND_WRITE_DMA48          0x35
+#define IDE_COMMAND_WRITE_DMA_Q48        0x36
+#define IDE_COMMAND_SET_NATIVE_SIZE48    0x37
+#define IDE_COMMAND_WRITE_MUL48          0x39
+#define IDE_COMMAND_WRITE_STREAM_DMA48   0x3a
+#define IDE_COMMAND_WRITE_STREAM48       0x3b
+#define IDE_COMMAND_WRITE_FUA_DMA48      0x3d
+#define IDE_COMMAND_WRITE_FUA_DMA_Q48    0x3e
+#define IDE_COMMAND_WRITE_LOG48          0x3f
+#define IDE_COMMAND_VERIFY               0x40
+#define IDE_COMMAND_VERIFY48             0x42
+#define IDE_COMMAND_READ_LOG_DMA48       0x47
+#define IDE_COMMAND_WRITE_LOG_DMA48      0x57
+#define IDE_COMMAND_TRUSTED_RCV          0x5c
+#define IDE_COMMAND_TRUSTED_RCV_DMA      0x5d
+#define IDE_COMMAND_TRUSTED_SEND         0x5e
+#define IDE_COMMAND_TRUSTED_SEND_DMA     0x5f
+#define IDE_COMMAND_SEEK                 0x70
 #define IDE_COMMAND_SET_DRIVE_PARAMETERS 0x91
 #define IDE_COMMAND_ATAPI_PACKET     0xA0
 #define IDE_COMMAND_ATAPI_IDENTIFY   0xA1
@@ -311,6 +325,7 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_COMMAND_READ_DMA         0xC8
 #define IDE_COMMAND_WRITE_DMA        0xCA
 #define IDE_COMMAND_WRITE_DMA_Q      0xCC
+#define IDE_COMMAND_WRITE_MUL_FUA48  0xCE
 #define IDE_COMMAND_GET_MEDIA_STATUS 0xDA
 #define IDE_COMMAND_DOOR_LOCK        0xDE
 #define IDE_COMMAND_DOOR_UNLOCK      0xDF
@@ -321,7 +336,7 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_COMMAND_IDENTIFY         0xEC
 #define IDE_COMMAND_MEDIA_EJECT      0xED
 #define IDE_COMMAND_FLUSH_CACHE48    0xEA
-#define IDE_COMMAND_ENABLE_MEDIA_STATUS   0xEF
+#define IDE_COMMAND_ENABLE_MEDIA_STATUS  0xEF
 #define	IDE_COMMAND_SET_FEATURES     0xEF      /* features command, 
                                                  IDE_COMMAND_ENABLE_MEDIA_STATUS */
 #define IDE_COMMAND_READ_NATIVE_SIZE 0xF8
@@ -699,8 +714,24 @@ typedef struct _IDENTIFY_DATA {
 
     ULONGLONG UserAddressableSectors48;     //     100-103
 
-    USHORT Reserved104[23];                 //     104-126
-    USHORT RevovableStatus;                 //     127
+    USHORT Reserved104[2];                  //     104-105
+    union {
+        USHORT PhysLogSectorSize;               //     106
+        struct {
+            USHORT PLSS_Size:4;
+            USHORT PLSS_Reserved:8;
+            USHORT PLSS_LargeL:1;  // =1 if 117-118 are valid
+            USHORT PLSS_LargeP:1;
+            USHORT PLSS_Signature:2; // = 0x01 = 01b
+        };
+    };
+    USHORT Reserved107[10];                 //     107-116
+
+    ULONG  LargeSectorSize;                 //     117-118
+    
+    USHORT Reserved117[8];                  //     119-126
+    
+    USHORT RemovableStatus;                 //     127
     USHORT SecurityStatus;                  //     128
 
     USHORT FeaturesSupport4;                //     129
@@ -822,25 +853,29 @@ NATIVE_MODE_CONTROLLER_INFORMATION const NativeModeAdapters[] = {
     AtapiWritePort1(chan, IDX_IO1_o_DriveSelect, (unit) ? IDE_DRIVE_SELECT_2 : IDE_DRIVE_SELECT_1);
 
 
-#define ReadBuffer(chan, Buffer, Count) \
+#define ReadBuffer(chan, Buffer, Count, timing) \
     AtapiReadBuffer2(chan, IDX_IO1_i_Data, \
                                  Buffer, \
-                                 Count);
+                                 Count, \
+                                 timing);
 
-#define WriteBuffer(chan, Buffer, Count) \
+#define WriteBuffer(chan, Buffer, Count, timing) \
     AtapiWriteBuffer2(chan, IDX_IO1_o_Data, \
                                   Buffer, \
-                                  Count);
+                                 Count, \
+                                 timing);
 
-#define ReadBuffer2(chan, Buffer, Count) \
+#define ReadBuffer2(chan, Buffer, Count, timing) \
     AtapiReadBuffer4(chan, IDX_IO1_i_Data, \
                              Buffer, \
-                             Count);
+                                 Count, \
+                                 timing);
 
-#define WriteBuffer2(chan, Buffer, Count) \
+#define WriteBuffer2(chan, Buffer, Count, timing) \
     AtapiWriteBuffer4(chan, IDX_IO1_o_Data, \
                               Buffer, \
-                              Count);
+                                 Count, \
+                                 timing);
 
 UCHAR
 DDKFASTAPI
@@ -1203,6 +1238,34 @@ VOID
 UniataDumpATARegs(
     IN struct _HW_CHANNEL* chan
     );
+
+ULONG
+EncodeVendorStr(
+   OUT PWCHAR Buffer,
+    IN PUCHAR Str,
+    IN ULONG  Length
+    );
+
+ULONGLONG
+UniAtaCalculateLBARegsBack(
+    struct _HW_LU_EXTENSION* LunExt,
+    ULONGLONG            lba
+    );
+
+BOOLEAN
+UniataAnybodyHome(
+    IN PVOID   HwDeviceExtension,
+    IN ULONG   Channel,
+    IN ULONG   deviceNumber
+    );
+
+#define ATA_CMD_FLAG_LBAIOsupp 0x01
+#define ATA_CMD_FLAG_48supp    0x02
+#define ATA_CMD_FLAG_48        0x04
+#define ATA_CMD_FLAG_DMA       0x08
+
+extern UCHAR AtaCommands48[256];
+extern UCHAR AtaCommandFlags[256];
 
 #ifdef _DEBUG
 #define PrintNtConsole  _PrintNtConsole

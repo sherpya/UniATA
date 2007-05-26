@@ -802,6 +802,10 @@ typedef struct _HW_LU_EXTENSION {
     // padding
     BOOLEAN        opt_reserved[2];
 
+    struct _SBadBlockListItem* bbListDescr;
+    struct _SBadBlockRange* arrBadBlocks;
+    ULONG           nBadBlocks;
+
 #ifdef IO_STATISTICS
 
     LONGLONG ModeErrorCount[MAX_RETRIES];
@@ -824,9 +828,15 @@ typedef struct _HW_DEVICE_EXTENSION {
     // with so many broken PCI IDE controllers being sold, we have
     // to support them.
     ULONG NumberChannels;
+    ULONG NumberLuns;
     ULONG FirstChannelToCheck;
+#if 1
     HW_LU_EXTENSION lun[IDE_MAX_LUN];
     HW_CHANNEL chan[AHCI_MAX_PORT/*IDE_MAX_CHAN*/];
+#else
+    PHW_LU_EXTENSION lun;
+    PHW_CHANNEL chan;
+#endif
     UCHAR LastInterruptedChannel;
     // Indicates the number of blocks transferred per int. according to the
     // identify data.
@@ -896,9 +906,6 @@ typedef struct _HW_DEVICE_EXTENSION {
     BOOLEAN        opt_AtapiDmaControlCmd;   // default FALSE
     BOOLEAN        opt_AtapiDmaRawRead;      // default TRUE
     BOOLEAN        opt_AtapiDmaReadWrite;    // default TRUE  
-
-    struct SBadBlockRange* arrBadBlocks;
-    ULONG           nBadBlocks;
 
 } HW_DEVICE_EXTENSION, *PHW_DEVICE_EXTENSION;
 
@@ -1268,7 +1275,8 @@ AtapiWriteBuffer4(
     IN PHW_CHANNEL chan,
     IN ULONG _port,
     IN PVOID Buffer,
-    IN ULONG Count
+    IN ULONG Count,
+    IN ULONG Timing
     );
 
 VOID
@@ -1277,7 +1285,8 @@ AtapiWriteBuffer2(
     IN PHW_CHANNEL chan,
     IN ULONG _port,
     IN PVOID Buffer,
-    IN ULONG Count
+    IN ULONG Count,
+    IN ULONG Timing
     );
 
 VOID
@@ -1286,7 +1295,8 @@ AtapiReadBuffer4(
     IN PHW_CHANNEL chan,
     IN ULONG _port,
     IN PVOID Buffer,
-    IN ULONG Count
+    IN ULONG Count,
+    IN ULONG Timing
     );
 
 VOID
@@ -1295,7 +1305,8 @@ AtapiReadBuffer2(
     IN PHW_CHANNEL chan,
     IN ULONG _port,
     IN PVOID Buffer,
-    IN ULONG Count
+    IN ULONG Count,
+    IN ULONG Timing
     );
 
 /*#define GET_CHANNEL(Srb)  (Srb->TargetId >> 1)
@@ -1304,7 +1315,7 @@ AtapiReadBuffer2(
 
 #define GET_CHANNEL(Srb)  (Srb->PathId)
 #define GET_LDEV(Srb)  (Srb->TargetId | (Srb->PathId << 1))
-#define GET_LDEV2(P, T, L)  (T | (P<<1))
+#define GET_LDEV2(P, T, L)  (T | ((P)<<1))
 #define GET_CDEV(Srb)  (Srb->TargetId)
 
 #define AtapiSetupLunPtrs(chan, deviceExtension, c) \

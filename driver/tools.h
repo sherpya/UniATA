@@ -94,6 +94,8 @@ typedef struct _FOUR_BYTE {
 }
 #define DEC_TO_BCD(x) (((x / 10) << 4) + (x % 10))
 
+/*
+
 #if defined _X86_ && !defined(__GNUC__)
 
 #define MOV_DD_SWP(a,b)           \
@@ -280,6 +282,8 @@ typedef struct _FOUR_BYTE {
 
 #define MOV_3B_SWP(a,b)     MOV_MSF_SWP(a,b)
 
+*/
+
 #ifdef DBG
 
 #define KdDump(a,b)                         \
@@ -331,10 +335,12 @@ __inline ULONG CountOfSetBitsULong(ULONG _X)
 #endif //min
 //#define abs(a) (((a) < 0) ? (-(a)) : (a))
 
+/*
 extern ULONG  MajorVersion;
 extern ULONG  MinorVersion;
 extern ULONG  BuildNumber;
 extern ULONG  SPVersion;
+*/
 
 #ifdef __cplusplus
 };
@@ -344,7 +350,7 @@ extern ULONG  SPVersion;
 extern UNICODE_STRING SavedSPString;
 #endif //USER_MODE
 
-
+/*
 #define WinVer_Is351  (MajorVersion==0x03)
 #define WinVer_IsNT   (MajorVersion==0x04)
 #define WinVer_Is2k   (MajorVersion==0x05 && MinorVersion==0x00)
@@ -358,6 +364,7 @@ extern UNICODE_STRING SavedSPString;
 #define WinVer_2k     (0x0500)
 #define WinVer_XP     (0x0501)
 #define WinVer_dNET   (0x0502)
+*/
 
 #define PtrOffset(BASE,OFFSET) ((ULONG)((ULONG)(OFFSET) - (ULONG)(BASE)))
 

@@ -75,6 +75,10 @@ Revision History:
 #define         ATA_SA150               0x47 /*0x80*/
 #define         ATA_SA300               0x48 /*0x81*/
 
+// define PIO timings in nanoseconds
+#define         PIO0_TIMING             600
+
+#define UniataGetPioTiming(LunExt)      ((LunExt->TransferMode <= ATA_PIO0) ? PIO0_TIMING : 0)
 
 #ifndef __IDE_BUSMASTER_DEVICES_H__
 #define __IDE_BUSMASTER_DEVICES_H__

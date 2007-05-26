@@ -18,6 +18,12 @@ UniataSataConnect(
     UCHAR                Status;
 
     KdPrint2((PRINT_PREFIX "UniataSataConnect:\n"));
+
+    if(!deviceExtension->BaseIoAddressSATA_0.Addr) {
+        KdPrint2((PRINT_PREFIX "  no I/O range\n"));
+        return IDE_STATUS_IDLE;
+    }
+
     /* clear SATA error register, some controllers need this */
     AtapiWritePort4(chan, IDX_SATA_SError,
         AtapiReadPort4(chan, IDX_SATA_SError));
@@ -66,6 +72,12 @@ UniataSataPhyEnable(
     int loop, retry;
 
     KdPrint2((PRINT_PREFIX "UniataSataPhyEnable:\n"));
+
+    if(!deviceExtension->BaseIoAddressSATA_0.Addr) {
+        KdPrint2((PRINT_PREFIX "  no I/O range\n"));
+        return IDE_STATUS_IDLE;
+    }
+
     SControl.Reg = AtapiReadPort4(chan, IDX_SATA_SControl);
     KdPrint2((PRINT_PREFIX "SControl %x\n", SControl.Reg));
     if(SControl.DET == SControl_DET_Idle) {
@@ -118,7 +130,8 @@ UniataSataClearErr(
     SATA_SSTATUS_REG SStatus;
     SATA_SERROR_REG  SError;
 
-    if(ChipFlags & UNIATA_SATA) {
+    if(deviceExtension->BaseIoAddressSATA_0.Addr) {
+    //if(ChipFlags & UNIATA_SATA) {
 
         SStatus.Reg = AtapiReadPort4(chan, IDX_SATA_SStatus);
         SError.Reg  = AtapiReadPort4(chan, IDX_SATA_SError); 
@@ -158,6 +171,10 @@ UniataSataEvent(
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     UCHAR Status;
     ULONG ldev = lChannel*2;
+
+    if(!deviceExtension->BaseIoAddressSATA_0.Addr) {
+        return FALSE;
+    }
 
     switch(Action) {
     case UNIATA_SATA_EVENT_ATTACH:
@@ -267,6 +284,6 @@ UniataAhciInit(
         chan->ChannelCtrlFlags |= CTRFLAGS_NO_SLAVE;
     }
 
-    return 0;
+    return TRUE;
 } // end UniataAhciInit()
 

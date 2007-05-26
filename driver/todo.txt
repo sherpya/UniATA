@@ -246,9 +246,9 @@
 152.add support for >2 channels                                        (29a)
 153.improve Intr-detection loop. Start each time from next channel      ...
     for load-balance                                                   (29a)
-154.add support for machines with >4G physical memory
+154.add support for machines with >4G physical memory                  (38 )
 155.add FreeBSD software RAID support
 156.use http://www.winimage.com/readfi15.zip for performance checks
 157.use IOCTL_SCSI_MINIPORT_IDENTIFY in atactl.exe to determine         ...
-    PIO/DMA when no uniata.sys is installed
+    PIO/DMA when no uniata.sys is installed                            (+++)
 158.
