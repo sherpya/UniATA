@@ -2066,6 +2066,7 @@ UniataAnybodyHome(
         AtapiStallExecution(10);
 
         AtapiWritePort1(chan, IDX_IO1_o_BlockCount, 0x55);
+        AtapiWritePort1(chan, IDX_IO1_o_BlockCount, 0x55);
         AtapiStallExecution(5);
         signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockCount);
         if(signatureLow != 0x55) {
@@ -2074,6 +2075,7 @@ UniataAnybodyHome(
             return FALSE;
         }
 
+        AtapiWritePort1(chan, IDX_IO1_o_BlockCount, 0xAA);
         AtapiWritePort1(chan, IDX_IO1_o_BlockCount, 0xAA);
         AtapiStallExecution(5);
         signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockCount);
