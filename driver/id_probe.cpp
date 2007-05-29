@@ -2056,29 +2056,48 @@ UniataAnybodyHome(
     ULONG                ldev = GET_LDEV2(Channel, deviceNumber, 0);
     PHW_LU_EXTENSION     LunExt = &(deviceExtension->lun[ldev]);
 
+    SATA_SSTATUS_REG     SStatus;
     UCHAR                signatureLow;
 
     // Select the device.
     SelectDrive(chan, deviceNumber);
 
-    AtapiStallExecution(10);
+    if(!deviceExtension->BaseIoAddressSATA_0.Addr) {
+        AtapiStallExecution(10);
 
-    AtapiWritePort1(chan, IDX_IO1_o_BlockCount, 0x55);
-    AtapiStallExecution(5);
-    signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockCount);
-    if(signatureLow != 0x55) {
-        KdPrint2((PRINT_PREFIX "  nobody home! %#x != 0x55\n", signatureLow));
-        LunExt->DeviceFlags = 0;
-        return FALSE;
-    }
+        AtapiWritePort1(chan, IDX_IO1_o_BlockCount, 0x55);
+        AtapiStallExecution(5);
+        signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockCount);
+        if(signatureLow != 0x55) {
+            KdPrint2((PRINT_PREFIX "  nobody home! %#x != 0x55\n", signatureLow));
+            LunExt->DeviceFlags = 0;
+            return FALSE;
+        }
 
-    AtapiWritePort1(chan, IDX_IO1_o_BlockCount, 0xAA);
-    AtapiStallExecution(5);
-    signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockCount);
-    if(signatureLow != 0xAA) {
-        KdPrint2((PRINT_PREFIX "  nobody home! %#x != 0xAA\n", signatureLow));
-        LunExt->DeviceFlags = 0;
-        return FALSE;
+        AtapiWritePort1(chan, IDX_IO1_o_BlockCount, 0xAA);
+        AtapiStallExecution(5);
+        signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockCount);
+        if(signatureLow != 0xAA) {
+            KdPrint2((PRINT_PREFIX "  nobody home! %#x != 0xAA\n", signatureLow));
+            LunExt->DeviceFlags = 0;
+            return FALSE;
+        }
+    } else {
+
+        SStatus.Reg = AtapiReadPort4(chan, IDX_SATA_SStatus);
+        KdPrint2((PRINT_PREFIX "SStatus %x\n", SStatus.Reg));
+        if(SStatus.DET <= SStatus_DET_Dev_NoPhy) {
+            KdPrint2((PRINT_PREFIX "  SATA DET <= SStatus_DET_Dev_NoPhy\n"));
+            return FALSE;
+        }
+        if(SStatus.SPD < SStatus_SPD_Gen1) {
+            KdPrint2((PRINT_PREFIX "  SATA SPD < SStatus_SPD_Gen1\n"));
+            return FALSE;
+        }
+        if(SStatus.IPM == SStatus_IPM_NoDev) {
+            KdPrint2((PRINT_PREFIX "  SATA IPN == SStatus_IPM_NoDev\n"));
+            return FALSE;
+        }
     }
 
     return TRUE;
