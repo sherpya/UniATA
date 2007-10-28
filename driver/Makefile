@@ -3,6 +3,6 @@
 #// All rights reserved
 #////////////////////////////////////////////////////////////////////
 
-BaseDir="$(BASEDIR)"
+BaseDir=$(BASEDIR)
 
 !INCLUDE idedma.mak

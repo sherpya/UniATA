@@ -129,13 +129,15 @@ UniataQueueRequest(
 
             // walk through command queue and find the best
             // place for insertion of the command
-            while (AtaReq1 = AtaReq2->prev_req) {
+            while ((AtaReq1 = AtaReq2->prev_req)) {
                 new_cost1 = UniataGetCost(LunExt, AtaReq1, AtaReq);
                 new_cost2 = UniataGetCost(LunExt, AtaReq, AtaReq2);
 
+#ifdef QUEUE_STATISTICS
                 if(new_cost1 == REORDER_COST_INTERSECT ||
                    new_cost2 == REORDER_COST_INTERSECT)
                     chan->IntersectCount++;
+#endif //QUEUE_STATISTICS
 
                 if(new_cost2 > REORDER_COST_RESELECT)
                     break;
@@ -179,7 +181,7 @@ UniataQueueRequest(
         AtaReq->prev_req = BestAtaReq1;
 
         AtaReq1 = AtaReq;
-        while(AtaReq1 = AtaReq1->next_req) {
+        while((AtaReq1 = AtaReq1->next_req)) {
             //ASSERT(AtaReq1->ttl);
             AtaReq1->ttl--;
         }
@@ -348,7 +350,7 @@ UniataGetNextChannel(
             cost_c = chan->queue_depth * (chan->ChannelSelectWaitCount+1);
         }
     }
-    if(best_c == -1) {
+    if(best_c == CHAN_NOT_SPECIFIED) {
         KdPrint2((PRINT_PREFIX "  empty queues\n"));
         return NULL;
     }

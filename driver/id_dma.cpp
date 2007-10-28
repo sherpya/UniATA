@@ -50,7 +50,7 @@ static const ULONG valid_udma[7] = {0,0,2,0,4,5,6};
 static const CHAR retry_Wdma[MAX_RETRIES+1] = {2, 2, 2,-1,-1,-1};
 static const CHAR retry_Udma[MAX_RETRIES+1] = {6, 2,-1,-1,-1,-1};
 
-PHYSICAL_ADDRESS ph4gb = {0xFFFFFFFF, 0};
+PHYSICAL_ADDRESS ph4gb = {{0xFFFFFFFF, 0}};
 
 VOID
 cyrix_timing (
@@ -200,26 +200,33 @@ AtapiDmaSetup(
 
     AtaReq->Flags &= ~REQ_FLAG_DMA_OPERATION;
 
-    KdPrint2((PRINT_PREFIX "AtapiDmaSetup: mode %#x\n", deviceExtension->lun[lChannel*2+DeviceNumber].TransferMode ));
+    KdPrint2((PRINT_PREFIX "AtapiDmaSetup: mode %#x, data %x, count %x, lCh %x, dev %x\n",
+        deviceExtension->lun[lChannel*2+DeviceNumber].TransferMode,
+        data, count, lChannel, DeviceNumber ));
     if(deviceExtension->lun[lChannel*2+DeviceNumber].TransferMode < ATA_DMA) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: Not DMA mode, assume this is just preparation\n" ));
         //return FALSE;
     }
+    KdPrint2((PRINT_PREFIX "  checkpoint 1\n" ));
     if(!count) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: count=0\n" ));
         return FALSE;
     }
+    KdPrint2((PRINT_PREFIX "  checkpoint 2\n" ));
     if(count > deviceExtension->MaximumDmaTransferLength) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: deviceExtension->MaximumDmaTransferLength > count\n" ));
         return FALSE;
     }
+    KdPrint2((PRINT_PREFIX "  checkpoint 3\n" ));
     if((ULONG)data & deviceExtension->AlignmentMask) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: unaligned data: %#x (%#x)\n", data, deviceExtension->AlignmentMask));
         return FALSE;
     }
 
+    KdPrint2((PRINT_PREFIX "  checkpoint 4\n" ));
     // NOTE: This code is intended for 32-bit capable controllers only.
     // 64-bit capable controllers shall be handled separately.
+    KdPrint2((PRINT_PREFIX "  get Phys(PRD=%x)\n", &(AtaReq->dma_tab) ));
     dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, NULL, (PUCHAR)&(AtaReq->dma_tab) /*chan->dma_tab*/, &i, &dma_baseu);
     if(dma_baseu) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: SRB built-in PRD above 4Gb: %8.8x%8.8x\n", dma_baseu, dma_base));
@@ -233,6 +240,7 @@ AtapiDmaSetup(
     }
     AtaReq->dma_base = dma_base;
 
+    KdPrint2((PRINT_PREFIX "  get Phys(data=%x)\n", data ));
     dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, Srb, data, &dma_count, &dma_baseu);
     if(dma_baseu) {
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: 1st block of buffer above 4Gb: %8.8x%8.8x\n", dma_baseu, dma_base));
@@ -242,8 +250,8 @@ retry_DB_IO:
         data = (PUCHAR)(chan->DB_IO);
     } else
     if(!dma_count || ((LONG)(dma_base) == -1)) {
-        AtaReq->dma_base = NULL;
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: No 1st block\n" ));
+        AtaReq->dma_base = NULL;
         return FALSE;
     }
 
@@ -257,10 +265,11 @@ retry_DB_IO:
         AtaReq->dma_tab[i].count = (dma_count & 0xffff);
         i++; 
         if (i >= ATA_DMA_ENTRIES) {
-            AtaReq->dma_base = NULL;
             KdPrint2((PRINT_PREFIX "too many segments in DMA table\n" ));
+            AtaReq->dma_base = NULL;
             return FALSE;
         }
+        KdPrint2((PRINT_PREFIX "  get Phys(data[n]=%x)\n", data ));
         dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, Srb, data, &dma_count, &dma_baseu);
         if(dma_baseu) {
             KdPrint2((PRINT_PREFIX "AtapiDmaSetup: block of buffer above 4Gb: %8.8x%8.8x\n", dma_baseu, dma_base));
@@ -281,6 +290,7 @@ retry_DB_IO:
         data += min(count, PAGE_SIZE);
         count -= min(count, PAGE_SIZE);
     }
+    KdPrint2((PRINT_PREFIX "  set TERM\n" ));
     AtaReq->dma_tab[i].base = dma_base;
     AtaReq->dma_tab[i].count = (dma_count & 0xffff) | ATA_DMA_EOT;
 
@@ -1060,6 +1070,17 @@ set_new_acard:
         }
         /* Use GENERIC PIO */
         break;
+    case ATA_NETCELL_ID:
+        /***********/
+        /* NetCell */
+        /***********/
+        if (wdmamode >= 2 && apiomode >= 4) {
+            if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_WDMA2)) {
+                return;
+            }
+        }
+        /* Use GENERIC PIO */
+        break;
     case ATA_HIGHPOINT_ID: {
         /********************/
         /* High Point (HPT) */
@@ -1258,7 +1279,7 @@ set_new_acard:
     case ATA_ATI_ID:
 
         KdPrint2((PRINT_PREFIX "ATI\n"));
-        if(ChipType = SIIMIO) {
+        if(ChipType == SIIMIO) {
             goto l_ATA_SILICON_IMAGE_ID;
         }
         //goto ATA_SERVERWORKS_ID;

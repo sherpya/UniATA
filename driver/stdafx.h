@@ -19,6 +19,11 @@ extern "C" {
 
 #include "id_queue.h"
 
+#ifdef ExAllocatePool
+#undef ExAllocatePool
+#endif
+#define ExAllocatePool(a,b) ExAllocatePoolWithTag(a,b,'ataU')
+
 #endif //UNIATA_CORE
 
 #include "badblock.h"

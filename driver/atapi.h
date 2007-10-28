@@ -235,6 +235,9 @@ typedef struct _IDE_REGISTERS_2 {
 #define DFLAGS_RCACHE_ENABLED        0x1000    // Indicates that we use read cache
 #define DFLAGS_ORIG_GEOMETRY         0x2000    // 
 #define DFLAGS_REINIT_DMA            0x4000    // 
+#define DFLAGS_HIDDEN                0x8000    // Hidden device, available only with special IOCTLs
+                                               // via communication virtual device
+//#define DFLAGS_            0x10000    // 
 //
 // Used to disable 'advanced' features.
 //
@@ -1078,10 +1081,12 @@ CheckDevice(
     IN BOOLEAN ResetBus
     );
 
+#define UNIATA_FIND_DEV_UNHIDE    0x01
+
 BOOLEAN
 FindDevices(
     IN PVOID HwDeviceExtension,
-    IN BOOLEAN AtapiOnly,
+    IN ULONG   Flags,
     IN ULONG   Channel
     );
 
@@ -1178,8 +1183,10 @@ AtapiDisableInterrupts(
     IN ULONG c
     );
 
-#define CHAN_NOT_SPECIFIED      (0xffffffffL)
-#define DEVNUM_NOT_SPECIFIED    (0xffffffffL)
+#define CHAN_NOT_SPECIFIED                  (0xffffffffL)
+#define CHAN_NOT_SPECIFIED_CHECK_CABLE      (0xfffffffeL)
+#define DEVNUM_NOT_SPECIFIED                (0xffffffffL)
+#define IOMODE_NOT_SPECIFIED                (0xffffffffL)
 
 extern ULONG
 AtapiRegCheckDevValue(

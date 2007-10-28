@@ -1,6 +1,11 @@
 #ifndef __NTDDK_EX__H__
 #define __NTDDK_EX__H__
 
+#ifndef __REACTOS__
+#undef ASSERT
+#define ASSERT
+#endif //__REACTOS__
+
 typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemBasicInformation,
     SystemProcessorInformation,
@@ -32,9 +37,15 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemUnloadGdiDriverInformation,
     SystemTimeAdjustmentInformation,
     SystemSummaryMemoryInformation,
+#ifndef __REACTOS__
     SystemNextEventIdInformation,
     SystemEventIdsInformation,
     SystemCrashDumpInformation,
+#else
+    SystemMirrorMemoryInformation,
+    SystemPerformanceTraceInformation,
+    SystemObsolete0,
+#endif
     SystemExceptionInformation,
     SystemCrashDumpStateInformation,
     SystemKernelDebuggerInformation,
@@ -44,10 +55,71 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemPrioritySeperation,
     SystemPlugPlayBusInformation,
     SystemDockInformation,
+#ifdef __REACTOS__
+    SystemPowerInformationNative,
+#elsif defined IRP_MN_START_DEVICE
+    SystemPowerInformationInfo,
+#else
     SystemPowerInformation,
+#endif
     SystemProcessorSpeedInformation,
     SystemCurrentTimeZoneInformation,
-    SystemLookasideInformation
+    SystemLookasideInformation,
+#ifdef __REACTOS__
+    SystemTimeSlipNotification,
+    SystemSessionCreate,
+    SystemSessionDetach,
+    SystemSessionInformation,
+    SystemRangeStartInformation,
+    SystemVerifierInformation,
+    SystemAddVerifier,
+    SystemSessionProcessesInformation,
+    SystemLoadGdiDriverInSystemSpaceInformation,
+    SystemNumaProcessorMap,
+    SystemPrefetcherInformation,
+    SystemExtendedProcessInformation,
+    SystemRecommendedSharedDataAlignment,
+    SystemComPlusPackage,
+    SystemNumaAvailableMemory,
+    SystemProcessorPowerInformation,
+    SystemEmulationBasicInformation,
+    SystemEmulationProcessorInformation,
+    SystemExtendedHanfleInformation,
+    SystemLostDelayedWriteInformation,
+    SystemBigPoolInformation,
+    SystemSessionPoolTagInformation,
+    SystemSessionMappedViewInformation,
+    SystemHotpatchInformation,
+    SystemObjectSecurityMode,
+    SystemWatchDogTimerHandler,
+    SystemWatchDogTimerInformation,
+    SystemLogicalProcessorInformation,
+    SystemWo64SharedInformationObosolete,
+    SystemRegisterFirmwareTableInformationHandler,
+    SystemFirmwareTableInformation,
+    SystemModuleInformationEx,
+    SystemVerifierTriageInformation,
+    SystemSuperfetchInformation,
+    SystemMemoryListInformation,
+    SystemFileCacheInformationEx,
+    SystemThreadPriorityClientIdInformation,
+    SystemProcessorIdleCycleTimeInformation,
+    SystemVerifierCancellationInformation,
+    SystemProcessorPowerInformationEx,
+    SystemRefTraceInformation,
+    SystemSpecialPoolInformation,
+    SystemProcessIdInformation,
+    SystemErrorPortInformation,
+    SystemBootEnvironmentInformation,
+    SystemHypervisorInformation,
+    SystemVerifierInformationEx,
+    SystemTimeZoneInformation,
+    SystemImageFileExecutionOptionsInformation,
+    SystemCoverageInformation,
+    SystemPrefetchPathInformation,
+    SystemVerifierFaultsInformation,
+    MaxSystemInfoClass,
+#endif //__REACTOS__
 } SYSTEM_INFORMATION_CLASS;
 
 
@@ -105,7 +177,9 @@ typedef struct _SYSTEM_MODULE_INFORMATION
 } SYSTEM_MODULE_INFORMATION, *PSYSTEM_MODULE_INFORMATION;
 
 typedef unsigned short  WORD;
+#ifndef __REACTOS__
 typedef unsigned int    BOOL;
+#endif //__REACTOS__
 typedef unsigned long   DWORD;
 typedef unsigned char   BYTE;
 
@@ -438,6 +512,7 @@ typedef struct _KTHREAD_HDR {
 */
 } KTHREAD_HDR, *PKTHREAD_HDR;
 
+#ifndef __REACTOS__
 typedef struct _IMAGE_DOS_HEADER {      // DOS .EXE header
     WORD   e_magic;                     // Magic number
     WORD   e_cblp;                      // Bytes on last page of file
@@ -543,6 +618,7 @@ typedef struct _IMAGE_EXPORT_DIRECTORY {
     DWORD   AddressOfNames;         // RVA from base of image
     DWORD   AddressOfNameOrdinals;  // RVA from base of image
 } IMAGE_EXPORT_DIRECTORY, *PIMAGE_EXPORT_DIRECTORY;
+#endif
 
 NTHALAPI
 VOID

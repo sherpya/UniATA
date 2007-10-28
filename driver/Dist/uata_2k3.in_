@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=SCSIAdapter
 CatalogFile=uniata.cat
-DriverVer=03/09/2006,0.33.7.0
+DriverVer=%BUILD_TS%,%DRIVER_VER%
 
 
 [DestinationDirs]

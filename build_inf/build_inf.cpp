@@ -34,12 +34,15 @@ Revision History:
 
 #include <windows.h>
 #include <stdio.h>
+#include <time.h>
 #include "..\driver\bm_devs.h"
+#include "..\driver\uniata_ver.h"
 #include "..\..\..\PCIDump\Head\Driver\PCIDump.h"
 #include "SvcManLib.h"
 
 #define DEVLIST_NAME     ";DEVLIST"
 #define DEVNAMELIST_NAME ";DEVNAMELIST"
+#define DRIVERVER_NAME   "DriverVer"
 
 BOOLEAN g_html=FALSE;
 
@@ -249,11 +252,82 @@ void main (int argc, char* argv[]) {
     LONG tmp;
     LONG i=0, j=0;
     ULONG k;
+    struct tm *newtime;
+    time_t aclock;
+    ULONG ver_1=0, ver_2=0, ver_3=0;
+    char ver_str[] = UNIATA_VER_STR;
     
     if(argc < 2)
         exit(-1);
 
     i=1;
+    if(!strcmp(argv[i], "--ver_h")) {
+        time( &aclock );                 /* Get time in seconds */
+        newtime = localtime( &aclock );  /* Convert time to struct */
+
+        if(sizeof(UNIATA_VER_STR) > 1) {
+            if(sscanf(ver_str, "%d", &ver_1) != 1) {
+                ver_1 = 0;
+            }
+        }
+        if(sizeof(UNIATA_VER_STR) > 3) {
+            ver_2 = ver_str[2]-'a'+1;
+        }
+        if(sizeof(UNIATA_VER_STR) > 4) {
+            if(sscanf(ver_str+3, "%d", &ver_3) != 1) {
+                ver_3 = 0;
+            }
+        }
+        printf("#define UNIATA_VER_STR         \"%s\"\n",
+            UNIATA_VER_STR
+            );
+        printf("#define UNIATA_VER_DOT         0.%d.%d.%d\n",
+            ver_1,ver_2,ver_3
+            );
+        printf("#define UNIATA_VER_DOT_COMMA   0,%d,%d,%d\n",
+            ver_1,ver_2,ver_3
+            );
+        printf("#define UNIATA_VER_DOT_STR     \"0.%d.%d.%d\"\n",
+            ver_1,ver_2,ver_3
+            );
+        printf("#define UNIATA_VER_YEAR        %d\n",
+            newtime->tm_year+1900
+            );
+        printf("#define UNIATA_VER_YEAR_STR    \"%d\"\n",
+            newtime->tm_year+1900
+            );
+        exit(0);
+    } else
+    if(!strcmp(argv[i], "--ver")) {
+        if(sizeof(UNIATA_VER_STR) > 1) {
+            if(sscanf(ver_str, "%d", &ver_1) != 1) {
+                ver_1 = 0;
+            }
+        }
+        if(sizeof(UNIATA_VER_STR) > 3) {
+            ver_2 = ver_str[2]-'a'+1;
+        }
+        if(sizeof(UNIATA_VER_STR) > 4) {
+            if(sscanf(ver_str+3, "%d", &ver_3) != 1) {
+                ver_3 = 0;
+            }
+        }
+        printf("0.%d.%d.%d",
+            ver_1,ver_2,ver_3
+            );
+        exit(0);
+    } else
+    if(!strcmp(argv[i], "--timestamp")) {
+        time( &aclock );                 /* Get time in seconds */
+        newtime = localtime( &aclock );  /* Convert time to struct */
+                                         /* tm form */
+        printf("%2.2d/%2.2d/%4.4d",
+            newtime->tm_mon+1,
+            newtime->tm_mday,
+            newtime->tm_year+1900
+            );
+        exit(0);
+    } else
     if(!strcmp(argv[i], "--html")) {
         ULONG prev_ven=-1;
         g_html = TRUE;
@@ -301,6 +375,7 @@ void main (int argc, char* argv[]) {
         j++;
     }
     buff[j] = 0;
+
     buff_i = (PUCHAR)strstr((PCHAR)buff, DEVLIST_NAME);
     if(!buff_i) {
         exit(-5);

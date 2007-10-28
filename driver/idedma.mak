@@ -29,10 +29,30 @@ NULL=
 NULL=nul
 !ENDIF 
 
-#makefile for nt4
+!IF "$(BaseDir)" == ""
 BaseDir=$(BASEDIR)
+!ENDIF 
+
+!IF "$(BaseDir)" == ""
+!ERROR BASEDIR environment variable not set
+!ELSEIF "$(BaseDir)" == "$(BASEDIRNT4)" || "$(BaseDir)" == "$(BASEDIR2K)"
+#makefile for nt4/w2k
+!IF "$(BASEDIR351)" == ""
+BaseDirLib=$(BaseDir)
+!ELSE 
 BaseDirLib=$(BASEDIR351)
+!ENDIF 
 DDKINC=/I $(BaseDir)\inc
+!ELSEIF "$(BaseDir)" == "$(BASEDIRXP)"
+#makefile for XP
+BaseDirLib=$(BaseDir)
+DDKINC=/I $(BaseDir)\inc\ddk /I $(BaseDir)\inc
+USE_XPDDK=1
+!ELSE 
+!ERROR BASEDIR is not equal to BASEDIRNT4, BASEDIR2K or BASEDIRXP
+!ENDIF 
+
+!MESSAGE Using DDK at $(BaseDir)
 
 CPP=cl.exe
 MTL=midl.exe
@@ -43,13 +63,21 @@ LINK32=link.exe
 
 OUTDIR=.\Release
 INTDIR=.\Release
+!IF "$(USE_XPDDK)" == ""
 LibPath=$(BaseDirLib)\Lib\i386\Free\
+!ELSE 
+LibPath=$(BaseDirLib)\Lib\i386\
+!ENDIF 
 
 !ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
 
 OUTDIR=.\Debug
 INTDIR=.\Debug
+!IF "$(USE_XPDDK)" == ""
 LibPath=$(BaseDirLib)\Lib\i386\Checked\
+!ELSE 
+LibPath=$(BaseDirLib)\Lib\i386\
+!ENDIF 
 
 !ENDIF 
 
@@ -90,7 +118,8 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 	cd ..\driver
 	copy ..\build_inf\Release\build_inf.exe .\build_inf.exe
 	copy ..\build_inf\Release\build_inf.exe .\Dist\build_inf.exe
-!ENDIF 
+	.\build_inf.exe --ver_h > uniata_ver.h
+!ENDIF
 
 
 "atactl.exe" : "uata_ctl.h"
@@ -281,8 +310,16 @@ SRC=idedma
     del "uniata_ver.h_.lk"
 
 "uniata_ver.h" : "uniata_ver.h_"
+!IF "$(VER)" != ""
     copy "uniata_ver.h_" "uniata_ver.h"
     srchrep.exe -src "**VER**" -dest "$(VER)" "uniata_ver.h"
+    cd ..\build_inf
+    nmake /A CFG="build_inf - Win32 Release"
+    cd ..\driver
+    copy ..\build_inf\Release\build_inf.exe .\build_inf.exe
+    copy ..\build_inf\Release\build_inf.exe .\Dist\build_inf.exe
+    .\build_inf.exe --ver_h > uniata_ver.h
+!ENDIF 
 
 "$(INTDIR)\$(SRC).res" : "$(SRC).rc" "$(INTDIR)" "uniata_ver.h"
     -@erase ".\$(SRC).res"

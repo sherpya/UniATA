@@ -189,7 +189,7 @@ UniataSataEvent(
         break;
     case UNIATA_SATA_EVENT_DETACH:
         KdPrint2((PRINT_PREFIX "  DISCONNECTED\n"));
-        deviceExtension->lun[ldev].DeviceFlags = 0;
+        UniataForgetDevice(&(deviceExtension->lun[ldev]));
         return TRUE;
         break;
     }

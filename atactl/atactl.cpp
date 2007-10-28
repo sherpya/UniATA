@@ -30,27 +30,39 @@ _MOV_DW_SWP(
 #define MOV_DW_SWP(a,b) _MOV_DW_SWP(&(a),&(b))
 
 int g_extended = 0;
+int g_adapter_info = 0;
 char* g_bb_list = NULL;
+int gRadix = 16;
 
 void print_help() {
     printf("Usage:\n"
            "  atactl -<switches> c|s<controller id>:b<bus id>:d<device id>[:l<lun>]\n"
            "Switches:\n"
-           "  l         (L)ist devices on SCSI bus(es)\n"
+           "  l         (L)ist devices on SCSI and ATA controllers bus(es)\n"
+           "              Note: ATA Pri/Sec controller are usually represented\n"
+           "              as Scsi0/Scsi1 under NT-family OSes\n"
            "  x         show e(X)tended info\n"
+           "  c         show (C)ontroller info\n"
            "  s         (S)can for new devices on ATA/SATA bus(es) (experimental)\n"
-           "  h         (H)ide device on ATA/SATA bus (experimental)\n"
+           "  S         (S)can for new devices on ATA/SATA bus(es) (experimental)\n"
+           "              device, hidden with 'H' can be redetected\n"
+           "  h         (H)ide device on ATA/SATA bus for removal (experimental)\n"
+           "              device can be redetected\n"
+           "  H         (H)ide device on ATA/SATA bus (experimental)\n"
+           "              device can not be redetected until 'h' or 'S' is issued\n"
            "  m [MODE]  set i/o (M)ode for device or revert to default\n"
-           "            available MODEs are PIO, PIO0-PIO5, DMA, WDMA0-WDMA2,\n"
+           "              available MODEs are PIO, PIO0-PIO5, DMA, WDMA0-WDMA2,\n"
            "              UDMA33/44/66/100/133, UDMA0-UDMA5\n"
            "  d [XXX]   lock ATA/SATA bus for device removal for XXX seconds or\n"
-           "            for %d seconds if no lock timeout specified.\n"
-           "            can be used with -h, -m or standalone.\n"
+           "              for %d seconds if no lock timeout specified.\n"
+           "              can be used with -h, -m or standalone.\n"
            "  r         (R)eset device\n"
            "  ba        (A)ssign (B)ad-block list\n"
            "  bl        get assigned (B)ad-block (L)ist\n"
            "  br        (R)eset assigned (B)ad-block list\n"
            "  f         specify (F)ile for bad-block list\n"
+           "  n XXX     block (n)ubmering radix. XXX can be hex or dec\n"
+           "------\n"
            "Examples:\n"
            "  atactl -l\n"
            "    will list all scsi buses and all connected devices\n"
@@ -60,6 +72,33 @@ void print_help() {
            "    will hide Master (d0:l0) device on secondary (c1:b0) IDE channel\n"
            "    and lock i/o on this channel for 30 seconds to ensure safity\n"
            "    of removal process"
+           "------\n"
+           "Device address format:\n"
+           "\n"
+           "s<controller id> number of controller in system. Is assigned during hardware\n"
+           "                   detection. Usually s0/s1 are ATA Pri/Sec.\n"
+           "                   Note, due do NT internal desing ATA controllers are represented\n"
+           "                   as SCSI controllers.\n"
+           "b<bus id>        For ATA controllers it is channel number.\n"
+           "                   Note, usually onboard controller is represented as 2 legacy\n"
+           "                   ISA-compatible single-channel controllers (Scsi9/Scsi1). Additional\n"
+           "                   ATA, ATA-RAID and some specific onboard controllers are represented\n"
+           "                   as multichannel controllers.\n"
+           "d<device id>     For ATA controllers d0 is Master, d1 is Slave.\n"
+           "l<lun>           Not used in ATA controller drivers, alway 0\n"
+           "------\n"
+           "Bad-block list format:\n"
+           "\n"
+           "# Comment\n"
+           "; Still one comment\n"
+           "hex: switch to hexadecimal mode\n"
+           "<Bad Area 1 Start LBA, e.g. FD50> <Block count 1, e.g. 60>\n"
+           "<Bad Area 2 Start LBA> <Block count 2>\n"
+           "...\n"
+           "dec: switch to decimal mode\n"
+           "<Bad Area N Start LBA, e.g. 16384> <Block count N, e.g. 48>\n"
+           "...\n"
+           "------\n"
            "",
            DEFAULT_REMOVAL_LOCK_TIMEOUT
            );
@@ -356,10 +395,10 @@ ata_mode_to_str(
 } // end ata_mode_to_str()
 
 #define check_atamode_str(str, mode) \
-   (!_stricmp(str, "UDMA##mode") || \
-    !_stricmp(str, "UDMA-##mode") || \
-    !_stricmp(str, "ATA-##mode") || \
-    !_stricmp(str, "ATA##mode"))
+   (!_stricmp(str, "UDMA" #mode) || \
+    !_stricmp(str, "UDMA-" #mode) || \
+    !_stricmp(str, "ATA-" #mode) || \
+    !_stricmp(str, "ATA#" #mode))
 
 int
 ata_str_to_mode(
@@ -547,10 +586,14 @@ ata_check_unit(
     int io_mode = -1;
     char SerNum[128];
     char DevSerial[128];
+    char lun_str[10];
     HKEY hKey2;
 
     if(dev_id != -1) {
         dev_id &= 0x00ffffff;
+    }
+    if(dev_id == 0x007f7f7f) {
+        return TRUE;
     }
 
     pout = (PSENDCMDOUTPARAMS)buff;
@@ -591,24 +634,35 @@ ata_check_unit(
             
             if(l_dev_id == dev_id || dev_id == -1) {
 
+                if(!memcmp(&inquiryData->InquiryData[8], UNIATA_COMM_PORT_VENDOR_STR, 24)) {
+                    // skip communication port
+                    goto next_dev;
+                }
+
                 found = TRUE;
 
+                if(inquiryData->Lun) {
+                    sprintf(lun_str, ":l%d", inquiryData->Lun);
+                } else {
+                    sprintf(lun_str, "  ", inquiryData->Lun);
+                }
                 if(!g_extended) {
-                    printf("  b%d:d%d:l%d    %24.24s %4.4s ",
+                    printf("  b%d:d%d%s    %24.24s %4.4s ",
                         i,
                         inquiryData->TargetId,
-                        inquiryData->Lun,
+                        lun_str,
                         /*(inquiryData->DeviceClaimed) ? "Y" : "N",*/
                         (g_extended ? (PUCHAR)"" : &inquiryData->InquiryData[8]),
                         (g_extended ? (PUCHAR)"" : &inquiryData->InquiryData[8+24])
                         );
                 } else {
-                    printf("  b%d:d%d:l%d ",
+                    printf("  b%d:d%d%s ",
                         i,
                         inquiryData->TargetId,
-                        inquiryData->Lun
+                        lun_str
                         );
                 }
+
 
                 /*
                 for (j = 0; j < 8; j++) {
@@ -626,7 +680,10 @@ ata_check_unit(
                                         &IoMode, sizeof(IoMode),
                                         &returned);
                 if(status) {
-                    io_mode = max(IoMode.CurrentMode, IoMode.MaxMode);
+                    //io_mode = min(IoMode.CurrentMode, IoMode.MaxMode);
+                    io_mode = min(max(IoMode.CurrentMode,IoMode.OrigMode),IoMode.MaxMode);
+                } else {
+                    io_mode = -1;
                 }
     
                 memset(&pin, 0, sizeof(pin));
@@ -727,6 +784,7 @@ ata_check_unit(
                 }
                 memcpy(&g_ident, ident, sizeof(IDENTIFY_DATA));
             }
+next_dev:
             if (inquiryData->NextInquiryDataOffset == 0) {
                 break;
             }
@@ -755,6 +813,7 @@ ata_adapter_info(
     ULONG status;
     ULONG returned;
     SCSI_ADDRESS addr;
+    PCI_SLOT_NUMBER       slotData;
 
     sprintf(dev_name, "\\\\.\\Scsi%d:", bus_id);
     h = ata_open_dev(dev_name);
@@ -767,11 +826,27 @@ ata_adapter_info(
     status = ata_send_ioctl(h, &addr, "-UNIATA-",
                             IOCTL_SCSI_MINIPORT_UNIATA_ADAPTER_INFO,
                             &AdapterInfo, sizeof(AdapterInfo),
-                            NULL, 0,
+                            &AdapterInfo, sizeof(AdapterInfo),
                             &returned);
+    printf("Scsi%d: %s\n", bus_id, status ? "[UniATA]" : "");
     if(print_info) {
         if(!status) {
             printf("Can't get adapter info\n");
+        } else {
+            if(AdapterInfo.AdapterInterfaceType == PCIBus) {
+                slotData.u.AsULONG = AdapterInfo.slotNumber;
+                printf("  PCI Bus/Dev/Func:   %d/%d/%d%s\n",
+                    AdapterInfo.SystemIoBusNumber, slotData.u.bits.DeviceNumber, slotData.u.bits.FunctionNumber,
+                    AdapterInfo.AdapterInterfaceType == AdapterInfo.OrigAdapterInterfaceType ? "" : " (ISA-Bridged)");
+                printf("  VendorId/DevId/Rev: %#04x/%#04x/%#02x\n", AdapterInfo.DevID >> 16, AdapterInfo.DevID & 0xffff, AdapterInfo.RevID);
+                if(AdapterInfo.DeviceName[0]) {
+                    printf("  Name:               %s\n", AdapterInfo.DeviceName);
+                }
+            } else
+            if(AdapterInfo.AdapterInterfaceType == Isa) {
+                printf("  ISA Bus\n");
+            }
+            printf("  IRQ: %d\n", AdapterInfo.BusInterruptLevel);
         }
     }
     ata_close_dev(h);
@@ -815,13 +890,12 @@ ata_list(
         }
         return TRUE;
     }
-    uniata_driven = ata_adapter_info(bus_id, FALSE);
+    uniata_driven = ata_adapter_info(bus_id, g_adapter_info);
     sprintf(dev_name, "\\\\.\\Scsi%d:", bus_id);
     h = ata_open_dev(dev_name);
     if(!h)
         return FALSE;
     if(dev_id == -1) {
-        printf("Scsi%d: %s\n", bus_id, uniata_driven ? "[UniATA]" : "");
         ata_check_controller(h, &g_capabilities);
         ata_check_unit(h, -1);
         ata_close_dev(h);
@@ -870,6 +944,9 @@ ata_mode(
                             &returned);
     if(!status) {
         printf("Can't apply specified transfer mode\n");
+    } else {
+        ata_mode_to_str(dev_name, mode);
+        printf("Transfer rate switched to %s\n", dev_name);
     }
     ata_close_dev(h);
     return status ? TRUE : FALSE;
@@ -899,12 +976,24 @@ ata_reset(
     addr.TargetId = (UCHAR)(dev_id >> 8);
     addr.Lun      = (UCHAR)(dev_id);
 
-    printf("Resetting device...\n");
+    if(addr.TargetId == 0x7f && addr.Lun == 0x7f) {
+        addr.TargetId = (UCHAR)0xff;
+        addr.Lun      = 0;
+        printf("Resetting channel...\n");
+    } else {
+        printf("Resetting device...\n");
+    }
+
     status = ata_send_ioctl(h, &addr, "-UNIATA-",
                             IOCTL_SCSI_MINIPORT_UNIATA_RESET_DEVICE,
                             NULL, 0,
                             NULL, 0,
                             &returned);
+    if(!status) {
+        printf("Reset failed\n");
+    } else {
+        printf("Channel reset done\n");
+    }
     ata_close_dev(h);
     return TRUE;
 } // end ata_reset()
@@ -913,7 +1002,8 @@ BOOLEAN
 ata_hide(
     int bus_id,
     int dev_id,
-    int lock
+    int lock,
+    int persistent_hide
     )
 {
     char dev_name[64];
@@ -939,6 +1029,7 @@ ata_hide(
     addr.Lun      = (UCHAR)(dev_id);
 
     to.WaitForPhysicalLink = lock;
+    to.Flags = persistent_hide ? UNIATA_REMOVE_FLAGS_HIDE : 0;
 
     printf("Deleting device.\n");
     if(lock) {
@@ -957,7 +1048,8 @@ BOOLEAN
 ata_scan(
     int bus_id,
     int dev_id,
-    int lock
+    int lock,
+    int unhide
     )
 {
     char dev_name[64];
@@ -978,32 +1070,34 @@ ata_scan(
     if(!h)
         return FALSE;
 
-/*
-    addr.PortNumber = bus_id;
-    addr.PathId   = (UCHAR)(dev_id >> 16);
-    addr.TargetId = 0;
-    addr.Lun      = 0;
+    if((UCHAR)(dev_id) != 0xff &&
+       (UCHAR)(dev_id >> 8) != 0xff) {
 
-    to.WaitForPhysicalLink = lock;
+        addr.PortNumber = bus_id;
+        addr.PathId   = (UCHAR)(dev_id >> 16);
+        addr.TargetId = 0;
+        addr.Lun      = 0;
 
-    printf("Scaning bus for new devices.\n");
-    if(lock) {
-        printf("You have %d seconds to connect device.\n", lock);
+        to.WaitForPhysicalLink = lock;
+        to.Flags = unhide ? UNIATA_ADD_FLAGS_UNHIDE : 0;
+
+        printf("Scaning bus for new devices.\n");
+        if(lock) {
+            printf("You have %d seconds to connect device.\n", lock);
+        }
+        status = ata_send_ioctl(h, &addr, "-UNIATA-",
+                                IOCTL_SCSI_MINIPORT_UNIATA_FIND_DEVICES,
+                                &to, sizeof(to),
+                                NULL, 0,
+                                &returned);
+    } else {
+        status = DeviceIoControl(h,
+                                 IOCTL_SCSI_RESCAN_BUS,
+                                 NULL, 0,
+                                 NULL, 0,
+                                 &returned,
+                                 FALSE);
     }
-    status = ata_send_ioctl(h, &addr, "-UNIATA-",
-                            IOCTL_SCSI_MINIPORT_UNIATA_FIND_DEVICES,
-                            &to, sizeof(to),
-                            NULL, 0,
-                            &returned);
-*/
-
-    status = DeviceIoControl(h,
-                             IOCTL_SCSI_RESCAN_BUS,
-                             NULL, 0,
-                             NULL, 0,
-                             &returned,
-                             FALSE);
-
     ata_close_dev(h);
     return TRUE;
 } // end ata_scan()
@@ -1071,7 +1165,7 @@ ata_bblk(
     LONGLONG tmp_bb_lba;
     LONGLONG tmp_bb_len;
     char BB_Msg[256];
-    int radix=16;
+    int radix=gRadix;
     int i, j;
     ULONG b;
 
@@ -1148,37 +1242,97 @@ ata_bblk(
         }
     } else
     if(list_bb == 0) {
+        LONGLONG* pData = ((LONGLONG*)bblist);
+        char a;
+        int k, k0;
         Length=0;
         i=0;
         j=0;
+        k=0;
         while(_fgets(BB_Msg, sizeof(BB_Msg), hf)) {
             j++;
             BB_Msg[sizeof(BB_Msg)-1] = 0;
-            if(BB_Msg[0] == ';' || BB_Msg[0] == '#') {
+            k=0;
+            while(a = BB_Msg[k]) {
+                if(a == ' ' || a == '\t' || a == '\r') {
+                    k++;
+                    continue;
+                }
+                break;
+            }
+            if(!a || a == ';' || a == '#') {
                 continue;
             }
-            if(!strncmp(BB_Msg, "hex:", 4)) {
+            if(!strncmp(BB_Msg+k, "hex:", 4)) {
                 radix=16;
                 continue;
             }
-            if(!strncmp(BB_Msg, "dec:", 4)) {
+            if(!strncmp(BB_Msg+k, "dec:", 4)) {
                 radix=10;
                 continue;
             }
-            if(radix == 10) {
-                b = sscanf(BB_Msg, "%I64d\t%I64d", &tmp_bb_lba, &tmp_bb_len);
-            } else {
-                b = sscanf(BB_Msg, "%I64x\t%I64x", &tmp_bb_lba, &tmp_bb_len);
+            k0 = k;
+            while(a = BB_Msg[k]) {
+                if(a == ' ' || a == '\t' || a == '\r') {
+                    BB_Msg[k] = '\t';
+                }
+                k++;
+                if(a == ';' || a == '#') {
+                    break;
+                }
+                if(a >= '0' && a <= '9') {
+                    continue;
+                }
+                if(radix == 16 && ((a >= 'A' && a <= 'F') || (a >= 'a' && a <= 'f'))) {
+                    continue;
+                }
+                printf("Bad input BB list file:\n  %s\n", g_bb_list);
+                printf("Illegal character '%1.1s' in line %d:\n%s\n", BB_Msg+k-1, j, BB_Msg);
+                k0=-1;
+                break;
             }
+            if(k0 == -1) {
+                continue;
+            }
+            k = k0;
+            if(radix == 10) {
+                b = sscanf(BB_Msg+k, "%I64d\t%I64d", &tmp_bb_lba, &tmp_bb_len);
+            } else {
+                b = sscanf(BB_Msg+k, "%I64x\t%I64x", &tmp_bb_lba, &tmp_bb_len);
+            }
+            if(b == 1) {
+                tmp_bb_len = 1;
+            } else
             if(b != 2) {
                 printf("Bad input BB list file:\n  %s\n", g_bb_list);
                 printf("Can't parse line %d:\n%s\n", j, BB_Msg);
                 continue;
+            } 
+            if(!tmp_bb_len) {
+                printf("Bad input BB list file:\n  %s\n", g_bb_list);
+                printf("BlockCount evaluated to 0 in line %d:\n%s\n", j, BB_Msg);
+                continue;
             }
-            ((LONGLONG*)bblist)[i*2+0]=tmp_bb_lba;
-            ((LONGLONG*)bblist)[i*2+1]=tmp_bb_lba+tmp_bb_len;
-            i++;
-            Length += sizeof(LONGLONG)*2;
+            if(tmp_bb_lba < 0) {
+                printf("Bad input BB list file:\n  %s\n", g_bb_list);
+                printf("Start LBA evaluated to negative in line %d:\n%s\n", j, BB_Msg);
+                continue;
+            }
+            if(tmp_bb_len < 0) {
+                printf("Bad input BB list file:\n  %s\n", g_bb_list);
+                printf("BlockCount evaluated to negative in line %d:\n%s\n", j, BB_Msg);
+                continue;
+            }
+
+            if(i &&
+                (pData[(i-1)*2+1] == tmp_bb_lba)) {
+                pData[(i-1)*2+1]+=tmp_bb_len;
+            } else {
+                pData[i*2+0]=tmp_bb_lba;
+                pData[i*2+1]=tmp_bb_lba+tmp_bb_len;
+                i++;
+                Length += sizeof(LONGLONG)*2;
+            }
         }
 
         if(RegSetValueEx(hKey2, DevSerial, NULL, REG_BINARY, (const UCHAR*)bblist, Length) != ERROR_SUCCESS) {
@@ -1295,6 +1449,7 @@ main (
     int b_dev=-1, d_dev=-1, l_dev=0;
     int mode=-1;
     int list_bb=0;
+    int persistent_hide=0;
 
     printf("Console ATA control utility for Windows NT3.51/NT4/2000/XP/2003\n"
            "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2007\n"
@@ -1306,6 +1461,7 @@ main (
         if((a = argv[i][0]) != '-') {
             for(j=0; a = argv[i][j]; j++) {
                 switch(a) {
+                case 'a' :
                 case 's' :
                 case 'c' :
                     j++;
@@ -1343,6 +1499,11 @@ main (
             case 'x' :
                 g_extended = 1;
                 break;
+            case 'a' :
+                g_adapter_info = 1;
+                break;
+            case 'S' :
+                persistent_hide = 1;
             case 's' :
                 if(cmd || lock>0) {
                     print_help();
@@ -1350,6 +1511,8 @@ main (
                 cmd = CMD_ATA_FIND;
                 d_dev = 0;
                 break;
+            case 'H' :
+                persistent_hide = 1;
             case 'h' :
                 if(cmd) {
                     print_help();
@@ -1424,12 +1587,43 @@ main (
                 }
                 j = strlen(argv[i])-1;
                 break;
+            case 'n' :
+                if(cmd != CMD_ATA_BBLK) {
+                    print_help();
+                }
+                i++;
+                if(!argv[i]) {
+                    print_help();
+                }
+                if(!strcmp(argv[i], "hex") ||
+                   !strcmp(argv[i], "16")) {
+                    gRadix = 16;
+                } else
+                if(!strcmp(argv[i], "dec") ||
+                   !strcmp(argv[i], "10")) {
+                    gRadix = 10;
+                } else {
+                    print_help();
+                }
+                j = strlen(argv[i])-1;
+                break;
             case '?' :
             default:
                 print_help();
             }
             j++;
         }
+    }
+
+    if(g_adapter_info && !cmd) {
+        cmd = CMD_ATA_LIST;
+        b_dev = 127;
+        d_dev = 127;
+        l_dev = 127;
+    } else
+    if(d_dev == -1 && b_dev != -1) {
+        d_dev = 127;
+        l_dev = 127;
     }
 
     if(d_dev != -1 && b_dev != -1) {
@@ -1445,15 +1639,16 @@ main (
         ata_reset(bus_id, dev_id);
     } else
     if(cmd == CMD_ATA_FIND) {
-        ata_scan(bus_id, dev_id, lock);
+        ata_scan(bus_id, dev_id, lock, persistent_hide);
     } else
     if(cmd == CMD_ATA_HIDE) {
-        ata_hide(bus_id, dev_id, lock);
+        ata_hide(bus_id, dev_id, lock, persistent_hide);
     } else
     if(cmd == CMD_ATA_BBLK) {
         ata_bblk(bus_id, dev_id, list_bb);
     } else {
         print_help();
     }
+    exit(0);
 }
 

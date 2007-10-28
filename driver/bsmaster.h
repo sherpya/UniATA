@@ -702,18 +702,19 @@ typedef struct _HW_CHANNEL {
     ULONG       NextDpcChan;
     PHW_TIMER   HwScsiTimer;
     LONGLONG    DpcTime;
-/*
+#if 0
     PHW_TIMER   HwScsiTimer1;
     PHW_TIMER   HwScsiTimer2;
     LONGLONG    DpcTime1;
-/*    PHW_TIMER           CurDpc;
-    LARGE_INTEGER       ActivationTime;*/
+//    PHW_TIMER           CurDpc;
+//    LARGE_INTEGER       ActivationTime;
 
-/*    KDPC                Dpc;
-    KTIMER              Timer;
-    PHW_TIMER           HwScsiTimer;*/
+//    KDPC                Dpc;
+//    KTIMER              Timer;
+//    PHW_TIMER           HwScsiTimer;
 //    KSPIN_LOCK          QueueSpinLock;
 //    KIRQL               QueueOldIrql;
+#endif
     struct _HW_DEVICE_EXTENSION* DeviceExtension;
     struct _HW_LU_EXTENSION* lun[2];
 
@@ -799,8 +800,9 @@ typedef struct _HW_LU_EXTENSION {
     ULONG          opt_PreferedTransferMode;
     BOOLEAN        opt_ReadCacheEnable;
     BOOLEAN        opt_WriteCacheEnable;
+    BOOLEAN        opt_ReadOnly;
     // padding
-    BOOLEAN        opt_reserved[2];
+    BOOLEAN        opt_reserved[1];
 
     struct _SBadBlockListItem* bbListDescr;
     struct _SBadBlockRange* arrBadBlocks;
@@ -890,6 +892,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     ULONG MaxTransferMode;  // max transfer mode supported by controller
     ULONG HwFlags;
     INTERFACE_TYPE OrigAdapterInterfaceType;
+    INTERFACE_TYPE AdapterInterfaceType;
     ULONG MaximumDmaTransferLength;
     ULONG AlignmentMask;
 
@@ -907,6 +910,8 @@ typedef struct _HW_DEVICE_EXTENSION {
     BOOLEAN        opt_AtapiDmaRawRead;      // default TRUE
     BOOLEAN        opt_AtapiDmaReadWrite;    // default TRUE  
 
+    PCHAR          FullDevName;
+
 } HW_DEVICE_EXTENSION, *PHW_DEVICE_EXTENSION;
 
 typedef struct _ISR2_DEVICE_EXTENSION {
@@ -920,6 +925,8 @@ typedef struct _ISR2_DEVICE_EXTENSION {
 extern UCHAR         pciBuffer[256];
 extern PBUSMASTER_CONTROLLER_INFORMATION BMList;
 extern ULONG         BMListLen;
+extern ULONG         IsaCount;
+extern ULONG         MCACount;
 
 extern const CHAR retry_Wdma[MAX_RETRIES+1];
 extern const CHAR retry_Udma[MAX_RETRIES+1];
@@ -931,7 +938,37 @@ UniataEnumBusMasterController(
     );
 
 extern ULONG DDKAPI
+UniataFindCompatBusMasterController1(
+    IN PVOID HwDeviceExtension,
+    IN PVOID Context,
+    IN PVOID BusInformation,
+    IN PCHAR ArgumentString,
+    IN OUT PPORT_CONFIGURATION_INFORMATION ConfigInfo,
+    OUT PBOOLEAN Again
+    );
+
+extern ULONG DDKAPI
+UniataFindCompatBusMasterController2(
+    IN PVOID HwDeviceExtension,
+    IN PVOID Context,
+    IN PVOID BusInformation,
+    IN PCHAR ArgumentString,
+    IN OUT PPORT_CONFIGURATION_INFORMATION ConfigInfo,
+    OUT PBOOLEAN Again
+    );
+
+extern ULONG DDKAPI
 UniataFindBusMasterController(
+    IN PVOID HwDeviceExtension,
+    IN PVOID Context,
+    IN PVOID BusInformation,
+    IN PCHAR ArgumentString,
+    IN OUT PPORT_CONFIGURATION_INFORMATION ConfigInfo,
+    OUT PBOOLEAN Again
+    );
+
+extern ULONG DDKAPI
+UniataFindFakeBusMasterController(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
     IN PVOID BusInformation,
@@ -960,6 +997,9 @@ ScsiPortGetBusDataByOffset(
     IN ULONG  Offset,
     IN ULONG  Length
     );
+
+#define PCIBUSNUM_NOT_SPECIFIED    (0xffffffffL)
+#define PCISLOTNUM_NOT_SPECIFIED   (0xffffffffL)
 
 extern ULONG
 AtapiFindListedDev(
@@ -1019,8 +1059,6 @@ AtapiDmaStart(
     IN ULONG lChannel,          // logical channel,
     IN PSCSI_REQUEST_BLOCK Srb
     );
-
-//#define DEVNUM_NOT_SPECIFIED    (0xffffffffL)
 
 extern UCHAR
 AtapiDmaDone(
@@ -1335,11 +1373,18 @@ AtapiReadChipConfig(
     IN ULONG channel // physical channel
     );
 
+VOID
+UniataForgetDevice(
+    PHW_LU_EXTENSION   LunExt
+    );
+
 extern ULONG SkipRaids;
 extern ULONG ForceSimplex;
 
 extern BOOLEAN InDriverEntry;
 
 extern BOOLEAN g_opt_Verbose;
+
+extern BOOLEAN WinVer_WDM_Model;
 
 #endif //__IDE_BUSMASTER_H__
