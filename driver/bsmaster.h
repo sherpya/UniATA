@@ -77,8 +77,6 @@ Revision History:
 #define PCI_ADDRESS_IOMASK              0xfffffff0
 
 #define ATA_BM_OFFSET1			0x08
-#define ATA_DMA_ENTRIES			256     /* PAGESIZE/2/sizeof(BM_DMA_ENTRY)*/
-#define ATA_DMA_EOT			0x80000000
 #define ATA_IOSIZE			0x08
 #define ATA_ALTOFFSET			0x206	/* alternate registers offset */
 #define ATA_PCCARD_ALTOFFSET		0x0e	/* do for PCCARD devices */
@@ -86,6 +84,9 @@ Revision History:
 #define ATA_BMIOSIZE			0x20
 #define ATA_PC98_BANKIOSIZE             0x01
 #define ATA_MAX_LBA28                   DEF_U64(0x0fffffff)
+
+#define ATA_DMA_ENTRIES			256     /* PAGESIZE/2/sizeof(BM_DMA_ENTRY)*/
+#define ATA_DMA_EOT			0x80000000
 
 #define DEV_BSIZE                       512
 
@@ -348,6 +349,34 @@ typedef struct _IDE_SATA_REGISTERS {
 
 #define IDX_MAX_REG                     (IDX_SATA_IO+IDX_SATA_IO_SZ)
 
+typedef union _AHCI_IS_REG {
+    struct {
+        ULONG DHRS:1;// Device to Host Register FIS Interrupt
+        ULONG PSS:1; // PIO Setup FIS Interrupt
+        ULONG DSS:1; // DMA Setup FIS Interrupt
+        ULONG SDBS:1;// Set Device Bits Interrupt
+        ULONG UFS:1; // Unknown FIS Interrupt
+        ULONG DPS:1; // Descriptor Processed
+        ULONG PCS:1; // Port Connect Change Status
+        ULONG DMPS:1;// Device Mechanical Presence Status
+
+        ULONG Reserved_8_21:14;
+        ULONG PRCS:1;// PhyRdy Change Status
+        ULONG IPMS:1;// Incorrect Port Multiplier Status
+
+        ULONG OFS:1; // Overflow Status
+        ULONG Reserved_25:1;
+        ULONG INFS:1;// Interface Non-fatal Error Status
+        ULONG IFS:1; // Interface Fatal Error Status
+        ULONG HBDS:1;// Host Bus Data Error Status
+        ULONG HBFS:1;// Host Bus Fatal Error Status
+        ULONG TFES:1;// Task File Error Status
+        ULONG CPDS:1;// Cold Port Detect Status
+    };
+    ULONG Reg;
+} AHCI_IS_REG, *PAHCI_IS_REG;
+
+
 typedef struct _IDE_AHCI_PORT_REGISTERS {
     union {
         struct {
@@ -366,31 +395,9 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
     };
 
     union {
-        ULONG Reg;            // interrupt status
-        struct {
-            ULONG DHRS:1;// Device to Host Register FIS Interrupt
-            ULONG PSS:1; // PIO Setup FIS Interrupt
-            ULONG DSS:1; // DMA Setup FIS Interrupt
-            ULONG SDBS:1;// Set Device Bits Interrupt
-            ULONG UFS:1; // Unknown FIS Interrupt
-            ULONG DPS:1; // Descriptor Processed
-            ULONG PCS:1; // Port Connect Change Status
-            ULONG DMPS:1;// Device Mechanical Presence Status
-
-            ULONG Reserved_8_21:14;
-            ULONG PRCS:1;// PhyRdy Change Status
-            ULONG IPMS:1;// Incorrect Port Multiplier Status
-
-            ULONG OFS:1; // Overflow Status
-            ULONG Reserved_25:1;
-            ULONG INFS:1;// Interface Non-fatal Error Status
-            ULONG IFS:1; // Interface Fatal Error Status
-            ULONG HBDS:1;// Host Bus Data Error Status
-            ULONG HBFS:1;// Host Bus Fatal Error Status
-            ULONG TFES:1;// Task File Error Status
-            ULONG CPDS:1;// Cold Port Detect Status
-        };
-    } IS;
+        ULONG       IS_Reg;            // interrupt status
+        AHCI_IS_REG IS;
+    };
 
     union {
         ULONG Reg;            // interrupt enable
@@ -513,13 +520,19 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
 
 } IDE_AHCI_PORT_REGISTERS, *PIDE_AHCI_PORT_REGISTERS;
 
+#define IDX_AHCI_P_IS                     (FIELD_OFFSET(IDE_AHCI_PORT_REGISTERS, IS))
+#define IDX_AHCI_P_CI                     (FIELD_OFFSET(IDE_AHCI_PORT_REGISTERS, CI))
+
 typedef struct _IDE_AHCI_PRD_ENTRY {
     union {
         ULONG base;
         ULONGLONG base64;
         struct {
             ULONG DBA;
-            ULONG DBAU;
+            union {
+                ULONG DBAU;
+                ULONG baseu;
+            };
         };
     };
     ULONG Reserved1;
@@ -529,6 +542,22 @@ typedef struct _IDE_AHCI_PRD_ENTRY {
     ULONG I:1;
 
 } IDE_AHCI_PRD_ENTRY, *PIDE_AHCI_PRD_ENTRY;
+
+#define ATA_AHCI_DMA_ENTRIES		(PAGE_SIZE/2/sizeof(IDE_AHCI_PRD_ENTRY))   /* 128 */
+
+typedef struct _IDE_AHCI_CMD {
+    UCHAR              cfis[64];
+    UCHAR              acmd[32];
+    UCHAR              Reserved[32];
+    IDE_AHCI_PRD_ENTRY prd_tab[ATA_AHCI_DMA_ENTRIES];
+} IDE_AHCI_CMD, *PIDE_AHCI_CMD;
+
+typedef struct _IDE_AHCI_CMD_LIST {
+    USHORT             cmd_flags;
+    USHORT             prd_length;     /* PRD entries */
+    ULONG              bytecount;
+    ULONGLONG          cmd_table_phys; /* 128byte aligned */
+} IDE_AHCI_CMD_LIST, *PIDE_AHCI_CMD_LIST;
 
 #define IsBusMaster(pciData) \
     ( ((pciData)->Command & (PCI_ENABLE_BUS_MASTER/* | PCI_ENABLE_IO_SPACE*/)) == \
@@ -545,31 +574,51 @@ typedef struct _IDE_AHCI_PRD_ENTRY {
 //#define INT_Q_SIZE 32
 #define MIN_REQ_TTL 4
 
-struct _ATA_REQ;
+union _ATA_REQ;
 
-typedef struct _ATA_REQ {
+typedef union _ATA_REQ {
 //    ULONG               reqId;          // serial
-    struct _ATA_REQ*    next_req;
-    struct _ATA_REQ*    prev_req;
+    struct {
 
-    PSCSI_REQUEST_BLOCK Srb;            // Current request on controller.
+        union {
 
-    PUSHORT             DataBuffer;     // Data buffer pointer.
-    ULONG               WordsLeft;      // Data words left.
-    ULONG               TransferLength; // Originally requested transfer length
-    LONGLONG            lba;
-    ULONG               bcount;
+            struct {
+                union _ATA_REQ*     next_req;
+                union _ATA_REQ*     prev_req;
 
-    UCHAR               retry;
-    UCHAR               ttl;
-//    UCHAR               tag;
-    UCHAR               Flags;
-    UCHAR               ReqState;
+                PSCSI_REQUEST_BLOCK Srb;            // Current request on controller.
 
-    PSCSI_REQUEST_BLOCK OriginalSrb;    // Mechanism Status Srb Data
+                PUSHORT             DataBuffer;     // Data buffer pointer.
+                ULONG               WordsLeft;      // Data words left.
+                ULONG               TransferLength; // Originally requested transfer length
+                LONGLONG            lba;
+                ULONG               bcount;
 
-    ULONG               dma_base;
-    BM_DMA_ENTRY        dma_tab[ATA_DMA_ENTRIES];
+                UCHAR               retry;
+                UCHAR               ttl;
+            //    UCHAR               tag;
+                UCHAR               Flags;
+                UCHAR               ReqState;
+
+                PSCSI_REQUEST_BLOCK OriginalSrb;    // Mechanism Status Srb Data
+
+                ULONG               dma_entries;
+                union {
+                    ULONG           dma_base;
+                    ULONGLONG       ahci_base64;    // for AHCI
+                };
+            };
+            UCHAR padding_128b[PAGE_SIZE];
+        };
+        struct {
+            union {
+                BM_DMA_ENTRY    dma_tab[ATA_DMA_ENTRIES];
+                IDE_AHCI_CMD    ahci_cmd;       // for AHCI
+            };
+        };
+    };
+
+    UCHAR padding_4kb[PAGE_SIZE];
 
 } ATA_REQ, *PATA_REQ;
 
@@ -724,7 +773,14 @@ typedef struct _HW_CHANNEL {
     PVOID   DB_IO;
     ULONG   DB_IO_PhAddr;
 
-    PUCHAR              DmaBuffer;
+    PUCHAR  DmaBuffer;
+
+    // 
+    PIDE_AHCI_CMD_LIST       AHCI_CL;
+    ULONGLONG                AHCI_CL_PhAddr;
+    PVOID                    AHCI_FIS;  // is not actually used by UniATA now, but is required by AHCI controller
+    ULONGLONG                AHCI_FIS_PhAddr;
+    // Note: in contrast to FBSD, we keep PRD and CMD item in AtaReq structure 
 
 #ifdef QUEUE_STATISTICS
     LONGLONG QueueStat[MAX_QUEUE_STAT];
@@ -800,7 +856,7 @@ typedef struct _HW_LU_EXTENSION {
     ULONG          opt_PreferedTransferMode;
     BOOLEAN        opt_ReadCacheEnable;
     BOOLEAN        opt_WriteCacheEnable;
-    BOOLEAN        opt_ReadOnly;
+    UCHAR          opt_ReadOnly;
     // padding
     BOOLEAN        opt_reserved[1];
 

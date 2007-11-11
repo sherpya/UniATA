@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=SCSIAdapter
 CatalogFile=uniata.cat
-DriverVer=10/28/2007,0.39.2.1
+DriverVer=%BUILD_TS%,%DRIVER_VER%
 
 ;
 ; Source file information
@@ -16,10 +16,10 @@ DriverVer=10/28/2007,0.39.2.1
 1 = %DiskId1%,,,""
 
 [SourceDisksFiles]
-; Files for disk Initio Installation Disk #1 (SCSIAdapter)
-uniata.sys = 1,,
-atactl.exe = 1,,
-uata_nt4.inf = 1,,
+; Files for disk UniATA Installation Disk #1 (SCSIAdapter)
+..\uniata.sys = 1,,
+..\atactl.exe = 1,,
+uata_2k.inf = 1,,
 
 ;Class Install
 [ClassInstall32.NT]
@@ -45,7 +45,7 @@ ExcludeFromSelect = *
 %ALTERWARE%=UNIATA_HDC
 
 [UNIATA_HDC]
-%DeviceDesc%
+;DEVLIST
 %PCI\CC_0101.DeviceDesc% = uniata_Inst,,PCI\CC_0101                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 %PCI\CC_0104.DeviceDesc% = uniata_Inst,,PCI\CC_0104                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 %PCI\CC_0105.DeviceDesc% = uniata_Inst,,PCI\CC_0105                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
@@ -93,7 +93,7 @@ AddService = UniATA, %SPSVCINST_ASSOCSERVICE%, uniata_Service_Inst
 ServiceType    = %SERVICE_KERNEL_DRIVER%
 StartType      = %SERVICE_BOOT_START%
 ErrorControl   = %SERVICE_ERROR_NORMAL%
-LoadOrderGroup = SCSI miniport
+LoadOrderGroup = System Bus Extender
 ServiceBinary  = %12%\uniata.sys
 
 [uniata_Inst.PosDup]            ;; BUGBUG: What does this do?
@@ -109,8 +109,8 @@ HKR,,TypesSupported,%REG_DWORD%,7
 
 
 [Strings]
-DeviceDesc
-UniATA_Name = "Universal ATA Driver (Win NT4)"
+;DEVNAMELIST
+UniATA_Name = "Universal ATA Driver%EDITION%"
 *PNP0600.PriDeviceDesc  = "Primary IDE Channel (UniATA)"
 *PNP0600.SecDeviceDesc  = "Secondary IDE Channel (UniATA)"
 PCI\CC_0101.DeviceDesc  = "Dual Channel PCI BusMaster IDE Controller (UniATA)"
@@ -123,7 +123,7 @@ ALTERWARE = "AlterWare"
 ;
 ; Non-Localizable Strings
 ;
-HDCClassName            = "IDE ATA/ATAPI controllers"
+HDCClassName            = "%CLASSNAME% controllers"
 SPSVCINST_ASSOCSERVICE = 0x00000002
 SERVICE_KERNEL_DRIVER  = 1
 SERVICE_BOOT_START     = 0

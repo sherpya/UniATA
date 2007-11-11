@@ -723,7 +723,13 @@ ata_check_unit(
                 if(io_mode != -1) {
                     ata_mode_to_str(mode_str, io_mode);
                 }
-                if(!g_extended) {
+                if(!g_extended || !status) {
+                    if(g_extended) {
+                        printf("   %24.24s %4.4s ",
+                            (&inquiryData->InquiryData[8]),
+                            (&inquiryData->InquiryData[8+24])
+                            );
+                    }
                     if(io_mode != -1) {
                         printf(" %.12s ", mode_str);
                     }

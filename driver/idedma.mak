@@ -63,6 +63,7 @@ LINK32=link.exe
 
 OUTDIR=.\Release
 INTDIR=.\Release
+ALTDIR=.\Debug
 !IF "$(USE_XPDDK)" == ""
 LibPath=$(BaseDirLib)\Lib\i386\Free\
 !ELSE 
@@ -73,6 +74,7 @@ LibPath=$(BaseDirLib)\Lib\i386\
 
 OUTDIR=.\Debug
 INTDIR=.\Debug
+ALTDIR=.\Release
 !IF "$(USE_XPDDK)" == ""
 LibPath=$(BaseDirLib)\Lib\i386\Checked\
 !ELSE 
@@ -86,6 +88,8 @@ OutDir=$(OUTDIR)
 DistDir=$(OUTDIR)_Dist
 SymDir=$(OUTDIR)_sym
 # End Custom Macros
+
+!MESSAGE ALTDIR: $(ALTDIR)
 
 TargetPath=$(OUTDIR)\IdeDma.sys
 InputPath=$(OUTDIR)\IdeDma.sys
@@ -144,21 +148,24 @@ PKG : "BusMaster_v$(VER).rar"
 "Debug\idedma.sys" :
 	nmake /A CFG="UniATA - Win32 Debug"
 
-"BusMaster_v$(VER).rar" : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
+"BusMaster_v$(VER).rar" : "$(ALTDIR)\IdeDma.sys" ".\copy.msg"
 	cd ..
-	driver\Dist\fix_dep.bat
+	driver\Dist\tools\fix_dep.bat
 	cd driver
 !IF  "$(CFG)" == "UniATA - Win32 Release"
 	nmake /A CFG="UniATA - Win32 Debug"
-	nmake /A CFG="UniATA - Win32 Release"
+#	nmake /A CFG="UniATA - Win32 Release"
 !ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
 	nmake /A CFG="UniATA - Win32 Release"
-	nmake /A CFG="UniATA - Win32 Debug"
+#	nmake /A CFG="UniATA - Win32 Debug"
 !ENDIF 
-	rar a -s -mdD -m5 BusMaster_v$(VER).rar @..\pkg_files.dist
-	rar a -s -mdD -m5 BusMaster_v$(VER)_Dbg.rar Debug_Dist
-	rar a -s -mdD -m5 BusMaster_v$(VER)_src.rar @..\pkg_files.src
-	rar a -s -mdD -m5 BusMaster_v$(VER)_sym.rar Release_sym
+	copy $(ALTDIR)\IdeDma.sys C:\WINNT\System32\Drivers\IdeDma.sys 
+	copy $(ALTDIR)\IdeDma.sys C:\WINNT\System32\Drivers\IdeDmb.sys 
+
+	rar a    -s -mdD -m5 BusMaster_v$(VER).rar     @..\pkg_files.dist
+	rar a -r -s -mdD -m5 BusMaster_v$(VER)_Dbg.rar Debug_Dist
+	rar a    -s -mdD -m5 BusMaster_v$(VER)_src.rar @..\pkg_files.src
+	rar a    -s -mdD -m5 BusMaster_v$(VER)_sym.rar Release_sym
 
 CLEAN :
 	-@erase $(LINK32_OBJS)
@@ -179,7 +186,7 @@ CLEAN :
 
 !IF  "$(CFG)" == "UniATA - Win32 Release"
 
-CPP_PROJ_BASE=/nologo /Gz /MT /W3 /GX /O2 $(DDKINC) /DNDEBUG /DWIN32 /D_WINDOWS /D_MBCS /D_USRDLL /DIdeDma_EXPORTS /D_X86_ /D_WIN32_WINNT=0x0400 /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
+CPP_PROJ_BASE=/nologo /Gz /MT /W3 /GX /O2 /Oy- $(DDKINC) /DNDEBUG /DWIN32 /D_WINDOWS /D_MBCS /D_USRDLL /DIdeDma_EXPORTS /D_X86_ /D_WIN32_WINNT=0x0400 /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
 CPP_PROJ=$(CPP_PROJ_BASE) /Yu"stdafx.h"
 
 .c{$(INTDIR)}.obj::
@@ -204,7 +211,7 @@ LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\L
 
 !ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
 
-CPP_PROJ_BASE=/nologo /Gz /MTd /W3 /GX /Z7 /Od $(DDKINC) /D_DEBUG /DDBG /DWIN32 /D_WINDOWS /D_MBCS /D_USRDLL /DIdeDma_EXPORTS /D_X86_ /D_WIN32_WINNT=0x0400 /Fp"$(INTDIR)\idedma.pch" /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
+CPP_PROJ_BASE=/nologo /Gz /MTd /W3 /GX /Z7 /Od /Oy- $(DDKINC) /D_DEBUG /DDBG /DWIN32 /D_WINDOWS /D_MBCS /D_USRDLL /DIdeDma_EXPORTS /D_X86_ /D_WIN32_WINNT=0x0400 /Fp"$(INTDIR)\idedma.pch" /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
 CPP_PROJ=$(CPP_PROJ_BASE) /Yu"stdafx.h"
 
 .c{$(INTDIR)}.obj::
@@ -246,17 +253,20 @@ LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\L
 	@echo off 
 	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDma.sys 
 	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDmb.sys 
+!IF "$(NO_BUILD_INF)" == ""
+	del /Q /S $(DistDir)\*
 	copy $(TargetPath) $(DistDir)\uniata.sys
 !IF  "$(CFG)" == "UniATA - Win32 Release"
 	copy $(OutDir)\idedma.pdb  $(SymDir)\uniata.pdb
 !ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
 	copy $(OutDir)\idedma.pdb  $(DistDir)\uniata.pdb
 !ENDIF 
-	cd Dist
+	cd Dist\tools
 	call rebuild_inf.bat $(VER)
-	cd ..
-	copy Dist\* $(DistDir)
+	cd ..\..
+	xcopy /S Dist\* $(DistDir)
 	echo $(DistDir)
+!ENDIF 
 	echo Driver copied > copy.msg 
 << 
 
@@ -312,12 +322,12 @@ SRC=idedma
 "uniata_ver.h" : "uniata_ver.h_"
 !IF "$(VER)" != ""
     copy "uniata_ver.h_" "uniata_ver.h"
-    srchrep.exe -src "**VER**" -dest "$(VER)" "uniata_ver.h"
+    .\Dist\tools\srchrep.exe -src "**VER**" -dest "$(VER)" "uniata_ver.h"
     cd ..\build_inf
     nmake /A CFG="build_inf - Win32 Release"
     cd ..\driver
     copy ..\build_inf\Release\build_inf.exe .\build_inf.exe
-    copy ..\build_inf\Release\build_inf.exe .\Dist\build_inf.exe
+    copy ..\build_inf\Release\build_inf.exe .\Dist\tools\build_inf.exe
     .\build_inf.exe --ver_h > uniata_ver.h
 !ENDIF 
 

@@ -49,3 +49,8 @@ srchrep -src "%%COMMENT%%" -dest " (SCSI)"           uata_xp.inf  > nul
 
 copy uniata_w2k.re_ uniata_w2k.reg
 srchrep -src "%%DRIVER_VER%%" -dest "%ver_dot%"      uniata_w2k.reg > nul
+
+move uata_nt4.inf   ../NT4
+move uata_2k*.inf   ../2K
+move uniata_w2k.reg ../2K
+move uata_xp*.inf   ../XP

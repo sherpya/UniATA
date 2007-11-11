@@ -303,18 +303,27 @@ UniataEnumBusMasterController__(
                     }
                     found = TRUE;
                 } else {
+                    KdPrint2((PRINT_PREFIX "unknown\n"));
                     RaidFlags = 0;
                 }
 
                 switch(SubClass) {
-                case PCI_DEV_SUBCLASS_IDE:
                 case PCI_DEV_SUBCLASS_RAID:
+                    if(!known && SkipRaids) {
+                        KdPrint2((PRINT_PREFIX "Skip RAID (2)\n"));
+                        continue;
+                    }
+                    break;
+                case PCI_DEV_SUBCLASS_IDE:
                 case PCI_DEV_SUBCLASS_ATA:
                 case PCI_DEV_SUBCLASS_SATA:
                     break;
                 default:
-                    KdPrint2((PRINT_PREFIX "Subclass not supported\n"));
-                    continue;
+                    if(!known) {
+                        KdPrint2((PRINT_PREFIX "Subclass not supported\n"));
+                        continue;
+                    }
+                    break;
                 }
 
                 switch(dev_id) {
@@ -2206,6 +2215,7 @@ AtapiFindController(
         // Since we have pre-configured information we only need to go through this loop once
         preConfig = TRUE;
         portBase = ScsiPortConvertPhysicalAddressToUlong((*ConfigInfo->AccessRanges)[0].RangeStart);
+        KdPrint2((PRINT_PREFIX "  preconfig, portBase=%x\n", portBase));
     }
 
 #ifndef UNIATA_CORE
@@ -2247,7 +2257,7 @@ AtapiFindController(
                                                 TRUE);
             }
 
-        }// ConfigInfo check
+        } 
         BaseIoAddress1 = (PIDE_REGISTERS_1)ioSpace;
 
         // Update the adapter count.
@@ -2272,16 +2282,30 @@ AtapiFindController(
 
         // Get the system physical address for the second IO range.
         if (BaseIoAddress1) {
-            ioSpace = (PUCHAR)ScsiPortGetDeviceBase(HwDeviceExtension,
-                                            ConfigInfo->AdapterInterfaceType,
-                                            ConfigInfo->SystemIoBusNumber,
-                                            ScsiPortConvertUlongToPhysicalAddress((ULONG)BaseIoAddress1 + ATA_ALTOFFSET),
-                                            ATA_ALTIOSIZE,
-                                            TRUE);
+            if(preConfig && 
+               !ScsiPortConvertPhysicalAddressToUlong((*ConfigInfo->AccessRanges)[1].RangeStart)) {
+                KdPrint2((PRINT_PREFIX "AtapiFindController: PCMCIA ?\n"));
+                ioSpace = (PUCHAR)ScsiPortGetDeviceBase(HwDeviceExtension,
+                                                ConfigInfo->AdapterInterfaceType,
+                                                ConfigInfo->SystemIoBusNumber,
+                                                ScsiPortConvertUlongToPhysicalAddress((ULONG)BaseIoAddress1 + 0x0E),
+                                                ATA_ALTIOSIZE,
+                                                TRUE);
+            } else {
+                ioSpace = (PUCHAR)ScsiPortGetDeviceBase(HwDeviceExtension,
+                                                ConfigInfo->AdapterInterfaceType,
+                                                ConfigInfo->SystemIoBusNumber,
+                                                ScsiPortConvertUlongToPhysicalAddress((ULONG)BaseIoAddress1 + ATA_ALTOFFSET),
+                                                ATA_ALTIOSIZE,
+                                                TRUE);
+            }
         }
         BaseIoAddress2 = (PIDE_REGISTERS_2)ioSpace;
+        KdPrint2((PRINT_PREFIX "  BaseIoAddress1=%x\n", BaseIoAddress1));
+        KdPrint2((PRINT_PREFIX "  BaseIoAddress2=%x\n", BaseIoAddress2));
 
         UniataInitMapBase(chan, BaseIoAddress1, BaseIoAddress2);
+        UniataInitMapBM(deviceExtension, 0, FALSE);
 
 retryIdentifier:
 
@@ -2510,17 +2534,18 @@ not_found:
 BOOLEAN
 UniataAnybodyHome(
     IN PVOID   HwDeviceExtension,
-    IN ULONG   Channel,
+    IN ULONG   lChannel,
     IN ULONG   deviceNumber
     )
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
-    PHW_CHANNEL          chan = &(deviceExtension->chan[Channel]);
-    ULONG                ldev = GET_LDEV2(Channel, deviceNumber, 0);
+    PHW_CHANNEL          chan = &(deviceExtension->chan[lChannel]);
+    ULONG                ldev = GET_LDEV2(lChannel, deviceNumber, 0);
     PHW_LU_EXTENSION     LunExt = &(deviceExtension->lun[ldev]);
 
     SATA_SSTATUS_REG     SStatus;
     UCHAR                signatureLow;
+    UCHAR                signatureHigh;
 
     if(LunExt->DeviceFlags & DFLAGS_HIDDEN) {
         KdPrint2((PRINT_PREFIX "  hidden\n"));
@@ -2530,7 +2555,15 @@ UniataAnybodyHome(
     // Select the device.
     SelectDrive(chan, deviceNumber);
 
-    if(!deviceExtension->BaseIoAddressSATA_0.Addr) {
+    signatureLow = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow);
+    signatureHigh = AtapiReadPort1(chan, IDX_IO1_i_CylinderHigh);
+
+    if (signatureLow == ATAPI_MAGIC_LSB && signatureHigh == ATAPI_MAGIC_MSB) {
+        KdPrint2((PRINT_PREFIX "  ATAPI at home\n", signatureLow));
+        return TRUE;
+    }
+
+    if(!UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
         AtapiStallExecution(10);
 
         AtapiWritePort1(chan, IDX_IO1_o_BlockNumber, 0x55);
@@ -2576,14 +2609,14 @@ UniataAnybodyHome(
 ULONG
 CheckDevice(
     IN PVOID   HwDeviceExtension,
-    IN ULONG   Channel,
+    IN ULONG   lChannel,
     IN ULONG   deviceNumber,
     IN BOOLEAN ResetDev
     )
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
-    PHW_CHANNEL          chan = &(deviceExtension->chan[Channel]);
-    ULONG                ldev = GET_LDEV2(Channel, deviceNumber, 0);
+    PHW_CHANNEL          chan = &(deviceExtension->chan[lChannel]);
+    ULONG                ldev = GET_LDEV2(lChannel, deviceNumber, 0);
     PHW_LU_EXTENSION     LunExt = &(deviceExtension->lun[ldev]);
 
     UCHAR                signatureLow,
@@ -2599,7 +2632,7 @@ CheckDevice(
         // Reset device
         AtapiSoftReset(chan, deviceNumber);
 
-        if(!UniataAnybodyHome(HwDeviceExtension, Channel, deviceNumber)) {
+        if(!UniataAnybodyHome(HwDeviceExtension, lChannel, deviceNumber)) {
             return 0;
         }
         statusByte = WaitOnBusy(chan);
@@ -2619,11 +2652,11 @@ CheckDevice(
             KdPrint2((PRINT_PREFIX 
                         "CheckDevice: no dev ?\n"));
         } else
-        if(deviceExtension->BaseIoAddressSATA_0.Addr) {
+        if(UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
         //if(deviceExtension->HwFlags & UNIATA_SATA) {
             KdPrint2((PRINT_PREFIX 
                         "CheckDevice: try enable SATA Phy\n"));
-            statusByte = UniataSataPhyEnable(HwDeviceExtension, Channel);
+            statusByte = UniataSataPhyEnable(HwDeviceExtension, lChannel);
             if(statusByte == 0xff) {
                 KdPrint2((PRINT_PREFIX "CheckDevice: status %#x (no dev)\n", statusByte));
                 UniataForgetDevice(LunExt);
@@ -2634,7 +2667,7 @@ CheckDevice(
     // Select the device.
     SelectDrive(chan, deviceNumber);
 
-    if(!UniataAnybodyHome(HwDeviceExtension, Channel, deviceNumber)) {
+    if(!UniataAnybodyHome(HwDeviceExtension, lChannel, deviceNumber)) {
         return 0;
     }
 
@@ -2642,7 +2675,7 @@ CheckDevice(
 
     GetBaseStatus(chan, statusByte);
     if(deviceExtension->HwFlags & UNIATA_SATA) {
-        UniataSataClearErr(HwDeviceExtension, Channel, UNIATA_SATA_IGNORE_CONNECT);
+        UniataSataClearErr(HwDeviceExtension, lChannel, UNIATA_SATA_IGNORE_CONNECT);
     }
 
     KdPrint2((PRINT_PREFIX "CheckDevice: status %#x\n", statusByte));
@@ -2673,7 +2706,7 @@ CheckDevice(
             // Issue ATAPI packet identify command.
             if (IssueIdentify(HwDeviceExtension,
                               deviceNumber,
-                              Channel,
+                              lChannel,
                               IDE_COMMAND_ATAPI_IDENTIFY, FALSE)) {
 
                 // Indicate ATAPI device.
@@ -2720,7 +2753,7 @@ CheckDevice(
         }
         if (IssueIdentify(HwDeviceExtension,
                           deviceNumber,
-                          Channel,
+                          lChannel,
                           IDE_COMMAND_IDENTIFY, FALSE)) {
 
             // IDE drive found.
@@ -2939,15 +2972,12 @@ FindDevices(
             ldev = GET_LDEV2(Channel, i, 0);
             LunExt = &(deviceExtension->lun[ldev]);
 
-            if(LunExt->DeviceFlags & DFLAGS_DEVICE_PRESENT) {
-                // Make sure some device (master is preferred) is selected on exit.
-                KdPrint2((PRINT_PREFIX 
-                           "FindDevices: select %d dev to clear INTR\n", i));
-                SelectDrive(chan, i);
-                GetBaseStatus(chan, statusByte);
-                KdPrint2((PRINT_PREFIX 
-                           "FindDevices: statusByte=%#x\n", statusByte));
-            }
+            KdPrint2((PRINT_PREFIX 
+                       "FindDevices: select %d dev to clear INTR\n", i));
+            SelectDrive(chan, i);
+            GetBaseStatus(chan, statusByte);
+            KdPrint2((PRINT_PREFIX 
+                       "FindDevices: statusByte=%#x\n", statusByte));
         }
         for (i = 0; i < max_ldev; i++) {
             ldev = GET_LDEV2(Channel, i, 0);

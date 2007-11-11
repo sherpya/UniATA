@@ -1,4 +1,4 @@
-; Copyright (c) 2002-2006 UniATA group
+; Copyright (c) 2002-2007 UniATA group
 
 [Version]
 Signature="$Windows NT$"
@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=hdc
 CatalogFile=uniata.cat
-DriverVer=10/28/2007,0.39.2.1
+DriverVer=11/11/2007,0.39.4.0
 
 
 [DestinationDirs]
@@ -101,6 +101,10 @@ ExcludeFromSelect = *
 %PCI\VEN_8086&DEV_2825.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_2825
 %PCI\VEN_8086&DEV_2829.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_2829
 %PCI\VEN_8086&DEV_282a.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_282a
+%PCI\VEN_8086&DEV_2920.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_2920
+%PCI\VEN_8086&DEV_2926.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_2926
+%PCI\VEN_8086&DEV_2923.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_2923
+%PCI\VEN_8086&DEV_2922.DeviceDesc%=uniata_Inst, PCI\VEN_8086&DEV_2922
 %PCI\VEN_10de&DEV_01bc.DeviceDesc%=uniata_Inst, PCI\VEN_10de&DEV_01bc
 %PCI\VEN_10de&DEV_0065.DeviceDesc%=uniata_Inst, PCI\VEN_10de&DEV_0065
 %PCI\VEN_10de&DEV_0085.DeviceDesc%=uniata_Inst, PCI\VEN_10de&DEV_0085
@@ -214,7 +218,7 @@ CopyFiles = uniata_Inst.Miniport
 ;
 
 [uniata_Inst.Miniport]
-uniata.sys
+..\uniata.sys
 
 
 ;
@@ -260,7 +264,7 @@ HKLM, "system\currentcontrolset\services\pciide", "Start", %REG_DWORD%, 0x000000
 
 [SourceDisksFiles]
 ; Files for disk UniATA Installation Disk #1 (SCSIAdapter)
-uniata.sys = 1,,
+..\uniata.sys = 1,,
 
 
 [Strings]
@@ -342,6 +346,10 @@ PCI\VEN_8086&DEV_2824.DeviceDesc="Intel ICH8 SATA2 controller "
 PCI\VEN_8086&DEV_2825.DeviceDesc="Intel ICH8 SATA2 controller "
 PCI\VEN_8086&DEV_2829.DeviceDesc="Intel ICH8M SATA2 controller "
 PCI\VEN_8086&DEV_282a.DeviceDesc="Intel ICH8M SATA2 controller "
+PCI\VEN_8086&DEV_2920.DeviceDesc="Intel ICH9 SATA2 controller "
+PCI\VEN_8086&DEV_2926.DeviceDesc="Intel ICH9 SATA2 controller "
+PCI\VEN_8086&DEV_2923.DeviceDesc="Intel ICH9 SATA2 controller "
+PCI\VEN_8086&DEV_2922.DeviceDesc="Intel ICH9 SATA2 controller "
 PCI\VEN_10de&DEV_01bc.DeviceDesc="nVidia nForce ATA-100 controller "
 PCI\VEN_10de&DEV_0065.DeviceDesc="nVidia nForce2 ATA-133 controller "
 PCI\VEN_10de&DEV_0085.DeviceDesc="nVidia nForce2 Pro ATA-133 controller "

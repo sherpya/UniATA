@@ -86,6 +86,7 @@ ScsiDebugPrint(
 
 #define PRINT_PREFIX                0, 
 
+#define KdPrint3(_x_) ScsiDebugPrint _x_
 #define KdPrint2(_x_) {ScsiDebugPrint("%x: ", PsGetCurrentThread()) ; ScsiDebugPrint _x_ ; }
 #define KdPrint(_x_) ScsiDebugPrint _x_
 
@@ -107,6 +108,7 @@ DbgPrint(
 //#define LOG_ON_RAISED_IRQL_W2K    TRUE
 //#define LOG_ON_RAISED_IRQL_W2K    FALSE
 
+#define KdPrint3(_x_) {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; if(g_LogToDisplay){ PrintNtConsole _x_ ;} }}
 #define KdPrint2(_x_) {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; if(g_LogToDisplay){ PrintNtConsole _x_ ;} }}
 #define KdPrint(_x_)  {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; if(g_LogToDisplay){ PrintNtConsole _x_ ;} }}
 /*
@@ -136,6 +138,10 @@ DbgPrint(
 
 #else // _DEBUG
 
+#define PRINT_PREFIX "UniATA: "
+
+//#define KdPrint3(_x_) {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; if(g_LogToDisplay){ PrintNtConsole _x_ ;} }}
+#define KdPrint3(_x_)
 #define KdPrint2(_x_)
 #define KdPrint(_x_)
 #define Connect_DbgPrint()   {;}
@@ -852,8 +858,10 @@ NATIVE_MODE_CONTROLLER_INFORMATION const NativeModeAdapters[] = {
     AtapiWritePort1(chan, IDX_IO1_o_Command, _Command);
 
 
-#define SelectDrive(chan, unit) \
-    AtapiWritePort1(chan, IDX_IO1_o_DriveSelect, (unit) ? IDE_DRIVE_SELECT_2 : IDE_DRIVE_SELECT_1);
+#define SelectDrive(chan, unit) { \
+    if(chan && chan->lun[unit] && chan->lun[unit]->DeviceFlags & DFLAGS_ATAPI_CHANGER) KdPrint3(("  Select %d\n", unit)); \
+    AtapiWritePort1(chan, IDX_IO1_o_DriveSelect, (unit) ? IDE_DRIVE_SELECT_2 : IDE_DRIVE_SELECT_1); \
+}
 
 
 #define ReadBuffer(chan, Buffer, Count, timing) \

@@ -1,11 +1,14 @@
 ..\driver\Dist
+..\driver\Dist\2K   
+..\driver\Dist\NT351
+..\driver\Dist\NT4  
+..\driver\Dist\tools
+..\driver\Dist\XP   
 ..\driver\Lib
 ..\driver\Lib\Debug
 ..\driver\Lib\Release
 ..\driver\Inc
 ..\driver\atapi.h
-..\driver\atapix.reg
-..\driver\atapix_extrn.reg
 ..\driver\bm_devs.h
 ..\driver\bsmaster.h
 ..\driver\build.mak
@@ -29,8 +32,6 @@
 ..\driver\idedma.rc
 ..\driver\uniata_ver.h
 ..\driver\uniata_ver.h_
-..\driver\idedma.reg
-..\driver\idedmb.reg
 ..\driver\*.BAT
 ..\driver\Makefile
 ..\driver\ntddk_ex.h
