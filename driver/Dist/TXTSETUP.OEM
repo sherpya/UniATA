@@ -51,7 +51,7 @@ scsi = OEMSCSI
 #   HKEY_LOCAL_MACHINE\ControlSet001\Services
 
 
-OEMSCSI = "Universal ATA Driver", uniata
+OEMSCSI = "Alter Group Universal ATA Driver", uniata
 
 
 

@@ -622,16 +622,25 @@ limit_lba48:
             LunExt->DeviceFlags |= REQ_FLAG_FORCE_DOWNRATE_LBA48;
 limit_pio:
             // do not make extra work if we already use PIO
-            KdPrint2((PRINT_PREFIX 
-                        "AtapiDmaReinit: set PIO mode on Device %d (%x -> %x)\n", ldev & 1, LunExt->TransferMode, ATA_PIO0+apiomode));
             if(/*LunExt->TransferMode >= ATA_DMA*/
-               LunExt->TransferMode != ATA_PIO0+apiomode
+               (LunExt->TransferMode > ATA_PIO5) && (LunExt->TransferMode != ATA_PIO0+apiomode)
                ) {
+                KdPrint2((PRINT_PREFIX 
+                            "AtapiDmaReinit: set PIO mode on Device %d (%x -> %x)\n", ldev & 1, LunExt->TransferMode, ATA_PIO0+apiomode));
                 AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
                              apiomode, 
                              -1,
                              -1 );
+            } else
+            if(LunExt->LimitedTransferMode < LunExt->TransferMode) {
+                KdPrint2((PRINT_PREFIX 
+                            "AtapiDmaReinit: set PIO mode on Device %d (%x -> %x) (2)\n", ldev & 1, LunExt->TransferMode, LunExt->LimitedTransferMode));
+                AtapiDmaInit(deviceExtension, ldev & 1, ldev >> 1,
+                             LunExt->LimitedTransferMode-ATA_PIO0, 
+                             -1,
+                             -1 );
             }
+
         } else {
             KdPrint2((PRINT_PREFIX 
                         "AtapiDmaReinit: set MAX mode on Device %d\n", ldev & 1));
@@ -1250,6 +1259,7 @@ set_new_acard:
                     if(ChipFlags & ICH4_FIX) {
                         return;
                     }
+                    break;
                 }
             }
         }

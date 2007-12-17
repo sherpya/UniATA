@@ -173,6 +173,40 @@ UniataEnumBusMasterController(
 
 } // end UniataEnumBusMasterController()
 
+BOOLEAN
+UniataCheckPCISubclass(
+    BOOLEAN known,
+    ULONG   RaidFlags,
+    UCHAR   SubClass
+    )
+{
+    if(known) {
+        if((RaidFlags & UNIATA_RAID_CONTROLLER) &&
+            SkipRaids) {
+            KdPrint2((PRINT_PREFIX "Skip RAID\n"));
+            return FALSE;
+        }
+        return TRUE;
+    }
+    KdPrint2((PRINT_PREFIX "unknown\n"));
+
+    switch(SubClass) {
+    case PCI_DEV_SUBCLASS_RAID:
+        if(SkipRaids) {
+            KdPrint2((PRINT_PREFIX "Skip RAID (2)\n"));
+            return FALSE;
+        }
+        break;
+    case PCI_DEV_SUBCLASS_IDE:
+    case PCI_DEV_SUBCLASS_ATA:
+    case PCI_DEV_SUBCLASS_SATA:
+        break;
+    default:
+        KdPrint2((PRINT_PREFIX "Subclass not supported\n"));
+        return FALSE;
+    }
+    return TRUE;
+} // end UniataCheckPCISubclass()
 
 /*
     Device initializaton callback
@@ -291,39 +325,19 @@ UniataEnumBusMasterController__(
 
                 //known = UniataChipDetect(HwDeviceExtension, NULL, -1, ConfigInfo, &SimplexOnly);
                 i = Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[0], VendorID, DeviceID, 0, NUM_BUSMASTER_ADAPTERS);
-                deviceExtension->FullDevName = BusMasterAdapters[i].FullDevName;
 
                 known = (i != BMLIST_TERMINATOR);
                 if(known) {
+                    deviceExtension->FullDevName = BusMasterAdapters[i].FullDevName;
                     RaidFlags = BusMasterAdapters[i].RaidFlags;
-                    if((RaidFlags & UNIATA_RAID_CONTROLLER) &&
-                        SkipRaids) {
-                        KdPrint2((PRINT_PREFIX "Skip RAID\n"));
-                        continue;
-                    }
-                    found = TRUE;
                 } else {
-                    KdPrint2((PRINT_PREFIX "unknown\n"));
+                    deviceExtension->FullDevName = "Unknown Storage";
                     RaidFlags = 0;
                 }
-
-                switch(SubClass) {
-                case PCI_DEV_SUBCLASS_RAID:
-                    if(!known && SkipRaids) {
-                        KdPrint2((PRINT_PREFIX "Skip RAID (2)\n"));
-                        continue;
-                    }
-                    break;
-                case PCI_DEV_SUBCLASS_IDE:
-                case PCI_DEV_SUBCLASS_ATA:
-                case PCI_DEV_SUBCLASS_SATA:
-                    break;
-                default:
-                    if(!known) {
-                        KdPrint2((PRINT_PREFIX "Subclass not supported\n"));
-                        continue;
-                    }
-                    break;
+                found = UniataCheckPCISubclass(known, RaidFlags, SubClass);
+                if(!found) {
+                    KdPrint2((PRINT_PREFIX "Subclass not supported\n"));
+                    continue;
                 }
 
                 switch(dev_id) {
@@ -508,6 +522,8 @@ UniataEnumBusMasterController__(
                         newBMListPtr->slotNumber = slotData.u.AsULONG;
                         newBMListPtr->MasterDev = IsMasterDev(&pciData) ? 1 : 0;
                         newBMListPtr->busNumber = busNumber;
+
+                        newBMListPtr->Known = known;
 
                         KdPrint2((PRINT_PREFIX "Add to BMList\n"));
                     } else {
@@ -960,20 +976,8 @@ UniataFindBusMasterController(
         return(SP_RETURN_NOT_FOUND);
     }
 
-    if((BMList[i].RaidFlags & UNIATA_RAID_CONTROLLER) &&
-        SkipRaids) {
-        KdPrint2((PRINT_PREFIX "RAID support disabled\n"));
-        return(SP_RETURN_NOT_FOUND);
-    }
-
-    switch(SubClass) {
-    case PCI_DEV_SUBCLASS_IDE:
-    case PCI_DEV_SUBCLASS_RAID:
-    case PCI_DEV_SUBCLASS_ATA:
-    case PCI_DEV_SUBCLASS_SATA:
-        // ok
-        break;
-    default:
+    found = UniataCheckPCISubclass(BMList[i].Known, BMList[i].RaidFlags, SubClass);
+    if(!found) {
         KdPrint2((PRINT_PREFIX "Subclass not supported\n"));
         return(SP_RETURN_NOT_FOUND);
     }

@@ -86,9 +86,9 @@ ScsiDebugPrint(
 
 #define PRINT_PREFIX                0, 
 
-#define KdPrint3(_x_) ScsiDebugPrint _x_
+#define KdPrint3(_x_) ScsiDebugPrint _x_    {;}
 #define KdPrint2(_x_) {ScsiDebugPrint("%x: ", PsGetCurrentThread()) ; ScsiDebugPrint _x_ ; }
-#define KdPrint(_x_) ScsiDebugPrint _x_
+#define KdPrint(_x_) ScsiDebugPrint _x_ {;}
 
 #else // SCSI_PORT_DBG_PRINT
 
@@ -141,9 +141,9 @@ DbgPrint(
 #define PRINT_PREFIX "UniATA: "
 
 //#define KdPrint3(_x_) {if(LOG_ON_RAISED_IRQL_W2K || MajorVersion < 0x05 || KeGetCurrentIrql() <= 2){/*DbgPrint("%x: ", PsGetCurrentThread()) ;*/ DbgPrint _x_ ; if(g_LogToDisplay){ PrintNtConsole _x_ ;} }}
-#define KdPrint3(_x_)
-#define KdPrint2(_x_)
-#define KdPrint(_x_)
+#define KdPrint3(_x_)  {;}
+#define KdPrint2(_x_)  {;}
+#define KdPrint(_x_)   {;}
 #define Connect_DbgPrint()   {;}
 
 #define AtapiStallExecution(dt)  ScsiPortStallExecution(dt)
@@ -296,6 +296,7 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_COMMAND_ATAPI_RESET      0x08
 #define IDE_COMMAND_RECALIBRATE      0x10
 #define IDE_COMMAND_READ             0x20
+#define IDE_COMMAND_READ_NO_RETR     0x21
 #define IDE_COMMAND_READ48           0x24
 #define IDE_COMMAND_READ_DMA48       0x25
 #define IDE_COMMAND_READ_DMA_Q48     0x26
@@ -305,6 +306,7 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_COMMAND_READ_STREAM48        0x2B
 #define IDE_COMMAND_READ_LOG48           0x2f
 #define IDE_COMMAND_WRITE                0x30
+#define IDE_COMMAND_WRITE_NO_RETR        0x31
 #define IDE_COMMAND_WRITE48              0x34
 #define IDE_COMMAND_WRITE_DMA48          0x35
 #define IDE_COMMAND_WRITE_DMA_Q48        0x36

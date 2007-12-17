@@ -78,7 +78,8 @@ Revision History:
 // define PIO timings in nanoseconds
 #define         PIO0_TIMING             600
 
-#define UniataGetPioTiming(LunExt)      ((LunExt->TransferMode <= ATA_PIO0) ? PIO0_TIMING : 0)
+//#define UniataGetPioTiming(LunExt)      ((LunExt->TransferMode <= ATA_PIO0) ? PIO0_TIMING : 0)
+#define UniataGetPioTiming(LunExt)      0 //ktp
 
 #ifndef __IDE_BUSMASTER_DEVICES_H__
 #define __IDE_BUSMASTER_DEVICES_H__
@@ -101,6 +102,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
     CHAR    channel;
 //    CHAR    numOfChannes;
     CHAR    MasterDev;
+    BOOLEAN Known;
 #ifndef USER_MODE
     CHAR    ChanInitOk;             // 0x01 - primary,  0x02 - secondary
     BOOLEAN Isr2Enable;

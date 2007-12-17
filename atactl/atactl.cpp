@@ -42,7 +42,7 @@ void print_help() {
            "              Note: ATA Pri/Sec controller are usually represented\n"
            "              as Scsi0/Scsi1 under NT-family OSes\n"
            "  x         show e(X)tended info\n"
-           "  c         show (C)ontroller info\n"
+           "  a         show (A)dapter info\n"
            "  s         (S)can for new devices on ATA/SATA bus(es) (experimental)\n"
            "  S         (S)can for new devices on ATA/SATA bus(es) (experimental)\n"
            "              device, hidden with 'H' can be redetected\n"
@@ -251,6 +251,7 @@ ata_send_ioctl(
 
     AtaCtl->hdr.Timeout = 10000;
     AtaCtl->hdr.ControlCode = Ioctl;
+    AtaCtl->hdr.ReturnCode = 0;
     
     if(addr) {
         AtaCtl->addr = *addr;
@@ -737,6 +738,9 @@ ata_check_unit(
                 printf("\n");
 
                 if(status && g_extended) {
+
+                    BOOLEAN BlockMode_valid = TRUE;
+
                     switch(ident->DeviceType) {
                     case ATAPI_TYPE_DIRECT:
                         if(ident->Removable) {
@@ -750,9 +754,11 @@ ata_check_unit(
                         break;
                     case ATAPI_TYPE_CDROM:
                         printf("    CD/DVD Drive  ");
+                        BlockMode_valid = FALSE;
                         break;
                     case ATAPI_TYPE_OPTICAL:
                         printf("    Optical Drive ");
+                        BlockMode_valid = FALSE;
                         break;
                     default:
                         printf("    Hard Drive    ");
@@ -773,10 +779,12 @@ ata_check_unit(
                     }
                     printf("    S/N: %20.20s\n", SerNum);
 
-                    if(ident->MaximumBlockTransfer) {
-                        printf("    Block mode: %d block%s\n", ident->MaximumBlockTransfer, ident->MaximumBlockTransfer == 1 ? "" : "s");
-                    } else {
-                        printf("    Block mode: N/A\n");
+                    if(BlockMode_valid) {
+                        if(ident->MaximumBlockTransfer) {
+                            printf("    Multi-block mode:        %d block%s\n", ident->MaximumBlockTransfer, ident->MaximumBlockTransfer == 1 ? "" : "s");
+                        } else {
+                            printf("    Multi-block mode:        N/A\n");
+                        }
                     }
 
                     len = 0;

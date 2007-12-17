@@ -592,6 +592,7 @@ typedef union _ATA_REQ {
                 ULONG               WordsLeft;      // Data words left.
                 ULONG               TransferLength; // Originally requested transfer length
                 LONGLONG            lba;
+                ULONG               WordsTransfered;// Data words already transfered.
                 ULONG               bcount;
 
                 UCHAR               retry;
@@ -608,7 +609,7 @@ typedef union _ATA_REQ {
                     ULONGLONG       ahci_base64;    // for AHCI
                 };
             };
-            UCHAR padding_128b[PAGE_SIZE];
+            UCHAR padding_128b[128];
         };
         struct {
             union {
@@ -637,6 +638,7 @@ typedef union _ATA_REQ {
 #define REQ_STATE_QUEUED                0x10
 
 #define REQ_STATE_PREPARE_TO_TRANSFER   0x20
+#define REQ_STATE_PREPARE_TO_NEXT       0x21
 #define REQ_STATE_READY_TO_TRANSFER     0x30
 
 #define REQ_STATE_EXPECTING_INTR        0x40
@@ -863,6 +865,8 @@ typedef struct _HW_LU_EXTENSION {
     struct _SBadBlockListItem* bbListDescr;
     struct _SBadBlockRange* arrBadBlocks;
     ULONG           nBadBlocks;
+
+    struct _HW_DEVICE_EXTENSION* DeviceExtension;
 
 #ifdef IO_STATISTICS
 
@@ -1420,6 +1424,8 @@ AtapiReadBuffer2(
         chan->lun[1] = &(deviceExtension->lun[c*2+1]); \
         chan->AltRegMap       = deviceExtension->AltRegMap; \
         chan->NextDpcChan     = -1; \
+        chan->lun[0]->DeviceExtension = deviceExtension; \
+        chan->lun[1]->DeviceExtension = deviceExtension; \
 }
 
 BOOLEAN

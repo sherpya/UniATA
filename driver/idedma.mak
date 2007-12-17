@@ -148,7 +148,7 @@ PKG : "BusMaster_v$(VER).rar"
 "Debug\idedma.sys" :
 	nmake /A CFG="UniATA - Win32 Debug"
 
-"BusMaster_v$(VER).rar" : "$(ALTDIR)\IdeDma.sys" ".\copy.msg"
+"BusMaster_v$(VER).rar" : "uniata_ver.h" "$(ALTDIR)\IdeDma.sys" ".\copy.msg"
 	cd ..
 	driver\Dist\tools\fix_dep.bat
 	cd driver

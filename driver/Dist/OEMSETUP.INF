@@ -47,7 +47,7 @@
 ;-----------------------------------------------------------------------
 
 [OptionsTextENG]
-    "UniATA"    = "Universal BusMaster ATA/ATAPI Driver"
+    "UniATA"    = "Alter Group Universal ATA Driver"
 
 
 ;-----------------------------------------------------------------------------------------
