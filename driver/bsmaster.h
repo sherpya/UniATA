@@ -892,7 +892,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     ULONG NumberChannels;
     ULONG NumberLuns;
     ULONG FirstChannelToCheck;
-#if 1
+#if 0
     HW_LU_EXTENSION lun[IDE_MAX_LUN];
     HW_CHANNEL chan[AHCI_MAX_PORT/*IDE_MAX_CHAN*/];
 #else

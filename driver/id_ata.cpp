@@ -5637,7 +5637,9 @@ IdeReadWrite(
                      (USHORT)(AtaReq->bcount),
 //                     (UCHAR)((wordCount*2 + DEV_BSIZE-1) / DEV_BSIZE),
                      0, ATA_IMMEDIATE);
-        GetStatus(chan, statusByte2);
+        if(statusByte2 != 0xff) {
+            GetStatus(chan, statusByte2);
+        }
         if(statusByte2 & IDE_STATUS_ERROR) {
             statusByte = AtapiReadPort1(chan, IDX_IO1_i_Error);
             KdPrint2((PRINT_PREFIX "IdeReadWrite: status %#x, error %#x\n", statusByte2, statusByte));
@@ -5655,11 +5657,18 @@ IdeReadWrite(
 //                 (UCHAR)((wordCount*2 + DEV_BSIZE-1) / DEV_BSIZE),
                  0, ATA_WAIT_INTR);
 
-    if (!(statusByte & IDE_STATUS_DRQ)) {
+    if (!(statusByte & IDE_STATUS_DRQ) ||
+        statusByte == 0xff) {
 
-        KdPrint2((PRINT_PREFIX 
-                   "IdeReadWrite: DRQ never asserted (%#x)\n",
-                   statusByte));
+        if(statusByte == 0xff) {
+            KdPrint2((PRINT_PREFIX 
+                       "IdeReadWrite: error sending command (%#x)\n",
+                       statusByte));
+        } else {
+            KdPrint2((PRINT_PREFIX 
+                       "IdeReadWrite: DRQ never asserted (%#x)\n",
+                       statusByte));
+        }
 
         AtaReq->WordsLeft = 0;
 
@@ -5671,7 +5680,7 @@ IdeReadWrite(
         // Clear current SRB.
         UniataRemoveRequest(chan, Srb);
 
-        return SRB_STATUS_TIMEOUT;
+        return (statusByte == 0xff) ? SRB_STATUS_ERROR : SRB_STATUS_TIMEOUT;
     }
 
     chan->ExpectingInterrupt = TRUE;
@@ -8155,9 +8164,16 @@ UniataInitAtaCommands()
 {
     int i;
     UCHAR command;
-    UCHAR flags = 0;
+    UCHAR flags;
 
-    for(i=0, command=0; i<256; i++, command++) {
+    KdPrint2((PRINT_PREFIX "UniataInitAtaCommands:\n"));
+
+    for(i=0; i<256; i++) {
+
+        flags = 0;
+        command = i;
+
+        KdPrint2((PRINT_PREFIX "cmd %2.2x: ", command));
 
         switch(command) {
         case IDE_COMMAND_READ_DMA48:
@@ -8178,6 +8194,7 @@ UniataInitAtaCommands()
         case IDE_COMMAND_WRITE_LOG_DMA48:
         case IDE_COMMAND_TRUSTED_RCV_DMA:
         case IDE_COMMAND_TRUSTED_SEND_DMA:
+            KdPrint2((PRINT_PREFIX "DMA "));
             flags |= ATA_CMD_FLAG_DMA;
         }
 
@@ -8200,6 +8217,7 @@ UniataInitAtaCommands()
         case IDE_COMMAND_FLUSH_CACHE48:
         case IDE_COMMAND_VERIFY48:
 
+            KdPrint2((PRINT_PREFIX "48 "));
             flags |= ATA_CMD_FLAG_48;
             /* FALL THROUGH */
 
@@ -8214,6 +8232,7 @@ UniataInitAtaCommands()
         case IDE_COMMAND_FLUSH_CACHE:
         case IDE_COMMAND_VERIFY:
 
+            KdPrint2((PRINT_PREFIX "LBA "));
             flags |= ATA_CMD_FLAG_LBAIOsupp;
         }
 
@@ -8245,9 +8264,11 @@ UniataInitAtaCommands()
         case IDE_COMMAND_VERIFY:
             command = IDE_COMMAND_VERIFY48; break;
         default:
+            KdPrint2((PRINT_PREFIX "!28->48 "));
             flags &= ~ATA_CMD_FLAG_48supp;
         }
 
+        KdPrint2((PRINT_PREFIX "\t -> %2.2x (%2.2x)\n", command, flags));
         AtaCommands48[i]   = command;
         AtaCommandFlags[i] = flags;
     }
