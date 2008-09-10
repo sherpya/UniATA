@@ -1,5 +1,5 @@
 #////////////////////////////////////////////////////////////////////
-#// Alexander A. Telyatnikov (Alter) 2002-2007. Kiev, Ukraine
+#// Alexander A. Telyatnikov (Alter) 2002-2008. Kiev, Ukraine
 #// All rights reserved
 #////////////////////////////////////////////////////////////////////
 
@@ -52,9 +52,11 @@ USE_XPDDK=1
 !ERROR BASEDIR is not equal to BASEDIRNT4, BASEDIR2K or BASEDIRXP
 !ENDIF 
 
-!MESSAGE Using DDK at $(BaseDir)
+!MESSAGE *** Using DDK at $(BaseDir)
+!MESSAGE *** Using Lib at $(BaseDirLib)
 
 CPP=cl.exe
+MCC=mc.exe
 MTL=midl.exe
 RSC=rc.exe
 LINK32=link.exe
@@ -305,11 +307,14 @@ SRC=id_badblock
 
 SRC=stdafx
 CPP_PROJ=$(CPP_PROJ_BASE) /Yc"stdafx.h"
-"$(INTDIR)\StdAfx.obj" "$(INTDIR)\idedma.pch" : $(SOURCE) "$(INTDIR)"
+"$(INTDIR)\StdAfx.obj" "$(INTDIR)\idedma.pch" : $(SOURCE) "$(INTDIR)" "uataerr.h"
 	$(CPP) @<<
   $(CPP_PROJ) $(SOURCE)
 <<
 
+
+"uataerr.h" : uataerr.mc
+    $(MCC) uataerr.mc
 
 SRC=idedma
 
@@ -318,6 +323,7 @@ SRC=idedma
 
 "uniata_ver.h_" : "uniata_ver.h_.lk"
     del "uniata_ver.h_.lk"
+
 
 "uniata_ver.h" : "uniata_ver.h_"
 !IF "$(VER)" != ""
@@ -331,7 +337,7 @@ SRC=idedma
     .\build_inf.exe --ver_h > uniata_ver.h
 !ENDIF 
 
-"$(INTDIR)\$(SRC).res" : "$(SRC).rc" "$(INTDIR)" "uniata_ver.h"
+"$(INTDIR)\$(SRC).res" : "$(SRC).rc" "$(INTDIR)" "uniata_ver.h" "uataerr.h"
     -@erase ".\$(SRC).res"
     $(RSC) $(RSC_PROJ) "$(SRC).rc"
     -@erase "$(INTDIR)\$(SRC).res"

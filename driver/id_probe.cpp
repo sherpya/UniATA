@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2007 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2008 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     id_probe.cpp
@@ -768,13 +768,27 @@ UniataFindCompatBusMasterController2(
         );
 } // end UniataFindCompatBusMasterController2()
 
-
 BOOLEAN
 UniataAllocateLunExt(
-    PHW_DEVICE_EXTENSION  deviceExtension
+    PHW_DEVICE_EXTENSION  deviceExtension,
+    ULONG NewNumberChannels
     )
 {
+    PHW_LU_EXTENSION old_luns = NULL;
+    PHW_CHANNEL old_chans = NULL;
+
     KdPrint2((PRINT_PREFIX "allocate Luns for %d channels\n", deviceExtension->NumberChannels));
+
+    old_luns = deviceExtension->lun;
+    old_chans = deviceExtension->chan;
+
+    if(old_luns || old_chans) {
+        if(NewNumberChannels == UNIATA_ALLOCATE_NEW_LUNS) {
+            KdPrint2((PRINT_PREFIX "already allocated!\n"));
+            return FALSE;
+        }
+    }
+
     deviceExtension->lun = (PHW_LU_EXTENSION)ExAllocatePool(NonPagedPool, sizeof(HW_LU_EXTENSION) * (deviceExtension->NumberChannels+1) * IDE_MAX_LUN_PER_CHAN);
     if (!deviceExtension->lun) {
         KdPrint2((PRINT_PREFIX "!deviceExtension->lun => SP_RETURN_ERROR\n"));
@@ -1066,10 +1080,6 @@ UniataFindBusMasterController(
         KdPrint2((PRINT_PREFIX "MasterDev (1)\n"));
         deviceExtension->MasterDev = TRUE;
         deviceExtension->NumberChannels = 1;
-    }
-
-    if(!UniataAllocateLunExt(deviceExtension)) {
-        goto exit_error;
     }
 
     if(MasterDev) {
@@ -1920,10 +1930,6 @@ UniataFindFakeBusMasterController(
         goto exit_notfound;
     }
 
-    if(!UniataAllocateLunExt(deviceExtension)) {
-        goto exit_error;
-    }
-
     KdPrint2((PRINT_PREFIX "IsBusMaster == TRUE\n"));
     BaseIoAddressBM_0 = (PIDE_BUSMASTER_REGISTERS)
         (AtapiGetIoRange(HwDeviceExtension, ConfigInfo, &pciData, SystemIoBusNumber,
@@ -2231,7 +2237,7 @@ AtapiFindController(
     deviceExtension->MaxTransferMode = ATA_PIO4;
     deviceExtension->NumberChannels = 1;
 
-    if(!UniataAllocateLunExt(deviceExtension)) {
+    if(!UniataAllocateLunExt(deviceExtension, UNIATA_ALLOCATE_NEW_LUNS)) {
         goto exit_error;
     }
 

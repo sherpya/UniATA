@@ -25,3 +25,6 @@
 #define VER_LANGNEUTRAL
 
 #include "common.ver"
+
+#include "uataerr.rc"
+

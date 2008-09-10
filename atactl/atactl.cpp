@@ -2,7 +2,8 @@
 #include <WinIoCtl.h>
 #include <stdio.h>
 //#include <ntdddisk.h>
-#include <ntddscsi.h>
+//#include <ntddscsi.h>
+#include "..\driver\ntddscsi.h"
 #include "..\driver\atapi.h"
 #include "..\driver\bm_devs.h"
 #include "..\driver\uata_ctl.h"
@@ -647,22 +648,6 @@ ata_check_unit(
                 } else {
                     sprintf(lun_str, "  ", inquiryData->Lun);
                 }
-                if(!g_extended) {
-                    printf("  b%d:d%d%s    %24.24s %4.4s ",
-                        i,
-                        inquiryData->TargetId,
-                        lun_str,
-                        /*(inquiryData->DeviceClaimed) ? "Y" : "N",*/
-                        (g_extended ? (PUCHAR)"" : &inquiryData->InquiryData[8]),
-                        (g_extended ? (PUCHAR)"" : &inquiryData->InquiryData[8+24])
-                        );
-                } else {
-                    printf("  b%d:d%d%s ",
-                        i,
-                        inquiryData->TargetId,
-                        lun_str
-                        );
-                }
 
 
                 /*
@@ -717,9 +702,28 @@ ata_check_unit(
                 }
 
                 if(status) {
+                    if(!g_extended) {
+                        printf("  b%d:d%d%s    %24.24s %4.4s ",
+                            i,
+                            inquiryData->TargetId,
+                            lun_str,
+                            /*(inquiryData->DeviceClaimed) ? "Y" : "N",*/
+                            (g_extended ? (PUCHAR)"" : &inquiryData->InquiryData[8]),
+                            (g_extended ? (PUCHAR)"" : &inquiryData->InquiryData[8+24])
+                            );
+                    } else {
+                        printf("  b%d:d%d%s ",
+                            i,
+                            inquiryData->TargetId,
+                            lun_str
+                            );
+                    }
                     if(io_mode == -1) {
                         io_mode = ata_cur_mode_from_ident(ident);
                     }
+                } else {
+                    goto next_dev;
+
                 }
                 if(io_mode != -1) {
                     ata_mode_to_str(mode_str, io_mode);
@@ -1466,7 +1470,7 @@ main (
     int persistent_hide=0;
 
     printf("Console ATA control utility for Windows NT3.51/NT4/2000/XP/2003\n"
-           "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2007\n"
+           "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2008\n"
            "Home site: http://alter.org.ua\n");
 
     for(i=1; i<argc; i++) {

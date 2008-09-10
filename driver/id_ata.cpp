@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2007 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2008 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     id_ata.cpp

@@ -1,4 +1,4 @@
-@echo off
+rem @echo off
 echo rebuilding .INF files
 build_inf.exe uata_2k.in_ > uata_2k.inf
 
@@ -50,7 +50,12 @@ srchrep -src "%%COMMENT%%" -dest " (SCSI)"           uata_xp.inf  > nul
 copy uniata_w2k.re_ uniata_w2k.reg
 srchrep -src "%%DRIVER_VER%%" -dest "%ver_dot%"      uniata_w2k.reg > nul
 
-move uata_nt4.inf   ../NT4
-move uata_2k*.inf   ../2K
-move uniata_w2k.reg ../2K
-move uata_xp*.inf   ../XP
+del /q ..\NT4\uata_nt4.inf
+del /q ..\2K\uata_2k*.inf
+del /q ..\2K\uniata_w2k.reg
+del /q ..\XP\uata_xp*.inf
+
+move uata_nt4.inf   ..\NT4
+move uata_2k*.inf   ..\2K
+move uniata_w2k.reg ..\2K
+move uata_xp*.inf   ..\XP

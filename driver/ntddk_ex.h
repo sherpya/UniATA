@@ -6,6 +6,11 @@
 #define ASSERT
 #endif //__REACTOS__
 
+
+#ifndef FILE_CHARACTERISTIC_PNP_DEVICE  // DDK 2003
+
+#define FILE_CHARACTERISTIC_PNP_DEVICE  0x00000800
+
 typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemBasicInformation,
     SystemProcessorInformation,
@@ -121,6 +126,8 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     MaxSystemInfoClass,
 #endif //__REACTOS__
 } SYSTEM_INFORMATION_CLASS;
+
+#endif // !FILE_CHARACTERISTIC_PNP_DEVICE
 
 
 NTSYSAPI
