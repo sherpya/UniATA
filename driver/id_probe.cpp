@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2008 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2010 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     id_probe.cpp
@@ -621,6 +621,8 @@ AtapiFindListedDev(
 
     ULONG i;
 
+    KdPrint2((PRINT_PREFIX "AtapiFindListedDev: lim=%x, Bus=%x, Slot=%x\n", lim, BusNumber, SlotNumber));
+
     // set start/end bus
     if(BusNumber == PCIBUSNUM_NOT_SPECIFIED) {
         busNumber  = 0;
@@ -639,6 +641,8 @@ AtapiFindListedDev(
     }
     slotData.u.AsULONG = 0;
 
+    KdPrint2((PRINT_PREFIX " scanning range Bus %x-%x, Slot %x-%x\n", busNumber, busNumber2-1, slotNumber, slotNumber2-1));
+
     for(            ; busNumber  < busNumber2       ; busNumber++ ) {
     for(            ; slotNumber < slotNumber2      ; slotNumber++) {
     for(funcNumber=0; funcNumber < PCI_MAX_FUNCTION ; funcNumber++) {
@@ -646,7 +650,7 @@ AtapiFindListedDev(
         slotData.u.bits.DeviceNumber   = slotNumber;
         slotData.u.bits.FunctionNumber = funcNumber;
 
-    busDataRead = HalGetBusData(
+        busDataRead = HalGetBusData(
             //ScsiPortGetBusData(HwDeviceExtension,
                                     PCIConfiguration, busNumber, slotData.u.AsULONG, 
                                     &pciData, PCI_COMMON_HDR_LENGTH);
@@ -660,11 +664,19 @@ AtapiFindListedDev(
 
         if(busDataRead < (ULONG)PCI_COMMON_HDR_LENGTH)
             continue;
-
+/*
+        KdPrint2((PRINT_PREFIX "AtapiFindListedDev: b:s:f(%x:%x:%x) %4.4x/%4.4x/%2.2x\n",
+                  busNumber, slotNumber, funcNumber,
+                  pciData.VendorID, pciData.DeviceID, pciData.RevisionID));
+                  */
         i = Ata_is_dev_listed(BusMasterAdapters, pciData.VendorID, pciData.DeviceID, pciData.RevisionID, lim);
         if(i != BMLIST_TERMINATOR) {
             if(_slotData)
                 *_slotData = slotData;
+            KdPrint2((PRINT_PREFIX "AtapiFindListedDev: found\n"));
+            KdPrint2((PRINT_PREFIX "AtapiFindListedDev: b:s:f(%x:%x:%x) %4.4x/%4.4x/%2.2x\n",
+                      busNumber, slotNumber, funcNumber,
+                      pciData.VendorID, pciData.DeviceID, pciData.RevisionID));
             return i;
         }
 
@@ -798,6 +810,8 @@ UniataAllocateLunExt(
     
     deviceExtension->chan = (PHW_CHANNEL)ExAllocatePool(NonPagedPool, sizeof(HW_CHANNEL) * (deviceExtension->NumberChannels+1));
     if (!deviceExtension->chan) {
+        ExFreePool(deviceExtension->lun);
+        deviceExtension->lun = NULL;
         KdPrint2((PRINT_PREFIX "!deviceExtension->chan => SP_RETURN_ERROR\n"));
         return FALSE;
     }
@@ -1023,7 +1037,25 @@ UniataFindBusMasterController(
 
     ConfigInfo->AlignmentMask = 0x00000003;
 
-    found = UniataChipDetect(HwDeviceExtension, &pciData, i, ConfigInfo, &simplexOnly);
+    MasterDev = IsMasterDev(&pciData);
+
+    if(MasterDev) {
+        KdPrint2((PRINT_PREFIX "MasterDev (1)\n"));
+        deviceExtension->MasterDev = TRUE;
+    }
+
+    status = UniataChipDetect(HwDeviceExtension, &pciData, i, ConfigInfo, &simplexOnly);
+    switch(status) {
+    case STATUS_SUCCESS:
+        found = TRUE;
+        break;
+    case STATUS_NOT_FOUND:
+        found = FALSE;
+        break;
+    default:
+        KdPrint2((PRINT_PREFIX "FAILED => SP_RETURN_ERROR\n"));
+        goto exit_error;
+    }
     KdPrint2((PRINT_PREFIX "ForceSimplex = %d\n", simplexOnly));
     KdPrint2((PRINT_PREFIX "HwFlags = %x\n (0)", deviceExtension->HwFlags));
     switch(dev_id) {
@@ -1072,14 +1104,6 @@ UniataFindBusMasterController(
         /* CMD 649, ROSB SWK33, ICH4 */
         KdPrint2((PRINT_PREFIX "UniataFindBusMasterController: UNIATA_NO_DPC (0)\n"));
         deviceExtension->UseDpc = FALSE;
-    }
-
-    MasterDev = IsMasterDev(&pciData);
-
-    if(MasterDev) {
-        KdPrint2((PRINT_PREFIX "MasterDev (1)\n"));
-        deviceExtension->MasterDev = TRUE;
-        deviceExtension->NumberChannels = 1;
     }
 
     if(MasterDev) {
@@ -1225,7 +1249,7 @@ UniataFindBusMasterController(
         deviceExtension->UseDpc = FALSE;
     }
 
-    if(simplexOnly || !MasterDev /*|| (WinVer_Id() > WinVer_NT)*/) {
+    if(simplexOnly && MasterDev) {
         if(deviceExtension->NumberChannels < 2) {
             KdPrint2((PRINT_PREFIX "set NumberChannels = 2\n"));
             deviceExtension->NumberChannels = 2;
@@ -1747,7 +1771,7 @@ UniataFindFakeBusMasterController(
 
     PIDE_BUSMASTER_REGISTERS BaseIoAddressBM_0 = NULL;
 
-//    NTSTATUS status;
+    NTSTATUS status;
     PPORT_CONFIGURATION_INFORMATION_COMMON _ConfigInfo =
         (PPORT_CONFIGURATION_INFORMATION_COMMON)ConfigInfo;
 
@@ -1859,7 +1883,18 @@ UniataFindFakeBusMasterController(
 
     ConfigInfo->AlignmentMask = 0x00000003;
 
-    found = UniataChipDetect(HwDeviceExtension, &pciData, i, ConfigInfo, &simplexOnly);
+    status = UniataChipDetect(HwDeviceExtension, &pciData, i, ConfigInfo, &simplexOnly);
+    switch(status) {
+    case STATUS_SUCCESS:
+        found = TRUE;
+        break;
+    case STATUS_NOT_FOUND:
+        found = FALSE;
+        break;
+    default:
+        KdPrint2((PRINT_PREFIX "FAILED => SP_RETURN_ERROR\n"));
+        goto exit_error;
+    }
     KdPrint2((PRINT_PREFIX "ForceSimplex = %d\n", simplexOnly));
     KdPrint2((PRINT_PREFIX "HwFlags = %x\n (0)", deviceExtension->HwFlags));
     switch(dev_id) {
@@ -2664,7 +2699,7 @@ UniataAnybodyHome(
         }
     } else {
 
-        SStatus.Reg = AtapiReadPort4(chan, IDX_SATA_SStatus);
+        SStatus.Reg = UniataSataReadPort4(chan, IDX_SATA_SStatus, deviceNumber);
         KdPrint2((PRINT_PREFIX "SStatus %x\n", SStatus.Reg));
         if(SStatus.DET <= SStatus_DET_Dev_NoPhy) {
             KdPrint2((PRINT_PREFIX "  SATA DET <= SStatus_DET_Dev_NoPhy\n"));
@@ -2733,7 +2768,7 @@ CheckDevice(
         //if(deviceExtension->HwFlags & UNIATA_SATA) {
             KdPrint2((PRINT_PREFIX 
                         "CheckDevice: try enable SATA Phy\n"));
-            statusByte = UniataSataPhyEnable(HwDeviceExtension, lChannel);
+            statusByte = UniataSataPhyEnable(HwDeviceExtension, lChannel, deviceNumber);
             if(statusByte == 0xff) {
                 KdPrint2((PRINT_PREFIX "CheckDevice: status %#x (no dev)\n", statusByte));
                 UniataForgetDevice(LunExt);
@@ -2752,7 +2787,7 @@ CheckDevice(
 
     GetBaseStatus(chan, statusByte);
     if(deviceExtension->HwFlags & UNIATA_SATA) {
-        UniataSataClearErr(HwDeviceExtension, lChannel, UNIATA_SATA_IGNORE_CONNECT);
+        UniataSataClearErr(HwDeviceExtension, lChannel, UNIATA_SATA_IGNORE_CONNECT, deviceNumber);
     }
 
     KdPrint2((PRINT_PREFIX "CheckDevice: status %#x\n", statusByte));

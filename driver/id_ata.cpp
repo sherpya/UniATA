@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2008 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2010 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     id_ata.cpp
@@ -231,7 +231,6 @@ UniataNanoSleep(
     } while(t);
 } // end UniataNanoSleep()
 
-
 #define AtapiWritePortN_template(_type, _Type, sz) \
 VOID \
 DDKFASTAPI \
@@ -251,6 +250,8 @@ AtapiWritePort##sz( \
         KdPrint(("invalid io write request @ ch %x, res* %x\n", chan, _port)); \
         return; \
     } \
+    if(res->Proc) {             \
+    } else  \
     if(!res->MemIo) {             \
         ScsiPortWritePort##_Type((_type*)(res->Addr), data); \
     } else {                                      \
@@ -284,6 +285,8 @@ AtapiWritePortEx##sz( \
         KdPrint(("invalid io write request @ ch %x, res* %x, offs %x\n", chan, _port, offs)); \
         return; \
     } \
+    if(res->Proc) {             \
+    } else  \
     if(!res->MemIo) {             \
         ScsiPortWritePort##_Type((_type*)(res->Addr+offs), data); \
     } else {                                      \
@@ -315,6 +318,9 @@ AtapiReadPort##sz( \
         KdPrint(("invalid io read request @ ch %x, res* %x\n", chan, _port)); \
         return (_type)(-1); \
     } \
+    if(res->Proc) {             \
+        return 0; \
+    } else  \
     if(!res->MemIo) {             \
         /*KdPrint(("r_io @ (%x) %x\n", _port, res->Addr));*/ \
         return ScsiPortReadPort##_Type((_type*)(res->Addr)); \
@@ -347,6 +353,9 @@ AtapiReadPortEx##sz( \
         KdPrint(("invalid io read request @ ch %x, res* %x, offs %x\n", chan, _port, offs)); \
         return (_type)(-1); \
     } \
+    if(res->Proc) {             \
+        return 0; \
+    } else  \
     if(!res->MemIo) {             \
         return ScsiPortReadPort##_Type((_type*)(res->Addr+offs)); \
     } else {                                      \
@@ -708,7 +717,10 @@ AtapiSoftReset(
         GetBaseStatus(chan, statusByte2);
     }
     if(chan->DeviceExtension->HwFlags & UNIATA_SATA) {
-        UniataSataClearErr(chan->DeviceExtension, chan->lChannel, UNIATA_SATA_IGNORE_CONNECT);
+        UniataSataClearErr(chan->DeviceExtension, chan->lChannel, UNIATA_SATA_IGNORE_CONNECT, DeviceNumber);
+/*        if(!(chan->ChannelCtrlFlags & CTRFLAGS_NO_SLAVE)) {
+            UniataSataClearErr(chan->DeviceExtension, chan->lChannel, UNIATA_SATA_IGNORE_CONNECT, 1);
+        }*/
     }
     return;
 
@@ -1299,14 +1311,16 @@ IssueIdentify(
             KdPrint2((PRINT_PREFIX "IssueIdentify: IDE_STATUS_DRQ (%#x)\n", statusByte));
             GetBaseStatus(chan, statusByte);
             // One last check for Atapi.
-            signatureLow = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow);
-            signatureHigh = AtapiReadPort1(chan, IDX_IO1_i_CylinderHigh);
+            if (Command == IDE_COMMAND_IDENTIFY) {
+                signatureLow = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow);
+                signatureHigh = AtapiReadPort1(chan, IDX_IO1_i_CylinderHigh);
 
-            if (signatureLow == ATAPI_MAGIC_LSB &&
-                signatureHigh == ATAPI_MAGIC_MSB) {
-                KdPrint2((PRINT_PREFIX "IssueIdentify: this is ATAPI (3) (ldev %d)\n", ldev));
-                // Device is Atapi.
-                return FALSE;
+                if (signatureLow == ATAPI_MAGIC_LSB &&
+                    signatureHigh == ATAPI_MAGIC_MSB) {
+                    KdPrint2((PRINT_PREFIX "IssueIdentify: this is ATAPI (3) (ldev %d)\n", ldev));
+                    // Device is Atapi.
+                    return FALSE;
+                }
             }
             break;
         } else {
@@ -1321,6 +1335,11 @@ IssueIdentify(
                     // Device is Atapi.
                     KdPrint2((PRINT_PREFIX "IssueIdentify: this is ATAPI (4) (ldev %d)\n", ldev));
                     return FALSE;
+                }
+            } else {
+                if(!(statusByte & IDE_STATUS_ERROR) && (statusByte & IDE_STATUS_BUSY)) {
+                    KdPrint2((PRINT_PREFIX "IssueIdentify: DRQ not asserted immediately, BUSY -> WaitForDrq\n"));
+                    break;
                 }
             }
             // Device didn't respond correctly. It will be given one more chances.
@@ -1868,7 +1887,7 @@ AtapiResetController__(
     ULONG DeviceID = (deviceExtension->DevID >> 16) & 0xffff;
     //ULONG RevID    =  deviceExtension->RevID;
     ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
-    UCHAR tmp8;
+    //UCHAR tmp8;
     UCHAR tmp16;
 
     KdPrint2((PRINT_PREFIX "AtapiResetController: Reset IDE %#x/%#x @ %#x\n", VendorID, DeviceID, slotNumber));
@@ -1984,6 +2003,7 @@ AtapiResetController__(
                 goto default_reset;
             }
 
+#if 0
             /* ICH6 & ICH7 in compat mode has 4 SATA ports as master/slave on 2 ch's */
             if(ChipFlags & UNIATA_AHCI) {
                 mask = 0x0005 << j;
@@ -1996,14 +2016,27 @@ AtapiResetController__(
                     mask = 0x0001 << j;
                 }
             }
+#else
+            mask = 1 << chan->lun[0]->SATA_lun_map;
+            if (max_ldev > 1) {
+            	mask |= (1 << chan->lun[1]->SATA_lun_map);
+            }
+#endif
             ChangePciConfig2(0x92, a & ~mask);
             AtapiStallExecution(10);
             ChangePciConfig2(0x92, a | mask);
             timeout = 100;
+
+            /* Wait up to 1 sec for "connect well". */
+            if (ChipFlags & (I6CH | I6CH2))
+                mask = mask << 8;
+            else
+                mask = mask << 4;
+
             while (timeout--) {
                 AtapiStallExecution(10000);
                 GetPciConfig2(0x92, tmp16);
-                if ((tmp16 & (mask << 4)) == (mask << 4)) {
+                if ((tmp16 & mask) == mask) {
                     AtapiStallExecution(10000);
                     break;
                 }
@@ -2024,7 +2057,7 @@ AtapiResetController__(
             /* disable PHY state change interrupt */
             AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0), 0x148 + offset, 0);
 
-            UniataSataClearErr(HwDeviceExtension, j, UNIATA_SATA_IGNORE_CONNECT);
+            UniataSataClearErr(HwDeviceExtension, j, UNIATA_SATA_IGNORE_CONNECT, 0);
 
             /* reset controller part for this channel */
             AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0), 0x48,
@@ -2040,7 +2073,7 @@ AtapiResetController__(
         default:
             if(ChipFlags & UNIATA_SATA) {
                 KdPrint2((PRINT_PREFIX "  SATA generic reset\n"));
-                UniataSataClearErr(HwDeviceExtension, j, UNIATA_SATA_IGNORE_CONNECT);
+                UniataSataClearErr(HwDeviceExtension, j, UNIATA_SATA_IGNORE_CONNECT, 0);
             }
 default_reset:
             KdPrint2((PRINT_PREFIX "  send reset\n"));
@@ -2059,7 +2092,7 @@ default_reset:
             KdPrint2((PRINT_PREFIX "  done\n"));
 
             break;
-        }
+        } // end switch()
 
         //if(!(ChipFlags & UNIATA_SATA)) {
         if(!UniataIsSATARangeAvailable(deviceExtension, j)) {
@@ -3573,7 +3606,7 @@ AtapiCheckInterrupt__(
 
     if((ChipFlags & UNIATA_AHCI) &&
         UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
-        OurInterrupt = UniataAhciStatus(HwDeviceExtension, lChannel);
+        OurInterrupt = UniataAhciStatus(HwDeviceExtension, lChannel, -1);
         return OurInterrupt;
     }
 
@@ -3647,18 +3680,18 @@ AtapiCheckInterrupt__(
 
         /* check for and handle connect events */
         if(((pr_status & (0x0cUL << shift)) == (0x04UL << shift)) ) {
-            UniataSataEvent(deviceExtension, lChannel, UNIATA_SATA_EVENT_ATTACH);
+            UniataSataEvent(deviceExtension, lChannel, UNIATA_SATA_EVENT_ATTACH, 0);
         }
         /* check for and handle disconnect events */
         if((pr_status & (0x08UL << shift)) &&
             !((pr_status & (0x04UL << shift) &&
-            AtapiReadPort4(chan, IDX_SATA_SStatus))) ) {
-            UniataSataEvent(deviceExtension, lChannel, UNIATA_SATA_EVENT_DETACH);
+            UniataSataReadPort4(chan, IDX_SATA_SStatus, 0))) ) {
+            UniataSataEvent(deviceExtension, lChannel, UNIATA_SATA_EVENT_DETACH, 0);
         }
         /* do we have any device action ? */
         if(!(pr_status & (0x01UL << shift))) {
             KdPrint2((PRINT_PREFIX "  nVidia unexpected\n"));
-            if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT)) {
+            if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT, 0)) {
                 OurInterrupt = 2;
             } else {
                 return FALSE;
@@ -3695,7 +3728,7 @@ AtapiCheckInterrupt__(
                     * controllers continue to assert IRQ as long as
                     * SError bits are pending.  Clear SError immediately.
                     */
-                    if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT)) {
+                    if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT, 0)) {
                         OurInterrupt = 2;
                     }
                 }
@@ -3740,13 +3773,30 @@ AtapiCheckInterrupt__(
         AtapiWritePort1(chan, IDX_BM_Command,
             AtapiReadPort1(chan, IDX_BM_Command) & ~BM_COMMAND_START_STOP);
         goto skip_dma_stat_check;
+    case ATA_INTEL_ID:
+        if(UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
+            if(ChipFlags & UNIATA_AHCI) {
+                // Do nothing here
+            } else
+            if(ChipFlags & UNIATA_SATA) {
+                if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT, 0)) {
+                    OurInterrupt = 2;
+                }
+                if(!(chan->ChannelCtrlFlags & CTRFLAGS_NO_SLAVE)) {
+                    if(UniataSataClearErr(chan->DeviceExtension, chan->lChannel, UNIATA_SATA_IGNORE_CONNECT, 1)) {
+                        OurInterrupt = 2;
+                    }
+                }
+            }
+        }
+        break;
     default:
         if(UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
             if(ChipFlags & UNIATA_AHCI) {
                 // Do nothing here
             } else
             if(ChipFlags & UNIATA_SATA) {
-                if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT)) {
+                if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT, 0)) {
                     OurInterrupt = 2;
                 }
             }
@@ -8499,7 +8549,7 @@ DriverEntry(
                                                Argument2,
                                                &hwInitializationData.comm,
                                                (PVOID)(i | (alt ? 0x80000000 : 0)));
-                KdPrint2((PRINT_PREFIX "Status %#x\n", newStatus));
+                KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x\n", newStatus));
                 if (newStatus < statusToReturn) {
                     statusToReturn = newStatus;
                 }
@@ -8547,7 +8597,7 @@ DriverEntry(
                                            Argument2,
                                            &hwInitializationData.comm,
                                            (PVOID)i);
-            KdPrint2((PRINT_PREFIX "Status %#x\n", newStatus));
+            KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x\n", newStatus));
         }
 #endif //0
         if(g_opt_Verbose) {
@@ -8601,6 +8651,7 @@ DriverEntry(
                                        Argument2,
                                        &hwInitializationData.comm,
                                        (PVOID)i);
+        KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x\n", newStatus));
         if (newStatus < statusToReturn)
             statusToReturn = newStatus;
 
@@ -8644,6 +8695,7 @@ DriverEntry(
                                         Argument2,
                                         &hwInitializationData.comm,
                                         &adapterCount);
+        KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x\n", newStatus));
         if (newStatus < statusToReturn)
             statusToReturn = newStatus;
     }
@@ -8657,12 +8709,13 @@ DriverEntry(
                                         Argument2,
                                         &hwInitializationData.comm,
                                         &adapterCount);
+        KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x\n", newStatus));
         if (newStatus < statusToReturn)
             statusToReturn = newStatus;
     }
     InDriverEntry = FALSE;
 
-    KdPrint2((PRINT_PREFIX "\n\nLeave ATAPI IDE MiniPort DriverEntry with status %#x\n", statusToReturn));
+    KdPrint2((PRINT_PREFIX "\n\nLeave UNIATA MiniPort DriverEntry with status %#x\n", statusToReturn));
 
     return statusToReturn;
 

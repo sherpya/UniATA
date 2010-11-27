@@ -30,6 +30,18 @@ _MOV_DW_SWP(
 }
 #define MOV_DW_SWP(a,b) _MOV_DW_SWP(&(a),&(b))
 
+#define MOV_DD_SWP(a,b)           \
+{                                 \
+    PFOUR_BYTE _from_, _to_;      \
+    _from_ = ((PFOUR_BYTE)&(b));  \
+    _to_ =   ((PFOUR_BYTE)&(a));  \
+    __asm mov ebx,_from_          \
+    __asm mov eax,[ebx]           \
+    __asm bswap eax               \
+    __asm mov ebx,_to_            \
+    __asm mov [ebx],eax           \
+}
+
 int g_extended = 0;
 int g_adapter_info = 0;
 char* g_bb_list = NULL;
@@ -590,6 +602,8 @@ ata_check_unit(
     char DevSerial[128];
     char lun_str[10];
     HKEY hKey2;
+    ULONGLONG max_lba = -1;
+    USHORT chs[3];
 
     if(dev_id != -1) {
         dev_id &= 0x00ffffff;
@@ -744,6 +758,7 @@ ata_check_unit(
                 if(status && g_extended) {
 
                     BOOLEAN BlockMode_valid = TRUE;
+                    BOOLEAN print_geom = FALSE;
 
                     switch(ident->DeviceType) {
                     case ATAPI_TYPE_DIRECT:
@@ -766,6 +781,18 @@ ata_check_unit(
                         break;
                     default:
                         printf("    Hard Drive    ");
+                        print_geom = 1;
+                        //MOV_DD_SWP(max_lba, ident->UserAddressableSectors);
+                        max_lba = ident->UserAddressableSectors;
+                        if(ident->FeaturesSupport.Address48) {
+                           max_lba = ident->UserAddressableSectors48;
+                        }
+                        //MOV_DW_SWP(chs[0], ident->NumberOfCylinders);
+                        //MOV_DW_SWP(chs[1], ident->NumberOfHeads);
+                        //MOV_DW_SWP(chs[2], ident->SectorsPerTrack);
+                        chs[0] = ident->NumberOfCylinders;
+                        chs[1] = ident->NumberOfHeads;
+                        chs[2] = ident->SectorsPerTrack;
                     }
                     if(io_mode != -1) {
                         printf("           %.12s\n", mode_str);
@@ -790,7 +817,27 @@ ata_check_unit(
                             printf("    Multi-block mode:        N/A\n");
                         }
                     }
-
+                    if(print_geom) {
+                        printf("    C/H/S:                   %d/%d/%d \n", chs[0], chs[1], chs[2]);
+                        printf("    LBA:                     %d \n", max_lba);
+                        if(max_lba < 2) {
+                            printf("    Size:                    %d kb\n", max_lba/2);
+                        } else
+                        if(max_lba < 2*1024*1024) {
+                            printf("    Size:                    %d Mb\n", max_lba/2048);
+                        } else
+                        if(max_lba < (ULONG)2*1024*1024*1024) {
+                            printf("    Size:                    %d.%d (%d) Gb\n", (ULONG)(max_lba/2048/1024),
+                                                                              (ULONG)(((max_lba/2048)%1024)/10),
+                                                                              (ULONG)(max_lba*512/1000/1000/1000)
+                            );
+                        } else {
+                            printf("    Size:                    %d.%d (%d) Tb\n", (ULONG)(max_lba/2048/1024/1024),
+                                                                              (ULONG)((max_lba/2048/1024)%1024)/10,
+                                                                              (ULONG)(max_lba*512/1000/1000/1000)
+                            );
+                        }
+                    }
                     len = 0;
                     if(hKey2 = ata_get_bblist_regh(ident, DevSerial, TRUE)) {
                         if(RegQueryValueEx(hKey2, DevSerial, NULL, NULL, NULL, &len) == ERROR_SUCCESS) {

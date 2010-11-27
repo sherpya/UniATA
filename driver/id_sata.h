@@ -4,13 +4,15 @@
 UCHAR
 UniataSataConnect(
     IN PVOID HwDeviceExtension,
-    IN ULONG lChannel          // logical channel
+    IN ULONG lChannel,          // logical channel
+    IN ULONG pm_port = 0 /* for port multipliers */
     );
 
 UCHAR
 UniataSataPhyEnable(
     IN PVOID HwDeviceExtension,
-    IN ULONG lChannel          // logical channel
+    IN ULONG lChannel,          // logical channel
+    IN ULONG pm_port = 0 /* for port multipliers */
     );
 
 #define UNIATA_SATA_DO_CONNECT        TRUE
@@ -20,7 +22,8 @@ BOOLEAN
 UniataSataClearErr(
     IN PVOID HwDeviceExtension,
     IN ULONG lChannel,          // logical channel
-    IN BOOLEAN do_connect
+    IN BOOLEAN do_connect,
+    IN ULONG pm_port = 0 /* for port multipliers */
     );
 
 #define UNIATA_SATA_EVENT_ATTACH      0x01
@@ -30,13 +33,29 @@ BOOLEAN
 UniataSataEvent(
     IN PVOID HwDeviceExtension,
     IN ULONG lChannel,          // logical channel
-    IN ULONG Action
+    IN ULONG Action,
+    IN ULONG pm_port = 0 /* for port multipliers */
     );
 
 #define UniataIsSATARangeAvailable(deviceExtension, lChannel) \
     ((deviceExtension->BaseIoAddressSATA_0.Addr || \
       deviceExtension->BaseIoAHCI_0.Addr) && \
         (deviceExtension->chan[lChannel].RegTranslation[IDX_SATA_SStatus].Addr))
+
+ULONG
+UniataSataReadPort4(
+    IN PHW_CHANNEL chan,
+    IN ULONG io_port_ndx,
+    IN ULONG pm_port=0 /* for port multipliers */
+    );
+
+VOID
+UniataSataWritePort4(
+    IN PHW_CHANNEL chan,
+    IN ULONG io_port_ndx,
+    IN ULONG data,
+    IN ULONG pm_port=0 /* for port multipliers */
+    );
 
 BOOLEAN
 UniataAhciInit(
@@ -46,7 +65,8 @@ UniataAhciInit(
 UCHAR
 UniataAhciStatus(
     IN PVOID HwDeviceExtension,
-    IN ULONG lChannel
+    IN ULONG lChannel,
+    IN ULONG DeviceNumber
     );
 
 ULONG
