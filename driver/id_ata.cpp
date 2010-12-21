@@ -8363,7 +8363,7 @@ DriverEntry(
     LARGE_INTEGER t0, t1;
 
     Connect_DbgPrint();
-    KdPrint2((PRINT_PREFIX (PCCHAR)ver_string));
+    KdPrint2((PRINT_PREFIX "%s", (PCCHAR)ver_string));
     a = (WCHAR)strlen(ver_string);
 
     g_opt_Verbose = (BOOLEAN)AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"PrintLogo", 0);
@@ -8501,6 +8501,8 @@ DriverEntry(
         if(g_opt_Verbose) {
             _PrintNtConsole("Init standard Dual-channel PCI ATA controller:");
         }
+
+
         for(alt = 0; alt < (ULONG)(WinVer_WDM_Model ? 1 : 2) ; alt++) {
 
             for(c=0; c<2; c++) {
@@ -8652,6 +8654,15 @@ DriverEntry(
                                        &hwInitializationData.comm,
                                        (PVOID)i);
         KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x\n", newStatus));
+        if(newStatus == STATUS_DEVICE_DOES_NOT_EXIST && BMList[i].NeedAltInit) {
+            KdPrint2((PRINT_PREFIX "STATUS_DEVICE_DOES_NOT_EXIST, try workaround\n"));
+            hwInitializationData.comm.AdapterInterfaceType = Isa;
+            newStatus = ScsiPortInitialize(DriverObject,
+                                           Argument2,
+                                           &hwInitializationData.comm,
+                                           (PVOID)(i | 0x80000000));
+            KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x (2)\n", newStatus));
+        }
         if (newStatus < statusToReturn)
             statusToReturn = newStatus;
 
@@ -9045,7 +9056,7 @@ AtapiRegCheckParameterValue(
 
     status = RtlQueryRegistryValues(RTL_REGISTRY_ABSOLUTE /*| RTL_REGISTRY_OPTIONAL*/,
                                     paramPath.Buffer, parameters, NULL, NULL);
-    //KdPrint(( "AtapiCheckRegValue: %ws -> %ws is %#x\n", PathSuffix, Name, doRun));
+    KdPrint(( "AtapiCheckRegValue: %ws -> %ws is %#x\n", PathSuffix, Name, doRun));
 
     ExFreePool(paramPath.Buffer);
 
