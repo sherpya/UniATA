@@ -64,6 +64,7 @@ PDRIVER_OBJECT SavedDriverObject = NULL;
 // local routines 
 
 ULONG
+NTAPI
 UniataEnumBusMasterController__(
 /*    IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -74,9 +75,9 @@ UniataEnumBusMasterController__(
     );
 
 VOID
+NTAPI
 AtapiDoNothing(VOID)
 {
-    ULONG i = 0;
     return;
 } // end AtapiDoNothing()
 
@@ -86,6 +87,7 @@ AtapiDoNothing(VOID)
     Get PCI address by ConfigInfo and RID
 */
 ULONG
+NTAPI
 AtapiGetIoRange(
     IN PVOID HwDeviceExtension,
     IN PPORT_CONFIGURATION_INFORMATION ConfigInfo,
@@ -96,7 +98,7 @@ AtapiGetIoRange(
     IN ULONG length
     )
 {
-    ULONG io_start = 0;
+    ULONGIO_PTR io_start = 0;
     KdPrint2((PRINT_PREFIX "  AtapiGetIoRange:\n"));
 
     if(ConfigInfo->NumberOfAccessRanges <= rid)
@@ -169,6 +171,7 @@ AtapiGetIoRange(
     Hal routines directly in order to scan PCI bus.
 */
 VOID
+NTAPI
 UniataEnumBusMasterController(
     IN PVOID DriverObject,
     PVOID Argument2
@@ -179,6 +182,7 @@ UniataEnumBusMasterController(
 } // end UniataEnumBusMasterController()
 
 BOOLEAN
+NTAPI
 UniataCheckPCISubclass(
     BOOLEAN known,
     ULONG   RaidFlags,
@@ -218,6 +222,7 @@ UniataCheckPCISubclass(
     Builds PCI device list using Hal routines (not ScsiPort wrappers)
 */
 ULONG
+NTAPI
 UniataEnumBusMasterController__(
     )
 {
@@ -516,8 +521,8 @@ UniataEnumBusMasterController__(
 /*                        if(known) {
                             RtlCopyMemory(newBMListPtr, (PVOID)&(BusMasterAdapters[i]), sizeof(BUSMASTER_CONTROLLER_INFORMATION));
                         } else {*/
-                        sprintf((PCHAR)vendorStrPtr, "%4.4x", VendorID);
-                        sprintf((PCHAR)deviceStrPtr, "%4.4x", DeviceID);
+                        sprintf((PCHAR)vendorStrPtr, "%4.4lx", VendorID);
+                        sprintf((PCHAR)deviceStrPtr, "%4.4lx", DeviceID);
 
                         RtlCopyMemory(&(newBMListPtr->VendorIdStr), (PCHAR)vendorStrPtr, 4);
                         RtlCopyMemory(&(newBMListPtr->DeviceIdStr), (PCHAR)deviceStrPtr, 4);
@@ -574,6 +579,7 @@ UniataEnumBusMasterController__(
     Wrapper for read PCI config space
 */
 ULONG 
+NTAPI
 ScsiPortGetBusDataByOffset(
     IN PVOID  HwDeviceExtension,
     IN BUS_DATA_TYPE  BusDataType,
@@ -612,6 +618,7 @@ ScsiPortGetBusDataByOffset(
     If no matching record found, -1 is returned
 */
 ULONG
+NTAPI
 AtapiFindListedDev(
     PBUSMASTER_CONTROLLER_INFORMATION BusMasterAdapters,
     ULONG     lim,
@@ -702,6 +709,7 @@ AtapiFindListedDev(
     on specified Bus/Slot
 */
 ULONG
+NTAPI
 AtapiFindDev(
     IN PVOID  HwDeviceExtension,
     IN BUS_DATA_TYPE  BusDataType,
@@ -754,6 +762,7 @@ AtapiFindDev(
 
 
 ULONG
+NTAPI
 UniataFindCompatBusMasterController1(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -774,6 +783,7 @@ UniataFindCompatBusMasterController1(
 } // end UniataFindCompatBusMasterController1()
 
 ULONG
+NTAPI
 UniataFindCompatBusMasterController2(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -794,6 +804,7 @@ UniataFindCompatBusMasterController2(
 } // end UniataFindCompatBusMasterController2()
 
 BOOLEAN
+NTAPI
 UniataAllocateLunExt(
     PHW_DEVICE_EXTENSION  deviceExtension,
     ULONG NewNumberChannels
@@ -856,6 +867,7 @@ Return Value:
 
 --*/
 ULONG
+NTAPI
 UniataFindBusMasterController(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -901,7 +913,11 @@ UniataFindBusMasterController(
     BOOLEAN found = FALSE;
     BOOLEAN MasterDev;
     BOOLEAN simplexOnly = FALSE;
+#ifndef UNIATA_CORE
+#ifdef UNIATA_INIT_ON_PROBE
     BOOLEAN skip_find_dev = FALSE;
+#endif
+#endif
     BOOLEAN AltInit = FALSE;
 
     SCSI_PHYSICAL_ADDRESS IoBasePort1;
@@ -1201,7 +1217,7 @@ UniataFindBusMasterController(
                                 BaseIoAddressBM_0,
                                 (*ConfigInfo->AccessRanges)[4].RangeInMemory ? TRUE : FALSE);
                 deviceExtension->BusMaster = TRUE;
-                deviceExtension->BaseIoAddressBM_0.Addr  = (ULONG)BaseIoAddressBM_0;
+                deviceExtension->BaseIoAddressBM_0.Addr  = (ULONGIO_PTR)BaseIoAddressBM_0;
                 if((*ConfigInfo->AccessRanges)[4].RangeInMemory) {
                     deviceExtension->BaseIoAddressBM_0.MemIo = TRUE;
                 }
@@ -1748,6 +1764,7 @@ exit_notfound:
    This is for claiming PCI Busmaster in compatible mode under WDM OSes
 */
 ULONG
+NTAPI
 UniataFindFakeBusMasterController(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -1998,7 +2015,7 @@ UniataFindFakeBusMasterController(
                         BaseIoAddressBM_0,
                         (*ConfigInfo->AccessRanges)[4].RangeInMemory ? TRUE : FALSE);
         deviceExtension->BusMaster = TRUE;
-        deviceExtension->BaseIoAddressBM_0.Addr  = (ULONG)BaseIoAddressBM_0;
+        deviceExtension->BaseIoAddressBM_0.Addr  = (ULONGIO_PTR)BaseIoAddressBM_0;
         if((*ConfigInfo->AccessRanges)[4].RangeInMemory) {
             deviceExtension->BaseIoAddressBM_0.MemIo = TRUE;
         }
@@ -2099,6 +2116,7 @@ Return Value:
 
 --*/
 NTSTATUS
+NTAPI
 UniataConnectIntr2(
     IN PVOID HwDeviceExtension
     )
@@ -2201,6 +2219,7 @@ UniataConnectIntr2(
 } // end UniataConnectIntr2()
 
 NTSTATUS
+NTAPI
 UniataDisconnectIntr2(
     IN PVOID HwDeviceExtension
     )
@@ -2252,6 +2271,7 @@ Return Value:
 
 --*/
 ULONG
+NTAPI
 AtapiFindController(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -2264,7 +2284,7 @@ AtapiFindController(
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     PHW_CHANNEL          chan;
     PULONG               adapterCount    = (PULONG)Context;
-    PUCHAR               ioSpace;
+    PUCHAR               ioSpace = NULL;
     ULONG                i;
     ULONG                irq=0;
     ULONG                portBase;
@@ -2274,7 +2294,7 @@ AtapiFindController(
     BOOLEAN              preConfig = FALSE;
     //
     PIDE_REGISTERS_1 BaseIoAddress1;
-    PIDE_REGISTERS_2 BaseIoAddress2;
+    PIDE_REGISTERS_2 BaseIoAddress2 = NULL;
 
     // The following table specifies the ports to be checked when searching for
     // an IDE controller.  A zero entry terminates the search.
@@ -2418,14 +2438,14 @@ AtapiFindController(
                 ioSpace = (PUCHAR)ScsiPortGetDeviceBase(HwDeviceExtension,
                                                 ConfigInfo->AdapterInterfaceType,
                                                 ConfigInfo->SystemIoBusNumber,
-                                                ScsiPortConvertUlongToPhysicalAddress((ULONG)BaseIoAddress1 + 0x0E),
+                                                ScsiPortConvertUlongToPhysicalAddress((ULONGIO_PTR)BaseIoAddress1 + 0x0E),
                                                 ATA_ALTIOSIZE,
                                                 TRUE);
             } else {
                 ioSpace = (PUCHAR)ScsiPortGetDeviceBase(HwDeviceExtension,
                                                 ConfigInfo->AdapterInterfaceType,
                                                 ConfigInfo->SystemIoBusNumber,
-                                                ScsiPortConvertUlongToPhysicalAddress((ULONG)BaseIoAddress1 + ATA_ALTOFFSET),
+                                                ScsiPortConvertUlongToPhysicalAddress((ULONGIO_PTR)BaseIoAddress1 + ATA_ALTOFFSET),
                                                 ATA_ALTIOSIZE,
                                                 TRUE);
             }
@@ -2669,6 +2689,7 @@ exit_error:
 } // end AtapiFindController()
 
 BOOLEAN
+NTAPI
 UniataAnybodyHome(
     IN PVOID   HwDeviceExtension,
     IN ULONG   lChannel,
@@ -2744,6 +2765,7 @@ UniataAnybodyHome(
 } // end UniataAnybodyHome()
 
 ULONG
+NTAPI
 CheckDevice(
     IN PVOID   HwDeviceExtension,
     IN ULONG   lChannel,
@@ -2760,6 +2782,7 @@ CheckDevice(
                          signatureHigh;
     UCHAR                statusByte;
     ULONG                RetVal=0;
+    ULONG                waitCount = 10000;
 
     KdPrint2((PRINT_PREFIX "CheckDevice: Device %#x\n",
                deviceNumber));
@@ -2782,7 +2805,22 @@ CheckDevice(
             // Perform hard-reset.
             KdPrint2((PRINT_PREFIX 
                         "CheckDevice: BUSY\n"));
+
+            AtapiWritePort1(chan, IDX_IO2_o_Control, IDE_DC_RESET_CONTROLLER );
+            AtapiStallExecution(500 * 1000);
+            AtapiWritePort1(chan, IDX_IO2_o_Control, IDE_DC_REENABLE_CONTROLLER);
+            SelectDrive(chan, deviceNumber & 0x01);
+
+            do {
+                // Wait for Busy to drop.
+                AtapiStallExecution(100);
+                GetStatus(chan, statusByte);
+
+            } while ((statusByte & IDE_STATUS_BUSY) && waitCount--);
+
             GetBaseStatus(chan, statusByte);
+            KdPrint2((PRINT_PREFIX
+                        "CheckDevice: status after hard reset %x\n", statusByte));
         }
 
         if((statusByte | IDE_STATUS_BUSY) == 0xff) {
@@ -2928,6 +2966,7 @@ Return Value:
 
 --*/
 BOOLEAN
+NTAPI
 FindDevices(
     IN PVOID HwDeviceExtension,
     IN ULONG   Flags,

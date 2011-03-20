@@ -191,6 +191,7 @@ typedef struct _IDE_AHCI_REGISTERS {
         ULONG AE:1;    // AHCI enable
     } GHC;
 
+#define AHCI_GHC   0x04
 #define AHCI_GHC_HR    0x00000001
 #define AHCI_GHC_IE    0x00000002
 #define AHCI_GHC_AE    0x80000000
@@ -1013,7 +1014,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     BOOLEAN        opt_AtapiDmaRawRead;      // default TRUE
     BOOLEAN        opt_AtapiDmaReadWrite;    // default TRUE  
 
-    PCHAR          FullDevName;
+    PCCH           FullDevName;
 
     // Controller specific state/options
     union {
@@ -1040,12 +1041,13 @@ extern const CHAR retry_Wdma[MAX_RETRIES+1];
 extern const CHAR retry_Udma[MAX_RETRIES+1];
 
 extern VOID
+NTAPI
 UniataEnumBusMasterController(
     IN PVOID DriverObject,
     PVOID Argument2
     );
 
-extern ULONG DDKAPI
+extern ULONG NTAPI
 UniataFindCompatBusMasterController1(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -1055,7 +1057,7 @@ UniataFindCompatBusMasterController1(
     OUT PBOOLEAN Again
     );
 
-extern ULONG DDKAPI
+extern ULONG NTAPI
 UniataFindCompatBusMasterController2(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -1068,12 +1070,13 @@ UniataFindCompatBusMasterController2(
 #define UNIATA_ALLOCATE_NEW_LUNS  0x00
 
 extern BOOLEAN
+NTAPI
 UniataAllocateLunExt(
     PHW_DEVICE_EXTENSION  deviceExtension,
     ULONG NewNumberChannels
     );
 
-extern ULONG DDKAPI
+extern ULONG NTAPI
 UniataFindBusMasterController(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -1083,7 +1086,7 @@ UniataFindBusMasterController(
     OUT PBOOLEAN Again
     );
 
-extern ULONG DDKAPI
+extern ULONG NTAPI
 UniataFindFakeBusMasterController(
     IN PVOID HwDeviceExtension,
     IN PVOID Context,
@@ -1094,16 +1097,19 @@ UniataFindFakeBusMasterController(
     );
 
 extern NTSTATUS
+NTAPI
 UniataConnectIntr2(
     IN PVOID HwDeviceExtension
     );
 
 extern NTSTATUS
+NTAPI
 UniataDisconnectIntr2(
     IN PVOID HwDeviceExtension
     );
 
-extern ULONG 
+extern ULONG
+NTAPI
 ScsiPortGetBusDataByOffset(
     IN PVOID  HwDeviceExtension,
     IN BUS_DATA_TYPE  BusDataType,
@@ -1118,6 +1124,7 @@ ScsiPortGetBusDataByOffset(
 #define PCISLOTNUM_NOT_SPECIFIED   (0xffffffffL)
 
 extern ULONG
+NTAPI
 AtapiFindListedDev(
     PBUSMASTER_CONTROLLER_INFORMATION BusMasterAdapters,
     ULONG     lim,
@@ -1128,6 +1135,7 @@ AtapiFindListedDev(
     );
 
 extern ULONG
+NTAPI
 AtapiFindDev(
     IN PVOID  HwDeviceExtension,
     IN BUS_DATA_TYPE  BusDataType,
@@ -1138,6 +1146,7 @@ AtapiFindDev(
     );
 
 extern VOID
+NTAPI
 AtapiDmaAlloc(
     IN PVOID HwDeviceExtension,
     IN PPORT_CONFIGURATION_INFORMATION ConfigInfo,
@@ -1145,6 +1154,7 @@ AtapiDmaAlloc(
     );
 
 extern BOOLEAN
+NTAPI
 AtapiDmaSetup(
     IN PVOID HwDeviceExtension,
     IN ULONG DeviceNumber,
@@ -1155,6 +1165,7 @@ AtapiDmaSetup(
     );
 
 extern BOOLEAN
+NTAPI
 AtapiDmaPioSync(
     PVOID  HwDeviceExtension,
     PSCSI_REQUEST_BLOCK Srb,
@@ -1163,12 +1174,14 @@ AtapiDmaPioSync(
     );
 
 extern BOOLEAN
+NTAPI
 AtapiDmaDBSync(
     PHW_CHANNEL chan,
     PSCSI_REQUEST_BLOCK Srb
     );
 
 extern VOID
+NTAPI
 AtapiDmaStart(
     IN PVOID HwDeviceExtension,
     IN ULONG DeviceNumber,
@@ -1177,6 +1190,7 @@ AtapiDmaStart(
     );
 
 extern UCHAR
+NTAPI
 AtapiDmaDone(
     IN PVOID HwDeviceExtension,
     IN ULONG DeviceNumber,
@@ -1185,6 +1199,7 @@ AtapiDmaDone(
     );
 
 extern VOID
+NTAPI
 AtapiDmaReinit(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN ULONG ldev,
@@ -1192,20 +1207,22 @@ AtapiDmaReinit(
     );
 
 extern VOID
+NTAPI
 AtapiDmaInit__(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN ULONG ldev
     );
 
 extern VOID
+NTAPI
 AtapiDmaInit(
     IN PVOID HwDeviceExtension,
     IN ULONG DeviceNumber,
     IN ULONG lChannel,          // logical channel,
                                // is always 0 except simplex-only controllers
-    IN CHAR apiomode,
-    IN CHAR wdmamode,
-    IN CHAR udmamode
+    IN SCHAR apiomode,
+    IN SCHAR wdmamode,
+    IN SCHAR udmamode
     );
 
 extern BOOLEAN NTAPI
@@ -1217,6 +1234,7 @@ AtapiInterrupt2(
 extern PDRIVER_OBJECT SavedDriverObject;
 
 extern BOOLEAN
+NTAPI
 UniataChipDetectChannels(
     IN PVOID HwDeviceExtension,
     IN PPCI_COMMON_CONFIG pciData, // optional
@@ -1225,6 +1243,7 @@ UniataChipDetectChannels(
     );
 
 extern NTSTATUS
+NTAPI
 UniataChipDetect(
     IN PVOID HwDeviceExtension,
     IN PPCI_COMMON_CONFIG pciData, // optional
@@ -1234,6 +1253,7 @@ UniataChipDetect(
     );
 
 extern BOOLEAN
+NTAPI
 AtapiChipInit(
     IN PVOID HwDeviceExtension,
     IN ULONG DeviceNumber,
@@ -1241,6 +1261,7 @@ AtapiChipInit(
     );
 
 extern ULONG
+NTAPI
 AtapiGetIoRange(
     IN PVOID HwDeviceExtension,
     IN PPORT_CONFIGURATION_INFORMATION ConfigInfo,
@@ -1356,7 +1377,7 @@ VOID
 DDKFASTAPI
 AtapiWritePort4(
     IN PHW_CHANNEL chan,
-    IN ULONG port,
+    IN ULONGIO_PTR port,
     IN ULONG data
     );
 
@@ -1364,7 +1385,7 @@ VOID
 DDKFASTAPI
 AtapiWritePort2(
     IN PHW_CHANNEL chan,
-    IN ULONG port,
+    IN ULONGIO_PTR port,
     IN USHORT data
     );
 
@@ -1372,7 +1393,7 @@ VOID
 DDKFASTAPI
 AtapiWritePort1(
     IN PHW_CHANNEL chan,
-    IN ULONG port,
+    IN ULONGIO_PTR port,
     IN UCHAR data
     );
 
@@ -1380,7 +1401,7 @@ VOID
 DDKFASTAPI
 AtapiWritePortEx4(
     IN PHW_CHANNEL chan,
-    IN ULONG port,
+    IN ULONGIO_PTR port,
     IN ULONG offs,
     IN ULONG data
     );
@@ -1389,7 +1410,7 @@ VOID
 DDKFASTAPI
 AtapiWritePortEx1(
     IN PHW_CHANNEL chan,
-    IN ULONG port,
+    IN ULONGIO_PTR port,
     IN ULONG offs,
     IN UCHAR data
     );
@@ -1398,28 +1419,28 @@ ULONG
 DDKFASTAPI
 AtapiReadPort4(
     IN PHW_CHANNEL chan,
-    IN ULONG port
+    IN ULONGIO_PTR port
     );
 
 USHORT
 DDKFASTAPI
 AtapiReadPort2(
     IN PHW_CHANNEL chan,
-    IN ULONG port
+    IN ULONGIO_PTR port
     );
 
 UCHAR
 DDKFASTAPI
 AtapiReadPort1(
     IN PHW_CHANNEL chan,
-    IN ULONG port
+    IN ULONGIO_PTR port
     );
 
 ULONG
 DDKFASTAPI
 AtapiReadPortEx4(
     IN PHW_CHANNEL chan,
-    IN ULONG port,
+    IN ULONGIO_PTR port,
     IN ULONG offs
     );
 
@@ -1427,7 +1448,7 @@ UCHAR
 DDKFASTAPI
 AtapiReadPortEx1(
     IN PHW_CHANNEL chan,
-    IN ULONG port,
+    IN ULONGIO_PTR port,
     IN ULONG offs
     );
 
@@ -1435,7 +1456,7 @@ VOID
 DDKFASTAPI
 AtapiWriteBuffer4(
     IN PHW_CHANNEL chan,
-    IN ULONG _port,
+    IN ULONGIO_PTR _port,
     IN PVOID Buffer,
     IN ULONG Count,
     IN ULONG Timing
@@ -1445,7 +1466,7 @@ VOID
 DDKFASTAPI
 AtapiWriteBuffer2(
     IN PHW_CHANNEL chan,
-    IN ULONG _port,
+    IN ULONGIO_PTR _port,
     IN PVOID Buffer,
     IN ULONG Count,
     IN ULONG Timing
@@ -1455,7 +1476,7 @@ VOID
 DDKFASTAPI
 AtapiReadBuffer4(
     IN PHW_CHANNEL chan,
-    IN ULONG _port,
+    IN ULONGIO_PTR _port,
     IN PVOID Buffer,
     IN ULONG Count,
     IN ULONG Timing
@@ -1465,7 +1486,7 @@ VOID
 DDKFASTAPI
 AtapiReadBuffer2(
     IN PHW_CHANNEL chan,
-    IN ULONG _port,
+    IN ULONGIO_PTR _port,
     IN PVOID Buffer,
     IN ULONG Count,
     IN ULONG Timing
@@ -1481,6 +1502,7 @@ AtapiReadBuffer2(
 #define GET_CDEV(Srb)  (Srb->TargetId)
 
 VOID
+NTAPI
 AtapiSetupLunPtrs(
     IN PHW_CHANNEL chan,
     IN PHW_DEVICE_EXTENSION deviceExtension,
@@ -1500,6 +1522,7 @@ AtapiSetupLunPtrs(
 }
 */
 BOOLEAN
+NTAPI
 AtapiReadChipConfig(
     IN PVOID HwDeviceExtension,
     IN ULONG DeviceNumber,
@@ -1507,12 +1530,14 @@ AtapiReadChipConfig(
     );
 
 VOID
+NTAPI
 UniataForgetDevice(
     PHW_LU_EXTENSION   LunExt
     );
 
 extern ULONG SkipRaids;
 extern ULONG ForceSimplex;
+extern BOOLEAN g_opt_AtapiDmaRawRead;
 
 extern BOOLEAN InDriverEntry;
 

@@ -87,9 +87,19 @@
 /***************************************************/
 
 /* ReactOS-specific defines */
-#ifdef DDKAPI
+#ifdef __REACTOS__
  #define USE_REACTOS_DDK
 #endif //DDKAPI
+
+#ifdef USE_REACTOS_DDK
+ #define ULONGIO_PTR     ULONG_PTR
+ #define CRNT_ILK_TYPE   
+ #define CRNT_ILK_PTYPE
+#else 
+ #define ULONGIO_PTR     ULONG
+ #define CRNT_ILK_TYPE   (PVOID)
+ #define CRNT_ILK_PTYPE  (PVOID*)
+#endif //USE_REACTOS_DDK
 
 /* Are we under GNU C (mingw) ??? */
 #if __GNUC__ >=3

@@ -122,6 +122,7 @@ BadBlockQueryRoutine(
 
 
 void
+NTAPI
 InitBadBlocks(
     IN PHW_LU_EXTENSION LunExt
     )
@@ -159,7 +160,11 @@ InitBadBlocks(
                                                 L"UniATA\\Parameters\\BadBlocks",
                                                 QueryTable, 0, 0);
 
+#ifdef _DEBUG
         KdPrint(( "InitBadBlocks returned: %#x\n", status));
+#else
+        UNREFERENCED_PARAMETER(status);
+#endif
     } else {
 
         KdPrint(( "InitBadBlocks local\n"));
@@ -218,6 +223,7 @@ InitBadBlocks(
 
 
 void
+NTAPI
 ForgetBadBlocks(
     IN PHW_LU_EXTENSION LunExt
     )
@@ -231,6 +237,7 @@ ForgetBadBlocks(
 } // end ForgetBadBlocks()
 
 bool
+NTAPI
 CheckIfBadBlock(
     IN PHW_LU_EXTENSION LunExt,
 //    IN UCHAR command,

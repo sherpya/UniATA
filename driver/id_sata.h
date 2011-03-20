@@ -2,6 +2,7 @@
 #define __UNIATA_SATA__H__
 
 UCHAR
+NTAPI
 UniataSataConnect(
     IN PVOID HwDeviceExtension,
     IN ULONG lChannel,          // logical channel
@@ -9,6 +10,7 @@ UniataSataConnect(
     );
 
 UCHAR
+NTAPI
 UniataSataPhyEnable(
     IN PVOID HwDeviceExtension,
     IN ULONG lChannel,          // logical channel
@@ -19,6 +21,7 @@ UniataSataPhyEnable(
 #define UNIATA_SATA_IGNORE_CONNECT    FALSE
 
 BOOLEAN
+NTAPI
 UniataSataClearErr(
     IN PVOID HwDeviceExtension,
     IN ULONG lChannel,          // logical channel
@@ -30,6 +33,7 @@ UniataSataClearErr(
 #define UNIATA_SATA_EVENT_DETACH      0x02
 
 BOOLEAN
+NTAPI
 UniataSataEvent(
     IN PVOID HwDeviceExtension,
     IN ULONG lChannel,          // logical channel
@@ -43,6 +47,7 @@ UniataSataEvent(
         (deviceExtension->chan[lChannel].RegTranslation[IDX_SATA_SStatus].Addr))
 
 ULONG
+NTAPI
 UniataSataReadPort4(
     IN PHW_CHANNEL chan,
     IN ULONG io_port_ndx,
@@ -50,6 +55,7 @@ UniataSataReadPort4(
     );
 
 VOID
+NTAPI
 UniataSataWritePort4(
     IN PHW_CHANNEL chan,
     IN ULONG io_port_ndx,
@@ -58,11 +64,13 @@ UniataSataWritePort4(
     );
 
 BOOLEAN
+NTAPI
 UniataAhciInit(
     IN PVOID HwDeviceExtension
     );
 
 UCHAR
+NTAPI
 UniataAhciStatus(
     IN PVOID HwDeviceExtension,
     IN ULONG lChannel,
@@ -70,6 +78,7 @@ UniataAhciStatus(
     );
 
 ULONG
+NTAPI
 UniataAhciSetupFIS(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN ULONG DeviceNumber,

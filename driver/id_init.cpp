@@ -44,6 +44,7 @@ Revision History:
 #include "stdafx.h"
 
 BOOLEAN
+NTAPI
 UniataChipDetectChannels(
     IN PVOID HwDeviceExtension,
     IN PPCI_COMMON_CONFIG pciData, // optional
@@ -117,6 +118,7 @@ UniataChipDetectChannels(
             KdPrint2((PRINT_PREFIX "New ATI PATA 1 chan\n"));
             break;
         }
+        /* FALLTHROUGH */
     case ATA_SILICON_IMAGE_ID:
 
         if(ChipFlags & SIIBUG) {
@@ -196,6 +198,7 @@ UniataChipDetectChannels(
 } // end UniataChipDetectChannels()
 
 NTSTATUS
+NTAPI
 UniataChipDetect(
     IN PVOID HwDeviceExtension,
     IN PPCI_COMMON_CONFIG pciData, // optional
@@ -1083,6 +1086,7 @@ for_ugly_chips:
     This will prevent data losses
 */
 VOID
+NTAPI
 AtapiViaSouthBridgeFixup(
     IN PVOID  HwDeviceExtension,
     IN BUS_DATA_TYPE  BusDataType,
@@ -1147,6 +1151,7 @@ AtapiViaSouthBridgeFixup(
     This will prevent data losses
 */
 VOID
+NTAPI
 AtapiRosbSouthBridgeFixup(
     IN PVOID  HwDeviceExtension,
     IN BUS_DATA_TYPE  BusDataType,
@@ -1198,6 +1203,7 @@ AtapiRosbSouthBridgeFixup(
     This will prevent data losses
 */
 VOID
+NTAPI
 AtapiAliSouthBridgeFixup(
     IN PVOID  HwDeviceExtension,
     IN BUS_DATA_TYPE  BusDataType,
@@ -1249,6 +1255,7 @@ AtapiAliSouthBridgeFixup(
 } // end AtapiRosbSouthBridgeFixup()
 
 ULONG
+NTAPI
 hpt_cable80(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN ULONG channel               // physical channel number (0-1)
@@ -1283,6 +1290,7 @@ hpt_cable80(
 
 
 ULONG
+NTAPI
 via_cable80(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN ULONG channel               // physical channel number (0-1)
@@ -1330,6 +1338,7 @@ via_cable80(
 } // end via_cable80()
 
 BOOLEAN
+NTAPI
 generic_cable80(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN ULONG channel,               // physical channel number (0-1)
@@ -1341,7 +1350,7 @@ generic_cable80(
     ULONG slotNumber = deviceExtension->slotNumber;
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
 
-    ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
+    //ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
     PHW_CHANNEL chan;
     ULONG  c; // logical channel (for Compatible Mode controllers)
     UCHAR tmp8;
@@ -1359,6 +1368,7 @@ generic_cable80(
 } // end generic_cable80()
 
 VOID
+NTAPI
 UniAtaReadLunConfig(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN ULONG channel,  // physical channel
@@ -1408,6 +1418,7 @@ UniAtaReadLunConfig(
 } // end UniAtaReadLunConfig()
 
 BOOLEAN
+NTAPI
 AtapiReadChipConfig(
     IN PVOID HwDeviceExtension,
     IN ULONG DeviceNumber,
@@ -1437,7 +1448,7 @@ AtapiReadChipConfig(
         }
         deviceExtension->opt_AtapiDmaZeroTransfer = FALSE; 
         deviceExtension->opt_AtapiDmaControlCmd   = FALSE; 
-        deviceExtension->opt_AtapiDmaRawRead      = TRUE; 
+        deviceExtension->opt_AtapiDmaRawRead      = g_opt_AtapiDmaRawRead; 
         deviceExtension->opt_AtapiDmaReadWrite    = TRUE; 
     }
 
@@ -1491,6 +1502,7 @@ AtapiReadChipConfig(
 } // end AtapiReadChipConfig()
 
 BOOLEAN
+NTAPI
 AtapiChipInit(
     IN PVOID HwDeviceExtension,
     IN ULONG DeviceNumber,
@@ -1501,7 +1513,9 @@ AtapiChipInit(
     ULONG slotNumber = deviceExtension->slotNumber;
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
     ULONG VendorID =  deviceExtension->DevID        & 0xffff;
+#ifdef _DEBUG
     ULONG DeviceID = (deviceExtension->DevID >> 16) & 0xffff;
+#endif
     ULONG RevID    =  deviceExtension->RevID;
 //    ULONG i;
 //    BUSMASTER_CONTROLLER_INFORMATION* DevTypeInfo;
@@ -1759,17 +1773,17 @@ AtapiChipInit(
                 KdPrint2((PRINT_PREFIX "BaseIoAddressSATA_0=%x\n", deviceExtension->BaseIoAddressSATA_0.Addr));
                 if(ChipFlags & NVQ) {
                     /* clear interrupt status */
-                    AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),offs, 0x00ff00ff);
+                    AtapiWritePortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0),offs, 0x00ff00ff);
                     /* enable device and PHY state change interrupts */
-                    AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),offs+4, 0x000d000d);
+                    AtapiWritePortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0),offs+4, 0x000d000d);
                     /* disable NCQ support */
-                    AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),0x0400, 
-                        AtapiReadPortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),0x0400) & 0xfffffff9);
+                    AtapiWritePortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0),0x0400, 
+                        AtapiReadPortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0),0x0400) & 0xfffffff9);
                 } else {
                     /* clear interrupt status */
-                    AtapiWritePortEx1(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),offs, 0xff);
+                    AtapiWritePortEx1(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0),offs, 0xff);
                     /* enable device and PHY state change interrupts */
-                    AtapiWritePortEx1(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),offs+1, 0xdd);
+                    AtapiWritePortEx1(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0),offs+1, 0xdd);
                 }
                 /* enable PCI interrupt */
                 ChangePciConfig2(offsetof(PCI_COMMON_CONFIG, Command), (a & ~0x0400));
@@ -1800,16 +1814,16 @@ AtapiChipInit(
             /* setup clocks */
             if(c == CHAN_NOT_SPECIFIED) {
 //            ATA_OUTB(ctlr->r_res1, 0x11, ATA_INB(ctlr->r_res1, 0x11) | 0x0a);
-                AtapiWritePortEx1(NULL, (ULONG)(&deviceExtension->BaseIoAddressBM_0),0x11, 
-                    AtapiReadPortEx1(NULL, (ULONG)(&deviceExtension->BaseIoAddressBM_0),0x11) | 0x0a );
+                AtapiWritePortEx1(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressBM_0),0x11, 
+                    AtapiReadPortEx1(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressBM_0),0x11) | 0x0a );
             }
             /* FALLTHROUGH */
         case PROLD:
             /* enable burst mode */
 //            ATA_OUTB(ctlr->r_res1, 0x1f, ATA_INB(ctlr->r_res1, 0x1f) | 0x01);
             if(c == CHAN_NOT_SPECIFIED) {
-                AtapiWritePortEx1(NULL, (ULONG)(&deviceExtension->BaseIoAddressBM_0),0x1f, 
-                    AtapiReadPortEx1(NULL, (ULONG)(&deviceExtension->BaseIoAddressBM_0),0x1f) | 0x01 );
+                AtapiWritePortEx1(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressBM_0),0x1f, 
+                    AtapiReadPortEx1(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressBM_0),0x1f) | 0x01 );
             } else {
                 // check 80-pin cable
                 chan = &deviceExtension->chan[c];
@@ -1834,7 +1848,7 @@ AtapiChipInit(
         case PRMIO:
             if(c == CHAN_NOT_SPECIFIED) {
                 if(ChipFlags & PRSATA) {
-                    AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressBM_0),0x6c, 0x000000ff);
+                    AtapiWritePortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressBM_0),0x6c, 0x000000ff);
                 }
             } else {
                 chan = &deviceExtension->chan[c];
@@ -1883,7 +1897,7 @@ AtapiChipInit(
                     KdPrint2((PRINT_PREFIX "SIISETCLK\n"));
                     GetPciConfig1(0x8a, tmp8);
                     if ((tmp8 & 0x30) != 0x10)
-                        ChangePciConfig1(0x8a, (a & 0xcf | 0x10));
+                        ChangePciConfig1(0x8a, (a & 0xcf) | 0x10);
                     GetPciConfig1(0x8a, tmp8);
                     if ((tmp8 & 0x30) != 0x10) {
                         KdPrint2((PRINT_PREFIX "Sil 0680 could not set ATA133 clock\n"));
@@ -1913,16 +1927,16 @@ AtapiChipInit(
                         unit10 = (c & 2);
                         if(ChipFlags & SIINOSATAIRQ) {
                             KdPrint2((PRINT_PREFIX "Disable broken SATA intr on c=%x\n", c));
-                            AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0), 0x148 + (unit01 << 7) + (unit10 << 8),0);
+                            AtapiWritePortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0), 0x148 + (unit01 << 7) + (unit10 << 8),0);
                         }
                     }
                 } else {
                     if(ChipFlags & SIINOSATAIRQ) {
                         KdPrint2((PRINT_PREFIX "Disable broken SATA intr on c=%x\n", c));
-                        AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0), 0x148 + (unit01 << 7) + (unit10 << 8),0);
+                        AtapiWritePortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0), 0x148 + (unit01 << 7) + (unit10 << 8),0);
                     } else {
                         KdPrint2((PRINT_PREFIX "Enable SATA intr on c=%x\n", c));
-                        AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0), 0x148 + (unit01 << 7) + (unit10 << 8),(1 << 16));
+                        AtapiWritePortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0), 0x148 + (unit01 << 7) + (unit10 << 8),(1 << 16));
                     }
                 }
             }
@@ -1932,16 +1946,16 @@ AtapiChipInit(
                 // Enable 3rd and 4th channels
                 if (ChipFlags & SII4CH) {
                     KdPrint2((PRINT_PREFIX "SII4CH\n"));
-                    AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),0x0200, 0x00000002);
+                    AtapiWritePortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0),0x0200, 0x00000002);
                 }
             } else {
                 chan = &deviceExtension->chan[c];
                 /* dont block interrupts */
                 //ChangePciConfig4(0x48, (a & ~0x03c00000));
-                tmp32 = AtapiReadPortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),0x48);
-                AtapiWritePortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),0x48, (1 << 22) << c);
+                tmp32 = AtapiReadPortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0),0x48);
+                AtapiWritePortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0),0x48, (1 << 22) << c);
                 // flush
-                tmp32 = AtapiReadPortEx4(NULL, (ULONG)(&deviceExtension->BaseIoAddressSATA_0),0x48);
+                tmp32 = AtapiReadPortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0),0x48);
 
                 /* Initialize FIFO PCI bus arbitration */
                 GetPciConfig1(offsetof(PCI_COMMON_CONFIG, CacheLineSize), tmp8);
@@ -2140,6 +2154,7 @@ AtapiChipInit(
 } // end AtapiChipInit()
 
 VOID
+NTAPI
 UniataInitMapBM(
     IN PHW_DEVICE_EXTENSION deviceExtension,
     IN PIDE_BUSMASTER_REGISTERS BaseIoAddressBM_0,
@@ -2156,7 +2171,7 @@ UniataInitMapBM(
     for(c=0; c<deviceExtension->NumberChannels; c++) {
         chan = &deviceExtension->chan[c];
         for (i=0; i<IDX_BM_IO_SZ; i++) {
-            chan->RegTranslation[IDX_BM_IO+i].Addr  = BaseIoAddressBM_0 ? ((ULONG)BaseIoAddressBM_0 + i) : 0;
+            chan->RegTranslation[IDX_BM_IO+i].Addr  = BaseIoAddressBM_0 ? ((ULONGIO_PTR)BaseIoAddressBM_0 + i) : 0;
             chan->RegTranslation[IDX_BM_IO+i].MemIo = MemIo;
         }
         if(BaseIoAddressBM_0) {
@@ -2166,6 +2181,7 @@ UniataInitMapBM(
 } // end UniataInitMapBM()
 
 VOID
+NTAPI
 UniataInitMapBase(
     IN PHW_CHANNEL chan,
     IN PIDE_REGISTERS_1 BaseIoAddress1,
@@ -2175,17 +2191,18 @@ UniataInitMapBase(
     ULONG i;
 
     for (i=0; i<IDX_IO1_SZ; i++) {
-        chan->RegTranslation[IDX_IO1+i].Addr = BaseIoAddress1 ? ((ULONG)BaseIoAddress1 + i) : 0;
+        chan->RegTranslation[IDX_IO1+i].Addr = BaseIoAddress1 ? ((ULONGIO_PTR)BaseIoAddress1 + i) : 0;
         chan->RegTranslation[IDX_IO1+i].MemIo = FALSE;
     }
     for (i=0; i<IDX_IO2_SZ; i++) {
-        chan->RegTranslation[IDX_IO2+i].Addr = BaseIoAddress2 ? ((ULONG)BaseIoAddress2 + i) : 0;
+        chan->RegTranslation[IDX_IO2+i].Addr = BaseIoAddress2 ? ((ULONGIO_PTR)BaseIoAddress2 + i) : 0;
         chan->RegTranslation[IDX_IO2+i].MemIo = FALSE;
     }
     UniataInitSyncBaseIO(chan);
 } // end UniataInitMapBase()
 
 VOID
+NTAPI
 UniataInitSyncBaseIO(
     IN PHW_CHANNEL chan
     )
@@ -2195,6 +2212,7 @@ UniataInitSyncBaseIO(
 } // end UniataInitSyncBaseIO()
 
 VOID
+NTAPI
 AtapiSetupLunPtrs(
     IN PHW_CHANNEL chan,
     IN PHW_DEVICE_EXTENSION deviceExtension,
