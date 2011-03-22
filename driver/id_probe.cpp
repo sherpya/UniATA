@@ -250,6 +250,9 @@ UniataEnumBusMasterController__(
     ULONG   DeviceID;
     ULONG   dev_id;
 
+    USHORT  SubVendorID;
+    USHORT  SubSystemID;
+
     ULONG   i;
     ULONG   pass=0;
 
@@ -310,10 +313,39 @@ UniataEnumBusMasterController__(
                 BaseClass = pciData.BaseClass;
                 SubClass  = pciData.SubClass;
                 dev_id = VendorID | (DeviceID << 16);
+
+                SubVendorID = pciData.u.type0.SubVendorID;
+                SubSystemID = pciData.u.type0.SubSystemID;
+
+
                 //KdPrint2((PRINT_PREFIX "DevId = %8.8X Class = %4.4X/%4.4X\n", dev_id, BaseClass, SubClass ));
 
-                if(BaseClass != PCI_DEV_CLASS_STORAGE)
+                if(VendorID == 0x80ee && DeviceID == 0xcafe) {
+                    KdPrint2((PRINT_PREFIX "-- BusID: %#x:%#x:%#x - VirtualBox Guest Service\n",busNumber,slotNumber,funcNumber));
+                    if(g_opt_VirtualMachine == VM_AUTO) {
+                        g_opt_VirtualMachine = VM_VBOX;
+                    }
+                    //continue;
+                } else
+                if((VendorID == 0x15ad) ||
+                   (SubVendorID == 0x15ad && SubSystemID == 0x1976)) {
+                    KdPrint2((PRINT_PREFIX "-- BusID: %#x:%#x:%#x - VMWare\n",busNumber,slotNumber,funcNumber));
+                    if(g_opt_VirtualMachine == VM_AUTO) {
+                        g_opt_VirtualMachine = VM_VMWARE;
+                    }
+                    //g_opt_VirtualBox = TRUE;
+                } else
+                if(SubVendorID == 0x1af4 && SubSystemID == 0x1100) {
+                    KdPrint2((PRINT_PREFIX "-- BusID: %#x:%#x:%#x - QEmu\n",busNumber,slotNumber,funcNumber));
+                    if(g_opt_VirtualMachine == VM_AUTO) {
+                        g_opt_VirtualMachine = VM_QEMU;
+                    }
+                }
+
+
+                if(BaseClass != PCI_DEV_CLASS_STORAGE) {
                     continue;
+                }
 
                 KdPrint2((PRINT_PREFIX "-- BusID: %#x:%#x:%#x\n",busNumber,slotNumber,funcNumber));
                 KdPrint2((PRINT_PREFIX "Storage Class\n"));

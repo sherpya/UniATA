@@ -89,6 +89,8 @@ ULONG  g_opt_WaitDrqDelay  = 10; // 100
 BOOLEAN g_opt_AtapiSendDisableIntr = 1; // 0
 BOOLEAN g_opt_AtapiDmaRawRead = 1; // 0
 
+ULONG g_opt_VirtualMachine = 0; // Auto
+
 BOOLEAN InDriverEntry = TRUE;
 
 BOOLEAN g_opt_Verbose = 0;
@@ -4442,10 +4444,15 @@ continue_err:
         deviceExtension->HbaCtrlFlags |= HBAFLAGS_DMA_DISABLED_LBA48;
     } else
     if(AtaReq->Flags & REQ_FLAG_FORCE_DOWNRATE) {
-        KdPrint2((PRINT_PREFIX "Some higher mode doesn't work right :((\n"));
 #ifdef IO_STATISTICS
+        KdPrint2((PRINT_PREFIX "Some higher mode doesn't work right :((\n"));
+        KdPrint2((PRINT_PREFIX "Recovery stats[%d]: %d vs %d\n",
+              AtaReq->retry,
+              chan->lun[DeviceNumber]->RecoverCount[AtaReq->retry],
+              chan->lun[DeviceNumber]->BlockIoCount
+              ));
         chan->lun[DeviceNumber]->RecoverCount[AtaReq->retry]++;
-        if(chan->lun[DeviceNumber]->RecoverCount[AtaReq->retry] >= chan->lun[DeviceNumber]->IoCount/3 ||
+        if(chan->lun[DeviceNumber]->RecoverCount[AtaReq->retry] >= chan->lun[DeviceNumber]->BlockIoCount/3 ||
            (deviceExtension->HwFlags & UNIATA_NO80CHK)
            ) {
 #else
@@ -4457,6 +4464,10 @@ continue_err:
         }
     }
 #ifdef IO_STATISTICS
+    if(AtaReq->bcount) {
+        // we need stats for Read/Write operations
+        chan->lun[DeviceNumber]->BlockIoCount++;
+    }
     chan->lun[DeviceNumber]->IoCount++;
 #endif //IO_STATISTICS
 
@@ -8474,22 +8485,6 @@ DriverEntry(
         SavedRegPath.MaximumLength = 255*sizeof(WCHAR);
         RtlCopyMemory(SavedRegPath.Buffer, RegistryPath->Buffer, SavedRegPath.Length);
         SavedRegPath.Buffer[SavedRegPath.Length/sizeof(WCHAR)] = 0;
-
-        if(AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"VirtualBox", 0)) {
-            // adjust options for VirtualBox
-            g_opt_WaitBusyCount = 20000;
-            g_opt_WaitBusyDelay = 150;
-            g_opt_WaitDrqDelay  = 100;
-            g_opt_AtapiSendDisableIntr = 0;
-            g_opt_AtapiDmaRawRead = FALSE;
-        }
-
-        g_opt_WaitBusyCount = AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"WaitBusyCount", g_opt_WaitBusyCount); // 200 vs 20000
-        g_opt_WaitBusyDelay = AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"WaitBusyDelay", g_opt_WaitBusyDelay); // 10 vs 150
-        g_opt_WaitDrqDelay  = AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"WaitDrqDelay",  g_opt_WaitDrqDelay);  // 10 vs 100
-        g_opt_AtapiSendDisableIntr = (BOOLEAN)AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"AtapiSendDisableIntr",  g_opt_AtapiSendDisableIntr);  // 1 vs 0
-        g_opt_AtapiDmaRawRead      = (BOOLEAN)AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"AtapiDmaRawRead",       g_opt_AtapiDmaRawRead);       // 1 vs 0
-
     }
 
     if(WinVer_Id() >= WinVer_2k) {
@@ -8545,7 +8540,34 @@ DriverEntry(
     KdPrint2((PRINT_PREFIX "\n\nATAPI IDE enum supported BusMaster Devices\n"));
 
     if(!ReEnter) {
+
+        g_opt_VirtualMachine = AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"VirtualMachineType", g_opt_VirtualMachine);
+        if(g_opt_VirtualMachine > VM_MAX_KNOWN) {
+            g_opt_VirtualMachine = 0;
+        }
+        if(AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"VirtualBox", (g_opt_VirtualMachine == VM_VBOX))) {
+            g_opt_VirtualMachine = VM_VBOX;
+        }
+        // Pre-scan PCI bus, also check if we are under VM
         UniataEnumBusMasterController(DriverObject, Argument2);
+
+        switch(g_opt_VirtualMachine) {
+        case VM_VBOX:
+            // adjust options for VirtualBox
+            g_opt_WaitBusyCount = 20000;
+            g_opt_WaitBusyDelay = 150;
+            g_opt_WaitDrqDelay  = 100;
+            g_opt_AtapiSendDisableIntr = 0;
+            g_opt_AtapiDmaRawRead = FALSE;
+            break;
+        }
+
+        g_opt_WaitBusyCount = AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"WaitBusyCount", g_opt_WaitBusyCount); // 200 vs 20000
+        g_opt_WaitBusyDelay = AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"WaitBusyDelay", g_opt_WaitBusyDelay); // 10 vs 150
+        g_opt_WaitDrqDelay  = AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"WaitDrqDelay",  g_opt_WaitDrqDelay);  // 10 vs 100
+        g_opt_AtapiSendDisableIntr = (BOOLEAN)AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"AtapiSendDisableIntr",  g_opt_AtapiSendDisableIntr);  // 1 vs 0
+        g_opt_AtapiDmaRawRead      = (BOOLEAN)AtapiRegCheckDevValue(NULL, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"AtapiDmaRawRead",       g_opt_AtapiDmaRawRead);       // 1 vs 0
+
     }
 
     // Look for legacy ISA-bridged PCI IDE controller (onboard)
@@ -8733,6 +8755,11 @@ DriverEntry(
                                        (PVOID)i);
         KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x\n", newStatus));
         if(newStatus == STATUS_DEVICE_DOES_NOT_EXIST && BMList[i].NeedAltInit) {
+            // Note: this is actually a BUG in scsiport.sys
+            // It stops scanning PCI bus when reaches empty PCI Function inside Slot
+            // However, this PCI Slot may have higher non-empty Functions
+            // UniATA will perform all staff instead of ScsiPort under NT,
+            // but for ReactOS it is better to patch ScsiPort.
             KdPrint2((PRINT_PREFIX "STATUS_DEVICE_DOES_NOT_EXIST, try workaround\n"));
             hwInitializationData.comm.AdapterInterfaceType = Isa;
             newStatus = ScsiPortInitialize(DriverObject,

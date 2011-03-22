@@ -917,6 +917,7 @@ typedef struct _HW_LU_EXTENSION {
     LONGLONG ModeErrorCount[MAX_RETRIES];
     LONGLONG RecoverCount[MAX_RETRIES];
     LONGLONG IoCount;
+    LONGLONG BlockIoCount;
 
 #endif//IO_STATISTICS
 } HW_LU_EXTENSION, *PHW_LU_EXTENSION;
@@ -1542,6 +1543,15 @@ extern BOOLEAN g_opt_AtapiDmaRawRead;
 extern BOOLEAN InDriverEntry;
 
 extern BOOLEAN g_opt_Verbose;
+extern ULONG   g_opt_VirtualMachine;
+
+#define VM_AUTO      0x00
+#define VM_NONE      0x01
+#define VM_VBOX      0x02
+#define VM_VMWARE    0x03
+#define VM_QEMU      0x04
+
+#define VM_MAX_KNOWN VM_QEMU
 
 extern BOOLEAN WinVer_WDM_Model;
 

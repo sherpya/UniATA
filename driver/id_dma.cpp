@@ -1317,12 +1317,13 @@ set_new_acard:
         for(i=udmamode; i>=0; i--) {
             if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_UDMA0 + i)) {
 
+        	/* Set UDMA reference clock (33/66/133MHz). */
                 SetPciConfig1(0x48, reg48 | (0x0001 << dev));
                 if(!(ChipFlags & ICH4_FIX)) {
                     SetPciConfig2(0x4a, (reg4a & ~(0x3 << (dev<<2))) |
                                         (0x01 + !(i & 0x01))  );
                 }
-                if(i >= 2) {
+                if(i >= 3) {
                     reg54 |= (0x1 << dev);
                 } else {
                     reg54 &= ~(0x1 << dev);
@@ -1369,20 +1370,18 @@ set_new_acard:
         GetPciConfig4(0x40, reg40);
         GetPciConfig1(0x44, reg44);
 
-        mask40 = 0x000000ff;
-
+	/* Allow PIO/WDMA timing controls. */
+        reg40 &= ~0x00ff00ff;
+        reg40 |= ~0x40774077;
+	/* Set PIO/WDMA timings. */
         if(!(DeviceNumber & 1)) {
             mask40 |= 0x00003300;
             new40 = ((USHORT)(intel_timings[idx]) << 8);
-            //mask44 = 0x00; // already done on init
-            //new44  = 0x00;
         } else {
             mask44 = 0x0f;
             new44 = ((intel_timings[idx] & 0x30) >> 2) |
                      (intel_timings[idx] & 0x03);
         }
-        new40 |= 0x00004077;
-
         if (Channel) {
             mask40 <<= 16;
             new40 <<= 16;
