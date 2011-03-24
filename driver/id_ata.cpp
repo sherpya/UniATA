@@ -797,7 +797,7 @@ AtaCommand48(
     //<<<<<< NV:  2006/08/03
 
     /* only use 48bit addressing if needed because of the overhead */
-    if ((lba >= ATA_MAX_LBA28 || count > 256) &&
+    if (((lba+count-1) >= ATA_MAX_LBA28 || count > 256) &&
         deviceExtension->lun[ldev].IdentifyData.FeaturesSupport.Address48) {
 
         KdPrint2((PRINT_PREFIX "  ldev %#x USE_LBA_48\n", ldev ));
@@ -1326,7 +1326,7 @@ IssueIdentify(
 
 //    if(deviceExtension->HwFlags & UNIATA_SATA) {
     if(UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
-        j = 4;
+        j = 4; // skip old-style checks
     } else {
         j = 0;
     }

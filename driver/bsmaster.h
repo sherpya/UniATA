@@ -83,7 +83,9 @@ Revision History:
 #define ATA_ALTIOSIZE			0x01	/* alternate registers size */
 #define ATA_BMIOSIZE			0x20
 #define ATA_PC98_BANKIOSIZE             0x01
-#define ATA_MAX_LBA28                   DEF_U64(0x0fffffff)
+//#define ATA_MAX_LBA28                   DEF_U64(0x0fffffff)
+// Hitachi 1 Tb HDD didn't allow LBA28 with BCount > 1 beyond this LBA
+#define ATA_MAX_LBA28                   DEF_U64(0x0fffff80-1)
 
 #define ATA_DMA_ENTRIES			256     /* PAGESIZE/2/sizeof(BM_DMA_ENTRY)*/
 #define ATA_DMA_EOT			0x80000000

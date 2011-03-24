@@ -976,7 +976,7 @@ for_ugly_chips:
                 KdPrint2((PRINT_PREFIX "Compatible mode\n"));
             }
             deviceExtension->HwFlags &= ~UNIATA_AHCI;
-
+        
             /* if BAR(5) is IO it should point to SATA interface registers */
             BaseMemAddress = AtapiGetIoRange(HwDeviceExtension, ConfigInfo, pciData, SystemIoBusNumber,
                                     5, 0, 0x10);
@@ -1029,7 +1029,7 @@ for_ugly_chips:
                     KdPrint2((PRINT_PREFIX "PATA part\n"));
                 } else {
 
-                    if((ChipFlags & ICH5) && BaseMemAddress) {
+                    if(/*(ChipFlags & ICH5) &&*/ BaseMemAddress) {
                         KdPrint2((PRINT_PREFIX "ICH5 indexed\n"));
                         chan->RegTranslation[IDX_INDEXED_ADDR].Addr        = BaseMemAddress + 0;
                         chan->RegTranslation[IDX_INDEXED_ADDR].MemIo       = MemIo;
@@ -1038,7 +1038,7 @@ for_ugly_chips:
                     }
                     if((ChipFlags & ICH5) || BaseMemAddress) {
 
-                        KdPrint2((PRINT_PREFIX "i indexed\n"));
+                        KdPrint2((PRINT_PREFIX "io indexed\n"));
                         // Rather interesting way of register access...
                         ChipType = INTEL_IDX;
                         deviceExtension->HwFlags &= ~CHIPTYPE_MASK;

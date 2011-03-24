@@ -247,6 +247,8 @@ UniataSataReadPort4(
     if(chan && (io_port_ndx < IDX_MAX_REG) &&
        chan->RegTranslation[io_port_ndx].Proc) {
 
+        KdPrint2((PRINT_PREFIX "  UniataSataReadPort4 %x[%d]\n", io_port_ndx, pm_port));
+
         PHW_DEVICE_EXTENSION deviceExtension = chan->DeviceExtension;
         PVOID HwDeviceExtension = (PVOID)deviceExtension;
         ULONG slotNumber = deviceExtension->slotNumber;
@@ -260,6 +262,7 @@ UniataSataReadPort4(
             p = pm_port ? 1 : 0;
             if(deviceExtension->HwFlags & ICH5) {
                 offs = 0x50+chan->lun[p]->SATA_lun_map*0x10;
+                KdPrint2((PRINT_PREFIX "  ICH5 way, offs %x\n", offs));
                 switch(io_port_ndx) {
                 case IDX_SATA_SStatus:
                     offs += 0;
@@ -278,6 +281,7 @@ UniataSataReadPort4(
                 return offs;
             } else {
                 offs = ((deviceExtension->Channel+chan->lChannel)*2+p) * 0x100;
+                KdPrint2((PRINT_PREFIX "  def way, offs %x\n", offs));
                 switch(io_port_ndx) {
                 case IDX_SATA_SStatus:
                     offs += 0;
@@ -312,6 +316,8 @@ UniataSataWritePort4(
     if(chan && (io_port_ndx < IDX_MAX_REG) &&
        chan->RegTranslation[io_port_ndx].Proc) {
 
+        KdPrint2((PRINT_PREFIX "  UniataSataWritePort4 %x[%d]\n", io_port_ndx, pm_port));
+
         PHW_DEVICE_EXTENSION deviceExtension = chan->DeviceExtension;
         PVOID HwDeviceExtension = (PVOID)deviceExtension;
         ULONG slotNumber = deviceExtension->slotNumber;
@@ -325,6 +331,7 @@ UniataSataWritePort4(
             p = pm_port ? 1 : 0;
             if(deviceExtension->HwFlags & ICH5) {
                 offs = 0x50+chan->lun[p]->SATA_lun_map*0x10;
+                KdPrint2((PRINT_PREFIX "  ICH5 way, offs %x\n", offs));
                 switch(io_port_ndx) {
                 case IDX_SATA_SStatus:
                     offs += 0;
@@ -343,6 +350,7 @@ UniataSataWritePort4(
                 return;
             } else {
                 offs = ((deviceExtension->Channel+chan->lChannel)*2+p) * 0x100;
+                KdPrint2((PRINT_PREFIX "  def way, offs %x\n", offs));
                 switch(io_port_ndx) {
                 case IDX_SATA_SStatus:
                     offs += 0;
