@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2005 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2011 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     atapi.h
@@ -84,7 +84,7 @@ ScsiDebugPrint(
     ...
     );
 
-#define PRINT_PREFIX                0, 
+#define PRINT_PREFIX                0,
 
 #define KdPrint3(_x_) ScsiDebugPrint _x_    {;}
 #define KdPrint2(_x_) {ScsiDebugPrint("%x: ", PsGetCurrentThread()) ; ScsiDebugPrint _x_ ; }
@@ -93,12 +93,14 @@ ScsiDebugPrint(
 #else // SCSI_PORT_DBG_PRINT
 
 #ifndef USE_DBGPRINT_LOGGER
+/*
 ULONG
 _cdecl
 DbgPrint(
     PCH Format,
     ...
     );
+*/
 #endif // USE_DBGPRINT_LOGGER
 
 #define PRINT_PREFIX
@@ -114,7 +116,7 @@ DbgPrint(
 /*
 #define PRINT_PREFIX_PTR ((PCHAR)&__tmp__kdprint__buff__)
 #define PRINT_UPREFIX_PTR ((PWCHAR)&__tmp__kdprint__ubuff__)
-#define PRINT_PREFIX     PRINT_PREFIX_PTR, 
+#define PRINT_PREFIX     PRINT_PREFIX_PTR,
 #define KdPrint2(_x_) \
 { \
     WCHAR __tmp__kdprint__ubuff__[256]; \
@@ -646,6 +648,7 @@ typedef struct _IDENTIFY_DATA {
     USHORT SataCapabilities;                //     76
 #define ATA_SATA_GEN1			0x0002
 #define ATA_SATA_GEN2			0x0004
+#define ATA_SATA_GEN3			0x0008
 #define ATA_SUPPORT_NCQ			0x0100
 #define ATA_SUPPORT_IFPWRMNGTRCV	0x0200
 
@@ -946,29 +949,6 @@ AtapiSoftReset(
     ULONG            DeviceNumber
     );
 
-/*#define IdeHardReset(BaseIoAddress,result) \
-{\
-    UCHAR statusByte;\
-    ULONG i;\
-    SelectDrive(BaseIoAddress,DeviceNumber); \
-    AtapiWritePort1(&BaseIoAddress->AltStatus,/*IDE_DC_DISABLE_INTERRUPTS | *//*IDE_DC_RESET_CONTROLLER );\
-/*    ScsiPortStallExecution(50 * 1000);\
-    AtapiWritePort1(&BaseIoAddress->AltStatus,IDE_DC_REENABLE_CONTROLLER);\
-    /* 5 seconds for reset */ \
-/*    for (i = 0; i < 1000 * (1+11); i++) {\
-        statusByte = AtapiReadPort1(&BaseIoAddress->AltStatus);\
-        if (statusByte != IDE_STATUS_IDLE && statusByte != IDE_STATUS_SUCCESS) {\
-            ScsiPortStallExecution((i<1000) ? 5 : 500);\
-        } else {\
-            break;\
-        }\
-    }\
-    KdPrint2((PRINT_PREFIX "IdeHardReset: Status %x\n", statusByte)); \
-    if (i == 1000*1000) {\
-        result = FALSE;\
-    }\
-    result = TRUE;\
-}*/
 
 #endif //USER_MODE
 
@@ -1047,6 +1027,12 @@ AtapiInterrupt__(
     IN UCHAR c
     );
 
+UCHAR
+NTAPI
+AtapiCheckInterrupt__(
+    IN PVOID HwDeviceExtension,
+    IN UCHAR c
+    );
 
 #define INTERRUPT_REASON_IGNORE          0
 #define INTERRUPT_REASON_OUR             1
@@ -1068,9 +1054,10 @@ IdeBuildSenseBuffer(
 VOID
 NTAPI
 IdeMediaStatus(
-    IN BOOLEAN EnableMSN,
+    BOOLEAN EnableMSN,
     IN PVOID HwDeviceExtension,
-    IN UCHAR Channel
+    IN ULONG lChannel,
+    IN ULONG DeviceNumber
     );
 
 ULONG NTAPI
@@ -1207,9 +1194,8 @@ AtapiDpcDispatch(
     IN PVOID SystemArgument1,
     IN PVOID SystemArgument2
     );
- 
 
-//#define AtaCommand(de, devn, chan, cmd, cyl, hd, sec, cnt, feat, flg) \
+//#define AtaCommand(de, devn, chan, cmd, cyl, hd, sec, cnt, feat, flg) 
 
 extern LONG
 NTAPI
@@ -1257,7 +1243,7 @@ AtapiRegCheckParameterValue(
     IN ULONG Default
     );
 
-extern ULONG  g_LogToDisplay;
+extern ULONG g_LogToDisplay;
 
 extern "C"
 VOID

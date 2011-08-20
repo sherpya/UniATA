@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2010 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2011 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     id_probe.cpp
@@ -115,7 +115,7 @@ AtapiGetIoRange(
     if((*ConfigInfo->AccessRanges)[rid].RangeInMemory) {
         io_start =
             // Get the system physical address for this IO range.
-            ((ULONG)ScsiPortGetDeviceBase(HwDeviceExtension,
+            ((ULONG_PTR)ScsiPortGetDeviceBase(HwDeviceExtension,
                         PCIBus /*ConfigInfo->AdapterInterfaceType*/,
                         SystemIoBusNumber /*ConfigInfo->SystemIoBusNumber*/,
                         ScsiPortConvertUlongToPhysicalAddress(
@@ -123,7 +123,7 @@ AtapiGetIoRange(
                             ~0x07/*PCI_ADDRESS_IOMASK*/) + offset
                                                              ),
                         length,
-                        (BOOLEAN)!(*ConfigInfo->AccessRanges)[rid].RangeInMemory) 
+                        (BOOLEAN)!(*ConfigInfo->AccessRanges)[rid].RangeInMemory)
                                );
 
         KdPrint2((PRINT_PREFIX "  AtapiGetIoRange: %#x\n", io_start));
@@ -208,6 +208,7 @@ UniataCheckPCISubclass(
         break;
     case PCI_DEV_SUBCLASS_IDE:
     case PCI_DEV_SUBCLASS_ATA:
+        break;
     case PCI_DEV_SUBCLASS_SATA:
         break;
     default:
@@ -280,7 +281,7 @@ UniataEnumBusMasterController__(
             for(slotNumber=0; slotNumber<PCI_MAX_DEVICES  && !no_buses; slotNumber++) {
             NeedPciAltInit = FALSE;
             for(funcNumber=0; funcNumber<PCI_MAX_FUNCTION && !no_buses; funcNumber++) {
-                
+
 //                KdPrint2((PRINT_PREFIX "-- BusID: %#x:%#x:%#x\n",busNumber,slotNumber,funcNumber));
                 slotData.u.bits.DeviceNumber   = slotNumber;
                 slotData.u.bits.FunctionNumber = funcNumber;
@@ -289,7 +290,7 @@ UniataEnumBusMasterController__(
                               //ScsiPortGetBusData
                                            (
                                             //HwDeviceExtension,
-                                            PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                            PCIConfiguration, busNumber, slotData.u.AsULONG,
                                             &pciData, PCI_COMMON_HDR_LENGTH);
                 // no more buses
                 if(!busDataRead) {
@@ -399,7 +400,8 @@ UniataEnumBusMasterController__(
                 /* unknown chipsets, try generic DMA if it seems possible */
                 default:
                     KdPrint2((PRINT_PREFIX "Default device\n"));
-                    if(Ata_is_supported_dev(&pciData))
+                    if(Ata_is_supported_dev(&pciData) ||
+                       Ata_is_ahci_dev(&pciData))
                         found = TRUE;
                     break;
                 }
@@ -430,14 +432,14 @@ UniataEnumBusMasterController__(
                                 pciData.Command |= PCI_ENABLE_BUS_MASTER;
                                 break;
                             }
-                            HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                            HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG,
                                                     &(pciData.Command),
                                                     offsetof(PCI_COMMON_CONFIG, Command),
                                                     sizeof(pciData.Command));
                             KdPrint2((PRINT_PREFIX "InterruptLine = %#x\n", pciData.u.type0.InterruptLine));
 
                             // reread config space
-                            busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                            busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG,
                                                         &pciData, PCI_COMMON_HDR_LENGTH);
                             KdPrint2((PRINT_PREFIX "New pciData.Command = %#x\n", pciData.Command));
                         }
@@ -456,7 +458,7 @@ UniataEnumBusMasterController__(
                         KdPrint2((PRINT_PREFIX "No PCI Mem/Io ranges found on device, skip it\n"));
                         continue;
                     }
-                    
+
                     if(pass) {
                         // fill list of detected devices
                         // it'll be used for further init
@@ -481,13 +483,13 @@ UniataEnumBusMasterController__(
 
                                 //ChangePciConfig1(0x09, a | PCI_IDE_PROGIF_NATIVE_ALL); // ProgIf
                                 pciData.ProgIf |= PCI_IDE_PROGIF_NATIVE_ALL;
-                                HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG,
                                                         &(pciData.ProgIf),
                                                         offsetof(PCI_COMMON_CONFIG, ProgIf),
                                                         sizeof(pciData.ProgIf));
 
                                 // reread config space
-                                busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG,
                                                             &pciData, PCI_COMMON_HDR_LENGTH);
                                 // check if the device have switched to Native Mode
                                 if(IsMasterDev(&pciData)) {
@@ -501,7 +503,7 @@ UniataEnumBusMasterController__(
                                         (pciData.u.type0.InterruptLine == 0xff)) {
                                         KdPrint2((PRINT_PREFIX "assign interrupt for device\n"));
                                         pciData.u.type0.InterruptLine = IrqForCompat;
-                                        HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                        HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG,
                                                                 &(pciData.u.type0.InterruptLine),
                                                                 offsetof(PCI_COMMON_CONFIG, u.type0.InterruptLine),
                                                                 sizeof(pciData.u.type0.InterruptLine));
@@ -512,7 +514,7 @@ UniataEnumBusMasterController__(
                                     }
                                     KdPrint2((PRINT_PREFIX "reread config space\n"));
                                     // reread config space
-                                    busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                    busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG,
                                                                 &pciData, PCI_COMMON_HDR_LENGTH);
                                     KdPrint2((PRINT_PREFIX "busDataRead = %#x\n", busDataRead));
                                     KdPrint2((PRINT_PREFIX "reread InterruptLine = %#x\n", pciData.u.type0.InterruptLine));
@@ -523,19 +525,19 @@ UniataEnumBusMasterController__(
                                         KdPrint2((PRINT_PREFIX "can't assign interrupt for device, revert to compat mode\n"));
                                         pciData.u.type0.InterruptLine = 0xff;
                                         KdPrint2((PRINT_PREFIX "set IntrLine to 0xff\n"));
-                                        HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                        HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG,
                                                                 &(pciData.u.type0.InterruptLine),
                                                                 offsetof(PCI_COMMON_CONFIG, u.type0.InterruptLine),
                                                                 sizeof(pciData.u.type0.InterruptLine));
                                         KdPrint2((PRINT_PREFIX "clear PCI_IDE_PROGIF_NATIVE_ALL\n"));
                                         pciData.ProgIf &= ~PCI_IDE_PROGIF_NATIVE_ALL;
-                                        HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                        HalSetBusDataByOffset(  PCIConfiguration, busNumber, slotData.u.AsULONG,
                                                                 &(pciData.ProgIf),
                                                                 offsetof(PCI_COMMON_CONFIG, ProgIf),
                                                                 sizeof(pciData.ProgIf));
                                         // reread config space
                                         KdPrint2((PRINT_PREFIX "reread config space on revert\n"));
-                                        busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG, 
+                                        busDataRead = HalGetBusData(PCIConfiguration, busNumber, slotData.u.AsULONG,
                                                                     &pciData, PCI_COMMON_HDR_LENGTH);
                                     } else {
                                         KdPrint2((PRINT_PREFIX "Assigned interrupt %#x for device\n", IrqForCompat));
@@ -558,7 +560,7 @@ UniataEnumBusMasterController__(
 
                         RtlCopyMemory(&(newBMListPtr->VendorIdStr), (PCHAR)vendorStrPtr, 4);
                         RtlCopyMemory(&(newBMListPtr->DeviceIdStr), (PCHAR)deviceStrPtr, 4);
-                        
+
                         newBMListPtr->nVendorId = VendorID;
                         newBMListPtr->VendorId = (PCHAR)&(newBMListPtr->VendorIdStr);
                         newBMListPtr->VendorIdLength = 4;
@@ -588,7 +590,7 @@ UniataEnumBusMasterController__(
         if(!pass) {
              if(!BMListLen)
                  break;
-             BMList = (PBUSMASTER_CONTROLLER_INFORMATION)ExAllocatePool(NonPagedPool, 
+             BMList = (PBUSMASTER_CONTROLLER_INFORMATION)ExAllocatePool(NonPagedPool,
                                          (BMListLen+1)*sizeof(BUSMASTER_CONTROLLER_INFORMATION));
              if(!BMList) {
                  BMListLen=0;
@@ -610,7 +612,7 @@ UniataEnumBusMasterController__(
 /*
     Wrapper for read PCI config space
 */
-ULONG 
+ULONG
 NTAPI
 ScsiPortGetBusDataByOffset(
     IN PVOID  HwDeviceExtension,
@@ -762,7 +764,7 @@ AtapiFindDev(
     slotData.u.AsULONG = SlotNumber;
     // walk through all Function Numbers
     for(funcNumber = 0; funcNumber < PCI_MAX_FUNCTION; funcNumber++) {
-        
+
         slotData.u.bits.FunctionNumber = funcNumber;
         if(slotData.u.AsULONG == SlotNumber)
             continue;
@@ -1028,7 +1030,7 @@ UniataFindBusMasterController(
         return SP_RETURN_ERROR;
     }
     RtlZeroMemory(deviceExtension, sizeof(HW_DEVICE_EXTENSION));
-    
+
     vendorStrPtr = vendorString;
     deviceStrPtr = deviceString;
 
@@ -1141,12 +1143,16 @@ UniataFindBusMasterController(
         if (found)
             break;
         KdPrint2((PRINT_PREFIX "Default device\n"));
-        if(!Ata_is_supported_dev(&pciData)) {
-            KdPrint2((PRINT_PREFIX "!Ata_is_supported_dev => found = FALSE\n"));
-            found = FALSE;
-        } else {
+        if(Ata_is_supported_dev(&pciData)) {
             KdPrint2((PRINT_PREFIX "Ata_is_supported_dev\n"));
             found = TRUE;
+        } else
+        if(deviceExtension->HwFlags & UNIATA_AHCI) {
+            KdPrint2((PRINT_PREFIX "AHCI candidate\n"));
+            found = TRUE;
+        } else {
+            KdPrint2((PRINT_PREFIX "!Ata_is_supported_dev => found = FALSE\n"));
+            found = FALSE;
         }
         deviceExtension->UnknownDev = TRUE;
         break;
@@ -1289,7 +1295,7 @@ UniataFindBusMasterController(
     }
 
     /*
-     * the Cypress chip is a mess, it contains two ATA functions, but 
+     * the Cypress chip is a mess, it contains two ATA functions, but
      * both channels are visible on the first one.
      * simply ignore the second function for now, as the right
      * solution (ignoring the second channel on the first function)
@@ -1386,9 +1392,9 @@ UniataFindBusMasterController(
         KdPrint2((PRINT_PREFIX "!MasterDev\n"));
         ConfigInfo->SlotNumber = slotNumber;
         ConfigInfo->SystemIoBusNumber = SystemIoBusNumber;
-        
+
         /* primary and secondary channels share the same interrupt */
-        if(!ConfigInfo->BusInterruptVector || 
+        if(!ConfigInfo->BusInterruptVector ||
             (ConfigInfo->BusInterruptVector != pciData.u.type0.InterruptLine)) {
             KdPrint2((PRINT_PREFIX "patch irq line = %#x\n", pciData.u.type0.InterruptLine));
             ConfigInfo->BusInterruptVector = pciData.u.type0.InterruptLine;  // set default value
@@ -1406,8 +1412,8 @@ UniataFindBusMasterController(
        (ConfigInfo->Length >= sizeof(_ConfigInfo->comm) + sizeof(_ConfigInfo->nt4))) {
         KdPrint2((PRINT_PREFIX "update ConfigInfo->nt4\n"));
         _ConfigInfo->nt4.DeviceExtensionSize         = sizeof(HW_DEVICE_EXTENSION);
-        _ConfigInfo->nt4.SpecificLuExtensionSize     = sizeof(HW_LU_EXTENSION);    
-        _ConfigInfo->nt4.SrbExtensionSize            = sizeof(ATA_REQ);            
+        _ConfigInfo->nt4.SpecificLuExtensionSize     = sizeof(HW_LU_EXTENSION);
+        _ConfigInfo->nt4.SrbExtensionSize            = sizeof(ATA_REQ);
     }
     if((WinVer_Id() > WinVer_2k) ||
        (ConfigInfo->Length >= sizeof(_ConfigInfo->comm) + sizeof(_ConfigInfo->nt4) + sizeof(_ConfigInfo->w2k))) {
@@ -1431,7 +1437,7 @@ UniataFindBusMasterController(
     found = FALSE;
 
     if(deviceExtension->BusMaster) {
-        
+
         KdPrint2((PRINT_PREFIX "Reconstruct ConfigInfo\n"));
         ConfigInfo->MapBuffers = TRUE;
 #ifdef USE_OWN_DMA
@@ -1491,6 +1497,9 @@ UniataFindBusMasterController(
         /* do extra channel-specific setups */
         AtapiReadChipConfig(HwDeviceExtension, i, channel);
         //AtapiChipInit(HwDeviceExtension, i, channel);
+        if(deviceExtension->HwFlags & UNIATA_AHCI) {
+            KdPrint2((PRINT_PREFIX "  No more setup for AHCI channel\n"));
+        } else
         if(deviceExtension->AltRegMap) {
             KdPrint2((PRINT_PREFIX "  Non-standard registers layout\n"));
         } else {
@@ -1542,7 +1551,7 @@ UniataFindBusMasterController(
                 KdPrint2((PRINT_PREFIX "ScsiPortValidateRange failed (1)\n"));
                 continue;
             }
-            
+
             if(!ScsiPortValidateRange(HwDeviceExtension,
                                       PCIBus /*ConfigInfo->AdapterInterfaceType*/,
                                       SystemIoBusNumber /*ConfigInfo->SystemIoBusNumber*/,
@@ -1636,7 +1645,7 @@ UniataFindBusMasterController(
           chan->RegTranslation[IDX_SATA_IO].MemIo ? "mem" : "io"));
 
         if(!(deviceExtension->HwFlags & UNIATA_AHCI)) {
-        UniataDumpATARegs(chan);
+            UniataDumpATARegs(chan);
 
 #ifndef UNIATA_CORE
 #ifdef UNIATA_INIT_ON_PROBE
@@ -1649,14 +1658,14 @@ UniataFindBusMasterController(
             GetBaseStatus(chan, statusByte);
             skip_find_dev = FALSE;
             if(!(deviceExtension->HwFlags & UNIATA_NO_SLAVE)) {
-                if ((statusByte & 0xf8) == 0xf8 || 
+                if ((statusByte & 0xf8) == 0xf8 ||
                     (statusByte == 0xa5)) {
                     // Check slave.
                     KdPrint2((PRINT_PREFIX "Check drive 1\n"));
                     SelectDrive(chan, 1);
                     AtapiStallExecution(1);
                     GetBaseStatus(chan, statusByte);
-                    if ((statusByte & 0xf8) == 0xf8 || 
+                    if ((statusByte & 0xf8) == 0xf8 ||
                         (statusByte == 0xa5)) {
                         // No controller at this base address.
                         KdPrint2((PRINT_PREFIX "Empty channel\n"));
@@ -1676,7 +1685,7 @@ UniataFindBusMasterController(
                 KdPrint2((PRINT_PREFIX "no devices\n"));
     /*            KeBugCheckEx(0xc000000e,
                              ScsiPortConvertPhysicalAddressToUlong(IoBasePort1),
-                             ScsiPortConvertPhysicalAddressToUlong(IoBasePort2), 
+                             ScsiPortConvertPhysicalAddressToUlong(IoBasePort2),
                              (ULONG)(deviceExtension->BaseIoAddressBM[c]), skip_find_dev);*/
             }
 //#ifdef UNIATA_INIT_ON_PROBE
@@ -1700,7 +1709,7 @@ UniataFindBusMasterController(
             if (channel == 1) {
                 KdPrint2((PRINT_PREFIX "claim Secondary\n"));
                 ConfigInfo->AtdiskSecondaryClaimed = TRUE;
-    
+
                 FirstMasterOk = TRUE;
             }
         }
@@ -1733,7 +1742,7 @@ exit_findbm:
         if(BaseIoAddressBM_0)
             ScsiPortFreeDeviceBase(HwDeviceExtension,
                                    BaseIoAddressBM_0);
-        
+
         KdPrint2((PRINT_PREFIX "return SP_RETURN_NOT_FOUND\n"));
         goto exit_notfound;
     } else {
@@ -1814,7 +1823,7 @@ UniataFindFakeBusMasterController(
     )
 {
     PHW_DEVICE_EXTENSION  deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
-    PHW_CHANNEL           chan = NULL;
+    //PHW_CHANNEL           chan = NULL;
     // this buffer must be global for UNIATA_CORE build
     PCI_COMMON_CONFIG     pciData;
 
@@ -1845,8 +1854,8 @@ UniataFindFakeBusMasterController(
     BOOLEAN found = FALSE;
     BOOLEAN MasterDev;
     BOOLEAN simplexOnly = FALSE;
-    BOOLEAN skip_find_dev = FALSE;
-    BOOLEAN AltInit = FALSE;
+    //BOOLEAN skip_find_dev = FALSE;
+    //BOOLEAN AltInit = FALSE;
 
     PIDE_BUSMASTER_REGISTERS BaseIoAddressBM_0 = NULL;
 
@@ -2222,7 +2231,7 @@ UniataConnectIntr2(
     KdPrint2((PRINT_PREFIX "isr2_affinity %#x\n", BMList[i].Isr2Affinity));
 
 //            deviceExtension->QueueNewIrql = BMList[i].Isr2Irql;
-    
+
     KdPrint2((PRINT_PREFIX "IoConnectInterrupt\n"));
     status = IoConnectInterrupt(
         &(BMList[i].Isr2InterruptObject),
@@ -2354,7 +2363,6 @@ AtapiFindController(
     }
 
     chan = &(deviceExtension->chan[0]);
-    AtapiSetupLunPtrs(chan, deviceExtension, 0);
 
     deviceExtension->AdapterInterfaceType =
     deviceExtension->OrigAdapterInterfaceType
@@ -2413,7 +2421,7 @@ AtapiFindController(
         portBase = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"PortBase", portBase);
         irq      = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"Irq", irq);
         
-        for (i = 0; i < deviceExtension->NumberLuns; i++) {
+        for (i = 0; i < 4; i++) {
             // Zero device fields to ensure that if earlier devices were found,
             // but not claimed, the fields are cleared.
             deviceExtension->lun[i].DeviceFlags &= ~(DFLAGS_ATAPI_DEVICE | DFLAGS_DEVICE_PRESENT | DFLAGS_TAPE_DEVICE);
@@ -2515,7 +2523,7 @@ retryIdentifier:
                 do {
                     AtapiStallExecution(1000);
                     statusByte = AtapiReadPort1(chan, IDX_ATAPI_IO1_i_Status);
-                    KdPrint2((PRINT_PREFIX 
+                    KdPrint2((PRINT_PREFIX
                                 "AtapiFindController: First access to status %#x\n",
                                 statusByte));
                 } while ((statusByte & IDE_STATUS_BUSY) && ++i < 10);
@@ -2533,7 +2541,7 @@ retryIdentifier:
 
             if ((statusByte = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow)) != 0xAA) {
 
-                KdPrint2((PRINT_PREFIX 
+                KdPrint2((PRINT_PREFIX
                             "AtapiFindController: Identifier read back from Slave (%#x)\n",
                             statusByte));
 not_found:
@@ -2603,7 +2611,7 @@ not_found:
         AtapiReadChipConfig(HwDeviceExtension, DEVNUM_NOT_SPECIFIED, 0);
         AtapiChipInit(HwDeviceExtension, DEVNUM_NOT_SPECIFIED, 0);
 
-        KdPrint2((PRINT_PREFIX 
+        KdPrint2((PRINT_PREFIX
                    "AtapiFindController: Found IDE at %#x\n",
                    BaseIoAddress1));
 
@@ -2619,12 +2627,12 @@ not_found:
 
 #ifndef UNIATA_CORE
                     if (AtapiParseArgumentString(ArgumentString, "dump") == 1) {
-                        KdPrint2((PRINT_PREFIX 
+                        KdPrint2((PRINT_PREFIX
                                    "AtapiFindController: Crash dump\n"));
                         atapiOnly = FALSE;
                         deviceExtension->DriverMustPoll = TRUE;
                     } else {
-                        KdPrint2((PRINT_PREFIX 
+                        KdPrint2((PRINT_PREFIX
                                    "AtapiFindController: Atapi Only\n"));
                         atapiOnly = TRUE;
                         deviceExtension->DriverMustPoll = FALSE;
@@ -2632,7 +2640,7 @@ not_found:
 #endif //UNIATA_CORE
                 } else {
 
-                    KdPrint2((PRINT_PREFIX 
+                    KdPrint2((PRINT_PREFIX
                                "AtapiFindController: Atapi Only (2)\n"));
                     atapiOnly = TRUE;
                     deviceExtension->DriverMustPoll = FALSE;
@@ -2652,14 +2660,14 @@ not_found:
         // Save the Interrupe Mode for later use
         deviceExtension->InterruptMode = ConfigInfo->InterruptMode;
 
-        KdPrint2((PRINT_PREFIX 
+        KdPrint2((PRINT_PREFIX
                    "AtapiFindController: look for devices\n"));
         // Search for devices on this controller.
         if (FindDevices(HwDeviceExtension,
                         0,
                         0 /* Channel */)) {
 
-            KdPrint2((PRINT_PREFIX 
+            KdPrint2((PRINT_PREFIX
                        "AtapiFindController: detected\n"));
             // Claim primary or secondary ATA IO range.
             if (portBase) {
@@ -2708,7 +2716,7 @@ not_found:
     *Again = FALSE;
     *(adapterCount) = 0;
 
-    KdPrint2((PRINT_PREFIX 
+    KdPrint2((PRINT_PREFIX
                "AtapiFindController: return SP_RETURN_NOT_FOUND\n"));
     ExFreePool(deviceExtension->lun);
     ExFreePool(deviceExtension->chan);
@@ -2731,8 +2739,8 @@ UniataAnybodyHome(
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     PHW_CHANNEL          chan = &(deviceExtension->chan[lChannel]);
-    ULONG                ldev = GET_LDEV2(lChannel, deviceNumber, 0);
-    PHW_LU_EXTENSION     LunExt = &(deviceExtension->lun[ldev]);
+    //ULONG                ldev = GET_LDEV2(lChannel, deviceNumber, 0);
+    PHW_LU_EXTENSION     LunExt = chan->lun[deviceNumber];
 
     SATA_SSTATUS_REG     SStatus;
     UCHAR                signatureLow;
@@ -2808,8 +2816,8 @@ CheckDevice(
 {
     PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
     PHW_CHANNEL          chan = &(deviceExtension->chan[lChannel]);
-    ULONG                ldev = GET_LDEV2(lChannel, deviceNumber, 0);
-    PHW_LU_EXTENSION     LunExt = &(deviceExtension->lun[ldev]);
+    //ULONG                ldev = GET_LDEV2(lChannel, deviceNumber, 0);
+    PHW_LU_EXTENSION     LunExt;
 
     UCHAR                signatureLow,
                          signatureHigh;
@@ -2824,6 +2832,16 @@ CheckDevice(
         return 0;
     }
 
+    LunExt = chan->lun[deviceNumber];
+
+    if(ResetDev && (deviceExtension->HwFlags & UNIATA_AHCI)) {
+        KdPrint2((PRINT_PREFIX "CheckDevice: reset AHCI dev\n"));
+        if(UniataAhciSoftReset(HwDeviceExtension, chan->lChannel, deviceNumber) == (ULONG)(-1)) {
+            KdPrint2((PRINT_PREFIX "CheckDevice: (no dev)\n"));
+            UniataForgetDevice(LunExt);
+            return 0;
+        }
+    } else
     if(ResetDev) {
         KdPrint2((PRINT_PREFIX "CheckDevice: reset dev\n"));
 
@@ -2836,12 +2854,12 @@ CheckDevice(
         statusByte = WaitOnBusy(chan);
 
         if((statusByte | IDE_STATUS_BUSY) == 0xff) {
-            KdPrint2((PRINT_PREFIX 
+            KdPrint2((PRINT_PREFIX
                         "CheckDevice: bad status %x\n", statusByte));
         } else
         if(statusByte != 0xff && (statusByte & IDE_STATUS_BUSY)) {
             // Perform hard-reset.
-            KdPrint2((PRINT_PREFIX 
+            KdPrint2((PRINT_PREFIX
                         "CheckDevice: BUSY\n"));
 
             AtapiWritePort1(chan, IDX_IO2_o_Control, IDE_DC_RESET_CONTROLLER );
@@ -2867,7 +2885,7 @@ CheckDevice(
         } else
         if(UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
         //if(deviceExtension->HwFlags & UNIATA_SATA) {
-            KdPrint2((PRINT_PREFIX 
+            KdPrint2((PRINT_PREFIX
                         "CheckDevice: try enable SATA Phy\n"));
             statusByte = UniataSataPhyEnable(HwDeviceExtension, lChannel, deviceNumber);
             if(statusByte == 0xff) {
@@ -2877,26 +2895,35 @@ CheckDevice(
             }
         }
     }
-    // Select the device.
-    SelectDrive(chan, deviceNumber);
 
-    if(!UniataAnybodyHome(HwDeviceExtension, lChannel, deviceNumber)) {
-        return 0;
-    }
+    if(deviceExtension->HwFlags & UNIATA_AHCI) {
+        RetVal = LunExt->DeviceFlags;
+        signatureLow = signatureHigh = 0; // make GCC happy
+    } else {
+        // Select the device.
+        SelectDrive(chan, deviceNumber);
 
-    statusByte = WaitOnBaseBusyLong(chan);
+        if(!UniataAnybodyHome(HwDeviceExtension, lChannel, deviceNumber)) {
+            return 0;
+        }
 
-    GetBaseStatus(chan, statusByte);
-    if(deviceExtension->HwFlags & UNIATA_SATA) {
-        UniataSataClearErr(HwDeviceExtension, lChannel, UNIATA_SATA_IGNORE_CONNECT, deviceNumber);
-    }
+        statusByte = WaitOnBaseBusyLong(chan);
 
-    KdPrint2((PRINT_PREFIX "CheckDevice: status %#x\n", statusByte));
-    if(((statusByte | IDE_STATUS_BUSY) == 0xff) ||
-        (statusByte & IDE_STATUS_BUSY)) {
-        KdPrint2((PRINT_PREFIX "CheckDevice: busy => return\n"));
-        UniataForgetDevice(LunExt);
-        return 0;
+        GetBaseStatus(chan, statusByte);
+        if(deviceExtension->HwFlags & UNIATA_SATA) {
+            UniataSataClearErr(HwDeviceExtension, lChannel, UNIATA_SATA_IGNORE_CONNECT, deviceNumber);
+        }
+
+        KdPrint2((PRINT_PREFIX "CheckDevice: status %#x\n", statusByte));
+        if(((statusByte | IDE_STATUS_BUSY) == 0xff) ||
+            (statusByte & IDE_STATUS_BUSY)) {
+            KdPrint2((PRINT_PREFIX "CheckDevice: busy => return\n"));
+            UniataForgetDevice(LunExt);
+            return 0;
+        }
+
+        signatureLow = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow);
+        signatureHigh = AtapiReadPort1(chan, IDX_IO1_i_CylinderHigh);
     }
 
     // set default costs
@@ -2904,9 +2931,22 @@ CheckDevice(
     LunExt->RwSwitchMCost = REORDER_MCOST_SWITCH_RW_HDD;
     LunExt->SeekBackMCost = REORDER_MCOST_SEEK_BACK_HDD;
 
-    signatureLow = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow);
-    signatureHigh = AtapiReadPort1(chan, IDX_IO1_i_CylinderHigh);
-
+    if(deviceExtension->HwFlags & UNIATA_AHCI) {
+        if(RetVal & DFLAGS_DEVICE_PRESENT) {
+            if(IssueIdentify(HwDeviceExtension,
+                              deviceNumber,
+                              lChannel,
+                              (RetVal & DFLAGS_ATAPI_DEVICE) ? IDE_COMMAND_ATAPI_IDENTIFY : IDE_COMMAND_IDENTIFY,
+                              FALSE)) {
+                // OK
+                KdPrint2((PRINT_PREFIX "CheckDevice: detected AHCI Device %#x\n",
+                           deviceNumber));
+            } else {
+                RetVal &= ~DFLAGS_ATAPI_DEVICE;
+                LunExt->DeviceFlags &= ~DFLAGS_ATAPI_DEVICE;
+            }
+        }
+    } else
     if (signatureLow == ATAPI_MAGIC_LSB && signatureHigh == ATAPI_MAGIC_MSB) {
 
         KdPrint2((PRINT_PREFIX "CheckDevice: ATAPI signature found\n"));
@@ -3020,7 +3060,6 @@ FindDevices(
     //ULONG                deviceNumber;
     ULONG                i;
     UCHAR                statusByte;
-    ULONG                ldev;
     ULONG                max_ldev;
     BOOLEAN              AtapiOnly = FALSE;
 
@@ -3033,24 +3072,31 @@ FindDevices(
     // Clear expecting interrupt flag and current SRB field.
     chan->ExpectingInterrupt = FALSE;
 //    chan->CurrentSrb = NULL;
-    max_ldev = (chan->ChannelCtrlFlags & CTRFLAGS_NO_SLAVE) ? 1 : IDE_MAX_LUN_PER_CHAN;
+//    max_ldev = (chan->ChannelCtrlFlags & CTRFLAGS_NO_SLAVE) ? 1 : IDE_MAX_LUN_PER_CHAN;
+    max_ldev = (chan->ChannelCtrlFlags & CTRFLAGS_NO_SLAVE) ? 1 : deviceExtension->NumberLuns;
     KdPrint2((PRINT_PREFIX "  max_ldev %d\n", max_ldev));
 
     // Search for devices.
     for (i = 0; i < max_ldev; i++) {
-        AtapiDisableInterrupts(deviceExtension, Channel);
+        //AtapiDisableInterrupts(deviceExtension, Channel);
         if(Flags & UNIATA_FIND_DEV_UNHIDE) {
-            ldev = GET_LDEV2(Channel, i, 0);
-            deviceExtension->lun[ldev].DeviceFlags &= ~DFLAGS_HIDDEN;
+            chan->lun[i]->DeviceFlags &= ~DFLAGS_HIDDEN;
         }
         deviceResponded |= 
             (CheckDevice(HwDeviceExtension, Channel, i, TRUE) != 0);
+        //AtapiEnableInterrupts(deviceExtension, Channel);
+    }
+
+    if(chan->DeviceExtension->HwFlags & UNIATA_AHCI) {
         AtapiEnableInterrupts(deviceExtension, Channel);
+        KdPrint2((PRINT_PREFIX
+                   "FindDevices: returning %d (AHCI)\n",
+                   deviceResponded));
+        return deviceResponded;
     }
 
     for (i = 0; i < max_ldev; i++) {
-        ldev = GET_LDEV2(Channel, i, 0);
-        LunExt = &(deviceExtension->lun[ldev]);
+        LunExt = chan->lun[i];
 
         if ((  LunExt->DeviceFlags & DFLAGS_DEVICE_PRESENT) &&
              !(LunExt->DeviceFlags & DFLAGS_LBA_ENABLED) &&
@@ -3119,7 +3165,7 @@ FindDevices(
             if (statusByte & IDE_STATUS_ERROR) {
 
                 // Reset the device.
-                KdPrint2((PRINT_PREFIX 
+                KdPrint2((PRINT_PREFIX
                             "FindDevices: Resetting controller before SetDriveParameters.\n"));
 
                 AtapiWritePort1(chan, IDX_IO2_o_Control, IDE_DC_RESET_CONTROLLER );
@@ -3137,7 +3183,7 @@ FindDevices(
 
             statusByte = WaitOnBusy(chan);
 
-            KdPrint2((PRINT_PREFIX 
+            KdPrint2((PRINT_PREFIX
                         "FindDevices: Status before SetDriveParameters: (%#x) (%#x)\n",
                         statusByte,
                         AtapiReadPort1(chan, IDX_IO1_i_DriveSelect)));
@@ -3147,12 +3193,12 @@ FindDevices(
             // Use the IDENTIFY data to set drive parameters.
             if (!SetDriveParameters(HwDeviceExtension,i,Channel)) {
 
-                KdPrint2((PRINT_PREFIX 
+                KdPrint2((PRINT_PREFIX
                            "FindDevices: Set drive parameters for device %d failed\n",
                            i));
                 // Don't use this device as writes could cause corruption.
                 LunExt->DeviceFlags &= ~DFLAGS_DEVICE_PRESENT;
-                UniataForgetDevice(&(deviceExtension->lun[ldev]));
+                UniataForgetDevice(LunExt);
                 continue;
 
             }
@@ -3183,8 +3229,7 @@ FindDevices(
 */
     if(deviceResponded) {
         for (i = 0; i < max_ldev; i++) {
-            ldev = GET_LDEV2(Channel, i, 0);
-            LunExt = &(deviceExtension->lun[ldev]);
+            LunExt = chan->lun[i];
 
             KdPrint2((PRINT_PREFIX 
                        "FindDevices: select %d dev to clear INTR\n", i));
@@ -3194,8 +3239,7 @@ FindDevices(
                        "FindDevices: statusByte=%#x\n", statusByte));
         }
         for (i = 0; i < max_ldev; i++) {
-            ldev = GET_LDEV2(Channel, i, 0);
-            LunExt = &(deviceExtension->lun[ldev]);
+            LunExt = chan->lun[i];
 
             if(LunExt->DeviceFlags & DFLAGS_DEVICE_PRESENT) {
                 // Make sure some device (master is preferred) is selected on exit.
@@ -3213,7 +3257,7 @@ FindDevices(
 //    AtapiWritePort1(chan, IDX_IO2_o_Control, IDE_DC_A_4BIT );
     GetBaseStatus(chan, statusByte);
 
-    KdPrint2((PRINT_PREFIX 
+    KdPrint2((PRINT_PREFIX
                "FindDevices: returning %d\n",
                deviceResponded));
 

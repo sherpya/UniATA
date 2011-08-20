@@ -129,6 +129,10 @@ InitBadBlocks(
 {
     RTL_QUERY_REGISTRY_TABLE QueryTable[2];    // Main record and zero filled end of array marker
     WCHAR DevSerial[128];
+#ifdef _DEBUG
+    UCHAR cDevSerial[128];
+    ULONG i;
+#endif
     ULONG Length;
     PLIST_ENTRY      link;
     PSBadBlockListItem   cur;
@@ -173,8 +177,13 @@ InitBadBlocks(
         Length++;
         Length += EncodeVendorStr(DevSerial+Length, LunExt->IdentifyData.SerialNumber, sizeof(LunExt->IdentifyData.SerialNumber));
 
+#ifdef _DEBUG
         KdPrint(( "LunExt %#x\n", LunExt));
-        KdPrint(( "S/N:%S\n", DevSerial));
+        for(i=0; i<Length; i++) {
+            cDevSerial[i] = (UCHAR)(DevSerial[i]);
+        }
+        KdPrint(( "S/N:%s\n", cDevSerial));
+#endif
 
         LunExt->nBadBlocks = 0;
         LunExt->arrBadBlocks = NULL;

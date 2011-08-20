@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2010 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2011 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     bsmaster.h
@@ -112,6 +112,8 @@ typedef struct _BUSMASTER_CTX {
 #define PCI_DEV_SUBCLASS_ATA            0x05
 #define PCI_DEV_SUBCLASS_SATA           0x06
 
+#define PCI_DEV_PROGIF_AHCI_1_0         0x01
+
 /* structure for holding DMA address data */
 typedef struct BM_DMA_ENTRY {
     ULONG base;
@@ -183,7 +185,11 @@ typedef struct _IDE_AHCI_REGISTERS {
     } CAP;
 
 #define AHCI_CAP_NOP_MASK    0x0000001f
-#define AHCI_CAP_SPM         0x00010000
+#define AHCI_CAP_NCS_MASK    0x00001f00
+#define AHCI_CAP_PMD         0x00008000
+#define AHCI_CAP_SPM         0x00020000
+#define AHCI_CAP_SAM         0x00040000
+#define	AHCI_CAP_SCLO	     0x01000000
 #define AHCI_CAP_S64A        0x80000000
 
     // Global HBA Control
@@ -234,6 +240,7 @@ typedef union _SATA_SSTATUS_REG {
 #define SStatus_SPD_NoDev        0x00
 #define SStatus_SPD_Gen1         0x01
 #define SStatus_SPD_Gen2         0x02
+#define SStatus_SPD_Gen3         0x03
 
         ULONG IPM:4; // Interface Power Management
 
@@ -264,6 +271,7 @@ typedef union _SATA_SCONTROL_REG {
 #define SControl_SPD_NoRestrict  0x00
 #define SControl_SPD_LimGen1     0x01
 #define SControl_SPD_LimGen2     0x02
+#define SControl_SPD_LimGen3     0x03
 
         ULONG IPM:4; // Interface Power Management Transitions Allowed
 
@@ -390,15 +398,37 @@ typedef union _AHCI_IS_REG {
     ULONG Reg;
 } AHCI_IS_REG, *PAHCI_IS_REG;
 
+#define         ATA_AHCI_P_IX_DHR       0x00000001
+#define         ATA_AHCI_P_IX_PS        0x00000002
+#define         ATA_AHCI_P_IX_DS        0x00000004
+#define         ATA_AHCI_P_IX_SDB       0x00000008
+#define         ATA_AHCI_P_IX_UF        0x00000010
+#define         ATA_AHCI_P_IX_DP        0x00000020
+#define         ATA_AHCI_P_IX_PC        0x00000040
+#define         ATA_AHCI_P_IX_DI        0x00000080
+
+#define         ATA_AHCI_P_IX_PRC       0x00400000
+#define         ATA_AHCI_P_IX_IPM       0x00800000
+#define         ATA_AHCI_P_IX_OF        0x01000000
+#define         ATA_AHCI_P_IX_INF       0x04000000
+#define         ATA_AHCI_P_IX_IF        0x08000000
+#define         ATA_AHCI_P_IX_HBD       0x10000000
+#define         ATA_AHCI_P_IX_HBF       0x20000000
+#define         ATA_AHCI_P_IX_TFE       0x40000000
+#define         ATA_AHCI_P_IX_CPD       0x80000000
+
+#define AHCI_CLB_ALIGNEMENT_MASK    ((ULONGLONG)(1024-1))
+#define AHCI_FIS_ALIGNEMENT_MASK    ((ULONGLONG)(256-1))
+#define AHCI_CMD_ALIGNEMENT_MASK    ((ULONGLONG)(128-1))
 
 typedef struct _IDE_AHCI_PORT_REGISTERS {
     union {
         struct {
-            ULONG  CLB;   // command list base address
+            ULONG  CLB;   // command list base address, 1K-aligned
             ULONG  CLBU;  // command list base address (upper 32bits)
         };
         ULONGLONG CLB64;
-    };
+    };  // 0x100 + 0x80*c + 0x0000
 
     union {
         struct {
@@ -406,12 +436,12 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
             ULONG  FBU;  // FIS base address (upper 32bits)
         };
         ULONGLONG FB64;
-    };
+    };  // 0x100 + 0x80*c + 0x0008
 
     union {
         ULONG       IS_Reg;            // interrupt status
         AHCI_IS_REG IS;
-    };
+    };  // 0x100 + 0x80*c + 0x0010
 
     union {
         ULONG Reg;            // interrupt enable
@@ -437,7 +467,7 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
             ULONG TFEE:1;// Task File Error Enable
             ULONG CPDE:1;// Cold Port Detect Enable
         };
-    } IE;
+    } IE;  // 0x100 + 0x80*c + 0x0014
 
     union {
         ULONG Reg;           // command register
@@ -475,7 +505,7 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
 #define SATA_CMD_ICC_Partial 0x02
 #define SATA_CMD_ICC_Slumber 0x06
         };
-    } CMD;
+    } CMD;  // 0x100 + 0x80*c + 0x0018
 
     ULONG Reserved;
 
@@ -492,7 +522,7 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
             UCHAR ERR; // Contains the latest copy of the task file error register.
             UCHAR Reserved[2];
         };
-    } TFD;
+    } TFD;  // 0x100 + 0x80*c + 0x0020
 
     union {
         ULONG Reg;           // signature
@@ -502,24 +532,25 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
             UCHAR LbaMid;
             UCHAR LbaHigh;
         };
-    } SIG;
+    } SIG;  // 0x100 + 0x80*c + 0x0024
     union {
         ULONG             SStatus;      // SCR0
         SATA_SSTATUS_REG  SSTS;
-    };
+    };  // 0x100 + 0x80*c + 0x0028
     union {
         ULONG             SControl;     // SCR2
         SATA_SCONTROL_REG SCTL;
-    };
+    };  // 0x100 + 0x80*c + 0x002c
     union {
         ULONG             SError;       // SCR1
         SATA_SERROR_REG   SERR;
-    };
+    };  // 0x100 + 0x80*c + 0x0030
     union {
         ULONG SACT;      // SCR3
         ULONG SActive;   // bitmask
-    };
-    ULONG CI;            // Command issue, bitmask
+    };  // 0x100 + 0x80*c + 0x0034
+
+    ULONG CI;            // Command issue, bitmask,   0x100 + 0x80*c + 0x0038
 
     // AHCI 1.1
     union {
@@ -528,7 +559,8 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
             USHORT PMN;     // PM Notify, bitmask
             USHORT Reserved;
         };
-    } SNTF;
+    } SNTF;  // 0x100 + 0x80*c + 0x003c
+
     ULONG FIS_Switching_Reserved[12];
     UCHAR VendorSpec[16];
 
@@ -537,7 +569,39 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
 #define IDX_AHCI_P_CLB                    (FIELD_OFFSET(IDE_AHCI_PORT_REGISTERS, CLB))
 #define IDX_AHCI_P_FB                     (FIELD_OFFSET(IDE_AHCI_PORT_REGISTERS, FB))
 #define IDX_AHCI_P_IS                     (FIELD_OFFSET(IDE_AHCI_PORT_REGISTERS, IS))
+#define IDX_AHCI_P_IE                     (FIELD_OFFSET(IDE_AHCI_PORT_REGISTERS, IE))
 #define IDX_AHCI_P_CI                     (FIELD_OFFSET(IDE_AHCI_PORT_REGISTERS, CI))
+#define IDX_AHCI_P_TFD                    (FIELD_OFFSET(IDE_AHCI_PORT_REGISTERS, TFD))
+#define IDX_AHCI_P_SIG                    (FIELD_OFFSET(IDE_AHCI_PORT_REGISTERS, SIG))
+#define IDX_AHCI_P_CMD                    (FIELD_OFFSET(IDE_AHCI_PORT_REGISTERS, CMD))
+
+#define IDX_AHCI_P_SNTF                   (FIELD_OFFSET(IDE_AHCI_PORT_REGISTERS, SNTF))
+
+// AHCI commands ( -> IDX_AHCI_P_CMD)
+#define         ATA_AHCI_P_CMD_ST       0x00000001
+#define         ATA_AHCI_P_CMD_SUD      0x00000002
+#define         ATA_AHCI_P_CMD_POD      0x00000004
+#define         ATA_AHCI_P_CMD_CLO      0x00000008
+#define         ATA_AHCI_P_CMD_FRE      0x00000010
+#define         ATA_AHCI_P_CMD_CCS_MASK 0x00001f00
+#define         ATA_AHCI_P_CMD_ISS      0x00002000
+#define         ATA_AHCI_P_CMD_FR       0x00004000
+#define         ATA_AHCI_P_CMD_CR       0x00008000
+#define         ATA_AHCI_P_CMD_CPS      0x00010000
+#define         ATA_AHCI_P_CMD_PMA      0x00020000
+#define         ATA_AHCI_P_CMD_HPCP     0x00040000
+#define         ATA_AHCI_P_CMD_ISP      0x00080000
+#define         ATA_AHCI_P_CMD_CPD      0x00100000
+#define         ATA_AHCI_P_CMD_ATAPI    0x01000000
+#define         ATA_AHCI_P_CMD_DLAE     0x02000000
+#define         ATA_AHCI_P_CMD_ALPE     0x04000000
+#define         ATA_AHCI_P_CMD_ASP      0x08000000
+#define         ATA_AHCI_P_CMD_ICC_MASK 0xf0000000
+#define         ATA_AHCI_P_CMD_NOOP     0x00000000
+#define         ATA_AHCI_P_CMD_ACTIVE   0x10000000
+#define         ATA_AHCI_P_CMD_PARTIAL  0x20000000
+#define         ATA_AHCI_P_CMD_SLUMBER  0x60000000
+
 
 typedef struct _IDE_AHCI_PRD_ENTRY {
     union {
@@ -562,21 +626,42 @@ typedef struct _IDE_AHCI_PRD_ENTRY {
 #define ATA_AHCI_DMA_ENTRIES		(PAGE_SIZE/2/sizeof(IDE_AHCI_PRD_ENTRY))   /* 128 */
 #define ATA_AHCI_MAX_TAGS		32
 
+#define AHCI_FIS_TYPE_ATA_H2D           0x27
+#define AHCI_FIS_TYPE_ATA_D2H           0x34
+
+#define AHCI_FIS_COMM_PM                (0x80 | AHCI_DEV_SEL_PM)
+
+#define AHCI_DEV_SEL_1                  0x00
+#define AHCI_DEV_SEL_2                  0x01
+#define AHCI_DEV_SEL_PM                 0x0f
+
+/* 128-byte aligned */
 typedef struct _IDE_AHCI_CMD {
     UCHAR              cfis[64];
     UCHAR              acmd[32];
     UCHAR              Reserved[32];
-    IDE_AHCI_PRD_ENTRY prd_tab[ATA_AHCI_DMA_ENTRIES];
+    IDE_AHCI_PRD_ENTRY prd_tab[ATA_AHCI_DMA_ENTRIES]; // also 128-byte aligned
 } IDE_AHCI_CMD, *PIDE_AHCI_CMD;
 
+
+/* cmd_flags */
+#define ATA_AHCI_CMD_ATAPI		0x0020
+#define ATA_AHCI_CMD_WRITE		0x0040
+#define ATA_AHCI_CMD_PREFETCH		0x0080
+#define ATA_AHCI_CMD_RESET		0x0100
+#define ATA_AHCI_CMD_BIST		0x0200
+#define ATA_AHCI_CMD_CLR_BUSY		0x0400
+
+/* 128-byte aligned */
 typedef struct _IDE_AHCI_CMD_LIST {
     USHORT             cmd_flags;
     USHORT             prd_length;     /* PRD entries */
     ULONG              bytecount;
-    ULONGLONG          cmd_table_phys; /* 128byte aligned */
+    ULONGLONG          cmd_table_phys; /* points to IDE_AHCI_CMD */
     ULONG              Reserved[4];
 } IDE_AHCI_CMD_LIST, *PIDE_AHCI_CMD_LIST;
 
+/* 256-byte aligned */
 typedef struct _IDE_AHCI_RCV_FIS {
     UCHAR              dsfis[28];
     UCHAR              Reserved1[4];
@@ -588,6 +673,13 @@ typedef struct _IDE_AHCI_RCV_FIS {
     UCHAR              ufis[64];
     UCHAR              Reserved4[96];
 } IDE_AHCI_RCV_FIS, *PIDE_AHCI_RCV_FIS;
+
+/* 1K-byte aligned */
+typedef struct _IDE_AHCI_CHANNEL_CTL_BLOCK {
+    IDE_AHCI_CMD_LIST  cmd_list[ATA_AHCI_MAX_TAGS]; // 1K-size (32*32)
+    IDE_AHCI_RCV_FIS   rcv_fis;
+    IDE_AHCI_CMD       cmd; // for single internal comamnds w/o associated AtaReq
+} IDE_AHCI_CHANNEL_CTL_BLOCK, *PIDE_AHCI_CHANNEL_CTL_BLOCK;
 
 
 #define IsBusMaster(pciData) \
@@ -611,41 +703,54 @@ typedef union _ATA_REQ {
 //    ULONG               reqId;          // serial
     struct {
 
-        union {
+        //union {
 
-            struct {
-                union _ATA_REQ*     next_req;
-                union _ATA_REQ*     prev_req;
+        struct {
+            union _ATA_REQ*     next_req;
+            union _ATA_REQ*     prev_req;
 
-                PSCSI_REQUEST_BLOCK Srb;            // Current request on controller.
+            PSCSI_REQUEST_BLOCK Srb;            // Current request on controller.
 
-                PUSHORT             DataBuffer;     // Data buffer pointer.
-                ULONG               WordsLeft;      // Data words left.
-                ULONG               TransferLength; // Originally requested transfer length
-                LONGLONG            lba;
-                ULONG               WordsTransfered;// Data words already transfered.
-                ULONG               bcount;
+            PUSHORT             DataBuffer;     // Data buffer pointer.
+            ULONG               WordsLeft;      // Data words left.
+            ULONG               TransferLength; // Originally requested transfer length
+            LONGLONG            lba;
+            ULONG               WordsTransfered;// Data words already transfered.
+            ULONG               bcount;
 
-                UCHAR               retry;
-                UCHAR               ttl;
-            //    UCHAR               tag;
-                UCHAR               Flags;
-                UCHAR               ReqState;
+            UCHAR               retry;
+            UCHAR               ttl;
+        //    UCHAR               tag;
+            UCHAR               Flags;
+            UCHAR               ReqState;
 
-                PSCSI_REQUEST_BLOCK OriginalSrb;    // Mechanism Status Srb Data
+            PSCSI_REQUEST_BLOCK OriginalSrb;    // Mechanism Status Srb Data
 
-                ULONG               dma_entries;
-                union {
+            ULONG               dma_entries;
+            union {
+                // for ATA
+                struct {
                     ULONG           dma_base;
-                    ULONGLONG       ahci_base64;    // for AHCI
-                };
+                    ULONG           dma_baseu;
+                } ata;
+                // for AHCI
+                struct {
+                    ULONGLONG       ahci_base64;
+                    ULONGLONG       in_lba;
+                    PIDE_AHCI_CMD   ahci_cmd_ptr;
+                    ULONG           in_bcount;
+                    ULONG           in_status;
+                    USHORT          io_cmd_flags; // out
+
+                } ahci;
             };
-            UCHAR padding_128b[128];
         };
+            //UCHAR padding_128b[128];  // Note: we assume, NT allocates block > 4k as PAGE-aligned
+        //};
         struct {
             union {
                 BM_DMA_ENTRY    dma_tab[ATA_DMA_ENTRIES];
-                IDE_AHCI_CMD    ahci_cmd;       // for AHCI
+                IDE_AHCI_CMD    ahci_cmd0;       // for AHCI, 128-byte aligned
             };
         };
     };
@@ -814,10 +919,12 @@ typedef struct _HW_CHANNEL {
     PUCHAR  DmaBuffer;
 
     // 
-    PIDE_AHCI_CMD_LIST       AHCI_CL;
-    ULONGLONG                AHCI_CL_PhAddr;
-    PVOID                    AHCI_FIS;  // is not actually used by UniATA now, but is required by AHCI controller
-    ULONGLONG                AHCI_FIS_PhAddr;
+    PIDE_AHCI_CHANNEL_CTL_BLOCK       AhciCtlBlock0; // unaligned
+    PIDE_AHCI_CHANNEL_CTL_BLOCK       AhciCtlBlock;  // 128-byte aligned
+    ULONGLONG                         AHCI_CTL_PhAddr;
+    IORES                             BaseIoAHCI_Port;
+    //PVOID                    AHCI_FIS;  // is not actually used by UniATA now, but is required by AHCI controller
+    //ULONGLONG                AHCI_FIS_PhAddr;
     // Note: in contrast to FBSD, we keep PRD and CMD item in AtaReq structure 
 
 #ifdef QUEUE_STATISTICS
@@ -845,6 +952,8 @@ typedef struct _HW_CHANNEL {
 #define CTRFLAGS_DSC_BSY                0x0080
 #define CTRFLAGS_NO_SLAVE               0x0100
 //#define CTRFLAGS_PATA                   0x0200
+#define CTRFLAGS_AHCI_PM                0x0400
+#define CTRFLAGS_AHCI_PM2               0x0800
 
 #define CTRFLAGS_PERMANENT  (CTRFLAGS_DMA_RO | CTRFLAGS_NO_SLAVE)
 
@@ -1015,11 +1124,12 @@ typedef struct _HW_DEVICE_EXTENSION {
 
     IORES                     BaseIoAHCI_0;
     //PIDE_AHCI_PORT_REGISTERS  BaseIoAHCIPort[AHCI_MAX_PORT];
+    ULONG                     AHCI_CAP;
 
     BOOLEAN        opt_AtapiDmaZeroTransfer; // default FALSE
     BOOLEAN        opt_AtapiDmaControlCmd;   // default FALSE
     BOOLEAN        opt_AtapiDmaRawRead;      // default TRUE
-    BOOLEAN        opt_AtapiDmaReadWrite;    // default TRUE  
+    BOOLEAN        opt_AtapiDmaReadWrite;    // default TRUE
 
     PCCH           FullDevName;
 
@@ -1044,8 +1154,8 @@ extern ULONG         BMListLen;
 extern ULONG         IsaCount;
 extern ULONG         MCACount;
 
-extern const CHAR retry_Wdma[MAX_RETRIES+1];
-extern const CHAR retry_Udma[MAX_RETRIES+1];
+//extern const CHAR retry_Wdma[MAX_RETRIES+1];
+//extern const CHAR retry_Udma[MAX_RETRIES+1];
 
 extern VOID
 NTAPI
@@ -1209,7 +1319,7 @@ extern VOID
 NTAPI
 AtapiDmaReinit(
     IN PHW_DEVICE_EXTENSION deviceExtension,
-    IN ULONG ldev,
+    IN PHW_LU_EXTENSION LunExt,
     IN PATA_REQ AtaReq
     );
 
@@ -1217,7 +1327,7 @@ extern VOID
 NTAPI
 AtapiDmaInit__(
     IN PHW_DEVICE_EXTENSION deviceExtension,
-    IN ULONG ldev
+    IN PHW_LU_EXTENSION LunExt
     );
 
 extern VOID
@@ -1226,7 +1336,7 @@ AtapiDmaInit(
     IN PVOID HwDeviceExtension,
     IN ULONG DeviceNumber,
     IN ULONG lChannel,          // logical channel,
-                               // is always 0 except simplex-only controllers
+                               // is always 0 except simplex-only and multi-channel controllers
     IN SCHAR apiomode,
     IN SCHAR wdmamode,
     IN SCHAR udmamode
@@ -1504,8 +1614,8 @@ AtapiReadBuffer2(
 #define GET_LDEV2(P, T, L)  (T)*/
 
 #define GET_CHANNEL(Srb)  (Srb->PathId)
-#define GET_LDEV(Srb)  (Srb->TargetId | (Srb->PathId << 1))
-#define GET_LDEV2(P, T, L)  (T | ((P)<<1))
+//#define GET_LDEV(Srb)  (Srb->TargetId | (Srb->PathId << 1))
+//#define GET_LDEV2(P, T, L)  (T | ((P)<<1))
 #define GET_CDEV(Srb)  (Srb->TargetId)
 
 VOID

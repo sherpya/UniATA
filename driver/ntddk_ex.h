@@ -1,15 +1,19 @@
 #ifndef __NTDDK_EX__H__
 #define __NTDDK_EX__H__
 
-#ifndef __REACTOS__
+//#ifndef USE_REACTOS_DDK
+#ifdef ASSERT
 #undef ASSERT
-#define ASSERT
-#endif //__REACTOS__
+#define ASSERT(x) ((void)0)
+#endif //ASSERT
+//#endif //USE_REACTOS_DDK
 
 
-#ifndef FILE_CHARACTERISTIC_PNP_DEVICE  // DDK 2003
+#if !defined(FILE_CHARACTERISTIC_PNP_DEVICE) || defined(USE_REACTOS_DDK) // DDK 2003
 
+#ifndef FILE_CHARACTERISTIC_PNP_DEVICE
 #define FILE_CHARACTERISTIC_PNP_DEVICE  0x00000800
+#endif 
 
 typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemBasicInformation,
@@ -42,7 +46,7 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemUnloadGdiDriverInformation,
     SystemTimeAdjustmentInformation,
     SystemSummaryMemoryInformation,
-#ifndef __REACTOS__
+#ifndef USE_REACTOS_DDK
     SystemNextEventIdInformation,
     SystemEventIdsInformation,
     SystemCrashDumpInformation,
@@ -50,7 +54,7 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemMirrorMemoryInformation,
     SystemPerformanceTraceInformation,
     SystemObsolete0,
-#endif
+#endif // USE_REACTOS_DDK
     SystemExceptionInformation,
     SystemCrashDumpStateInformation,
     SystemKernelDebuggerInformation,
@@ -60,17 +64,17 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemPrioritySeperation,
     SystemPlugPlayBusInformation,
     SystemDockInformation,
-#ifdef __REACTOS__
+#ifdef USE_REACTOS_DDK
     SystemPowerInformationNative,
-#elsif defined IRP_MN_START_DEVICE
+#elif defined IRP_MN_START_DEVICE
     SystemPowerInformationInfo,
 #else
     SystemPowerInformation,
-#endif
+#endif // USE_REACTOS_DDK
     SystemProcessorSpeedInformation,
     SystemCurrentTimeZoneInformation,
     SystemLookasideInformation,
-#ifdef __REACTOS__
+#ifdef USE_REACTOS_DDK
     SystemTimeSlipNotification,
     SystemSessionCreate,
     SystemSessionDetach,
@@ -124,10 +128,10 @@ typedef enum _SYSTEM_INFORMATION_CLASS {
     SystemPrefetchPathInformation,
     SystemVerifierFaultsInformation,
     MaxSystemInfoClass,
-#endif //__REACTOS__
+#endif // USE_REACTOS_DDK
 } SYSTEM_INFORMATION_CLASS;
 
-#endif // !FILE_CHARACTERISTIC_PNP_DEVICE
+#endif // !defined(FILE_CHARACTERISTIC_PNP_DEVICE) || defined(USE_REACTOS_DDK)
 
 
 NTSYSAPI
