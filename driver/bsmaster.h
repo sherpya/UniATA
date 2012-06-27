@@ -85,7 +85,8 @@ Revision History:
 #define ATA_PC98_BANKIOSIZE             0x01
 //#define ATA_MAX_LBA28                   DEF_U64(0x0fffffff)
 // Hitachi 1 Tb HDD didn't allow LBA28 with BCount > 1 beyond this LBA
-#define ATA_MAX_LBA28                   DEF_U64(0x0fffff80-1)
+#define ATA_MAX_IOLBA28                 DEF_U64(0x0fffff80)
+#define ATA_MAX_LBA28                   DEF_U64(0x0fffffff)
 
 #define ATA_DMA_ENTRIES			256     /* PAGESIZE/2/sizeof(BM_DMA_ENTRY)*/
 #define ATA_DMA_EOT			0x80000000
@@ -662,6 +663,7 @@ typedef union _ATA_REQ {
 #define REQ_FLAG_FORCE_DOWNRATE_LBA48   0x10
 #define REQ_FLAG_DMA_DBUF               0x20
 #define REQ_FLAG_DMA_DBUF_PRD           0x40
+#define REQ_FLAG_LBA48                  0x80
 
 // Request states
 #define REQ_STATE_NONE                  0x00
@@ -913,6 +915,8 @@ typedef struct _HW_LU_EXTENSION {
     };
 
     struct _HW_DEVICE_EXTENSION* DeviceExtension;
+    struct _HW_CHANNEL* chan;
+    ULONG  Lun;
 
 #ifdef IO_STATISTICS
 

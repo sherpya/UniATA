@@ -284,6 +284,16 @@ void main (int argc, char* argv[]) {
         printf("#define UNIATA_VER_DOT         0.%d.%d.%d\n",
             ver_1,ver_2,ver_3
             );
+        printf("#define UNIATA_VER_MJ          0\n");
+        printf("#define UNIATA_VER_MN          %d\n",
+            ver_1
+            );
+        printf("#define UNIATA_VER_SUB_MJ      %d\n",
+            ver_2
+            );
+        printf("#define UNIATA_VER_SUB_MN      %d\n",
+            ver_3
+            );
         printf("#define UNIATA_VER_DOT_COMMA   0,%d,%d,%d\n",
             ver_1,ver_2,ver_3
             );

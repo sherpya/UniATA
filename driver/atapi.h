@@ -346,8 +346,10 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_COMMAND_DOOR_UNLOCK      0xDF
 #define IDE_COMMAND_STANDBY_IMMED    0xE0 // flush and spin down
 #define IDE_COMMAND_STANDBY          0xE2 // flush and spin down and enable autopowerdown timer
+#define IDE_COMMAND_READ_PM          0xE4 // SATA PM
 #define IDE_COMMAND_SLEEP            0xE6 // flush, spin down and deactivate interface
 #define IDE_COMMAND_FLUSH_CACHE      0xE7
+#define IDE_COMMAND_WRITE_PM         0xE8 // SATA PM
 #define IDE_COMMAND_IDENTIFY         0xEC
 #define IDE_COMMAND_MEDIA_EJECT      0xED
 #define IDE_COMMAND_FLUSH_CACHE48    0xEA
@@ -1045,6 +1047,11 @@ AtapiInterrupt__(
     IN UCHAR c
     );
 
+
+#define INTERRUPT_REASON_IGNORE          0
+#define INTERRUPT_REASON_OUR             1
+#define INTERRUPT_REASON_UNEXPECTED      2
+
 BOOLEAN
 NTAPI
 AtapiHwInitialize(
@@ -1325,6 +1332,14 @@ UniataAnybodyHome(
 
 extern UCHAR AtaCommands48[256];
 extern UCHAR AtaCommandFlags[256];
+
+/*
+ We need LBA48 when requested LBA or BlockCount are too large.
+ But for LBA-based commands we have *special* limitation
+*/
+#define UniAta_need_lba48(command, lba, count, supp48) \
+    (  ((AtaCommandFlags[command] & ATA_CMD_FLAG_LBAIOsupp) && (supp48) && (((lba+count) >= ATA_MAX_IOLBA28) || (count > 256)) ) || \
+       (lba > ATA_MAX_LBA28) || (count > 255) )
 
 #ifdef _DEBUG
 #define PrintNtConsole  _PrintNtConsole

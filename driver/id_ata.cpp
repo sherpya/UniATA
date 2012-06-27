@@ -554,7 +554,7 @@ WaitOnBaseBusy(
     )
 {
     ULONG i;
-    UCHAR Status;
+    UCHAR Status = 0xff;
     for (i=0; i<g_opt_WaitBusyCount; i++) {
         GetBaseStatus(chan, Status);
         if (Status & IDE_STATUS_BUSY) {
@@ -797,8 +797,8 @@ AtaCommand48(
     //<<<<<< NV:  2006/08/03
 
     /* only use 48bit addressing if needed because of the overhead */
-    if (((lba+count-1) >= ATA_MAX_LBA28 || count > 256) &&
-        deviceExtension->lun[ldev].IdentifyData.FeaturesSupport.Address48) {
+    if (UniAta_need_lba48(command, lba, count,
+        deviceExtension->lun[ldev].IdentifyData.FeaturesSupport.Address48)) {
 
         KdPrint2((PRINT_PREFIX "  ldev %#x USE_LBA_48\n", ldev ));
         /* translate command into 48bit version */
@@ -3327,7 +3327,7 @@ AtapiInterrupt(
             if((c_state == CHECK_INTR_DETECTED) ||
                (i_res = AtapiCheckInterrupt__(deviceExtension, (UCHAR)c))) {
 
-                if(i_res == 2) {
+                if(i_res == INTERRUPT_REASON_UNEXPECTED) {
                     KdPrint2((PRINT_PREFIX "AtapiInterrupt(base): Catch unexpected\n"));
                     InterlockedExchange(&(deviceExtension->chan[c].CheckIntr), CHECK_INTR_IDLE);
                     return TRUE;
@@ -3419,7 +3419,7 @@ AtapiInterrupt2(
         if((i_res = AtapiCheckInterrupt__(deviceExtension, (UCHAR)c))) {
 
             KdPrint2((PRINT_PREFIX "AtapiInterrupt2: intr\n"));
-            if(i_res == 2) {
+            if(i_res == INTERRUPT_REASON_UNEXPECTED) {
                 KdPrint2((PRINT_PREFIX "AtapiInterrupt2: Catch unexpected\n"));
                 InterlockedExchange(&(deviceExtension->chan[c].CheckIntr), CHECK_INTR_IDLE);
                 return TRUE;
@@ -3632,6 +3632,12 @@ AtapiCheckInterrupt__(
     lChannel = c;
     Channel = (UCHAR)(deviceExtension->Channel + lChannel);
 
+    if((ChipFlags & UNIATA_AHCI) &&
+        UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
+        OurInterrupt = UniataAhciStatus(HwDeviceExtension, lChannel, -1);
+        return OurInterrupt;
+    }
+
     if(chan->ChannelCtrlFlags & CTRFLAGS_DMA_ACTIVE) {
         DmaTransfer = TRUE;
         KdPrint2((PRINT_PREFIX "  cntrlr %#x:%#x, lch %#x DmaTransfer = TRUE\n", deviceExtension->DevIndex,
@@ -3647,12 +3653,6 @@ AtapiCheckInterrupt__(
     if(deviceExtension->UnknownDev) {
         KdPrint2((PRINT_PREFIX "  UnknownDev\n"));
         goto check_unknown;
-    }
-
-    if((ChipFlags & UNIATA_AHCI) &&
-        UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
-        OurInterrupt = UniataAhciStatus(HwDeviceExtension, lChannel, -1);
-        return OurInterrupt;
     }
 
     // Attention !
@@ -3672,7 +3672,7 @@ AtapiCheckInterrupt__(
             if (!(status & 
                   ((Channel) ? 0x00004000 : 0x00000400))) {
                 KdPrint2((PRINT_PREFIX "  Promise old/new unexpected\n"));
-                return FALSE;
+                return INTERRUPT_REASON_IGNORE;
             }
             break;
         case PRTX:
@@ -3682,7 +3682,7 @@ AtapiCheckInterrupt__(
                 break;
             if(!(status & 0x20)) {
                 KdPrint2((PRINT_PREFIX "  Promise tx unexpected\n"));
-                return FALSE;
+                return INTERRUPT_REASON_IGNORE;
             }
             break;
         case PRMIO:
@@ -3694,11 +3694,11 @@ AtapiCheckInterrupt__(
             if(pr_status & (0x11 << Channel)) {
                 // TODO: reset channel
                 KdPrint2((PRINT_PREFIX "  Promise mio unexpected + reset req\n"));
-                return FALSE;
+                return INTERRUPT_REASON_IGNORE;
             }
             if(!(status & (0x01 << Channel))) {
                 KdPrint2((PRINT_PREFIX "  Promise mio unexpected\n"));
-                return FALSE;
+                return INTERRUPT_REASON_IGNORE;
             }
             AtapiWritePort4(chan, IDX_BM_DeviceSpecific0, 0x00000001);
             break;
@@ -3737,9 +3737,9 @@ AtapiCheckInterrupt__(
         if(!(pr_status & (0x01UL << shift))) {
             KdPrint2((PRINT_PREFIX "  nVidia unexpected\n"));
             if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT, 0)) {
-                OurInterrupt = 2;
+                OurInterrupt = INTERRUPT_REASON_UNEXPECTED;
             } else {
-                return FALSE;
+                return INTERRUPT_REASON_IGNORE;
             }
         }
 
@@ -3759,11 +3759,11 @@ AtapiCheckInterrupt__(
             KdPrint2((PRINT_PREFIX "  Sii DS0 %x\n", reg32));
             if(reg32 == 0xffffffff) {
                 KdPrint2((PRINT_PREFIX "  Sii mio unexpected\n"));
-                return FALSE;
+                return INTERRUPT_REASON_IGNORE;
             }
             if(!(reg32 & (BM_DS0_SII_DMA_SATA_IRQ | BM_DS0_SII_DMA_COMPLETE | BM_DS0_SII_IRQ | BM_DS0_SII_DMA_ENABLE | BM_DS0_SII_DMA_ERROR))) {
                 KdPrint2((PRINT_PREFIX "  Sii mio unexpected (2)\n"));
-                return FALSE;
+                return INTERRUPT_REASON_IGNORE;
             }
 
             if(ChipFlags & UNIATA_SATA) {
@@ -3774,7 +3774,7 @@ AtapiCheckInterrupt__(
                     * SError bits are pending.  Clear SError immediately.
                     */
                     if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT, 0)) {
-                        OurInterrupt = 2;
+                        OurInterrupt = INTERRUPT_REASON_UNEXPECTED;
                     }
                 }
             }
@@ -3795,11 +3795,11 @@ AtapiCheckInterrupt__(
             KdPrint2((PRINT_PREFIX "  0x71 = %#x\n", reg8));
             if (!(reg8 &
                   (Channel ? 0x08 : 0x04))) {
-                return FALSE;
+                return INTERRUPT_REASON_IGNORE;
             }
             if (!DmaTransfer) {
                 KdPrint2((PRINT_PREFIX "  cmd our\n"));
-                OurInterrupt = 2;
+                OurInterrupt = INTERRUPT_REASON_UNEXPECTED;
             }
             SetPciConfig1(0x71, (Channel ? 0x08 : 0x04));
         }
@@ -3811,7 +3811,7 @@ AtapiCheckInterrupt__(
         //dma_status = GetDmaStatus(deviceExtension, lChannel);
         if (!((dma_status = GetDmaStatus(deviceExtension, lChannel)) & BM_STATUS_INTR)) {
             KdPrint2((PRINT_PREFIX "  Acard unexpected\n"));
-            return FALSE;
+            return INTERRUPT_REASON_IGNORE;
         }
         AtapiWritePort1(chan, IDX_BM_Status, dma_status | BM_STATUS_INTR);
         AtapiStallExecution(1);
@@ -3825,11 +3825,11 @@ AtapiCheckInterrupt__(
             } else
             if(ChipFlags & UNIATA_SATA) {
                 if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT, 0)) {
-                    OurInterrupt = 2;
+                    OurInterrupt = INTERRUPT_REASON_UNEXPECTED;
                 }
                 if(!(chan->ChannelCtrlFlags & CTRFLAGS_NO_SLAVE)) {
                     if(UniataSataClearErr(chan->DeviceExtension, chan->lChannel, UNIATA_SATA_IGNORE_CONNECT, 1)) {
-                        OurInterrupt = 2;
+                        OurInterrupt = INTERRUPT_REASON_UNEXPECTED;
                     }
                 }
             }
@@ -3842,7 +3842,7 @@ AtapiCheckInterrupt__(
             } else
             if(ChipFlags & UNIATA_SATA) {
                 if(UniataSataClearErr(HwDeviceExtension, c, UNIATA_SATA_DO_CONNECT, 0)) {
-                    OurInterrupt = 2;
+                    OurInterrupt = INTERRUPT_REASON_UNEXPECTED;
                 }
             }
         }
@@ -3854,16 +3854,16 @@ check_unknown:
             KdPrint2((PRINT_PREFIX "  DmaTransfer + !BM_STATUS_INTR (%x)\n", dma_status));
             if(dma_status & BM_STATUS_ERR) {
                 KdPrint2((PRINT_PREFIX "  DmaTransfer + BM_STATUS_ERR -> our\n"));
-                OurInterrupt = 2;
+                OurInterrupt = INTERRUPT_REASON_UNEXPECTED;
             } else {
                 KdPrint2((PRINT_PREFIX "  getting status...\n"));
                 GetStatus(chan, statusByte);
                 KdPrint2((PRINT_PREFIX "  status %#x\n", statusByte));
                 if(statusByte & IDE_STATUS_ERROR) {
                     KdPrint2((PRINT_PREFIX "  IDE_STATUS_ERROR -> our\n", statusByte));
-                    OurInterrupt = 2;
+                    OurInterrupt = INTERRUPT_REASON_UNEXPECTED;
                 } else {
-                    return FALSE;
+                    return INTERRUPT_REASON_IGNORE;
                 }
             }
         }
@@ -3873,7 +3873,7 @@ check_unknown:
             KdPrint2((PRINT_PREFIX "  clear unexpected DMA intr\n"));
             AtapiDmaDone(deviceExtension, DEVNUM_NOT_SPECIFIED ,lChannel, NULL);
             // catch it !
-            OurInterrupt = 2;
+            OurInterrupt = INTERRUPT_REASON_UNEXPECTED;
         }
     }
 skip_dma_stat_check:
@@ -3904,15 +3904,15 @@ skip_dma_stat_check:
             KdPrint2((PRINT_PREFIX "  ATAPI additional check\n"));
         } else {
             KdPrint2((PRINT_PREFIX "  expecting intr + BUSY (3), non ATAPI\n"));
-            return FALSE;
+            return INTERRUPT_REASON_IGNORE;
         }
         if((statusByte & ~IDE_STATUS_DRQ) != (IDE_STATUS_BUSY | IDE_STATUS_DRDY | IDE_STATUS_DSC)) {
             KdPrint3((PRINT_PREFIX "  unexpected status, seems it is not our\n"));
-            return FALSE;
+            return INTERRUPT_REASON_IGNORE;
         }
         if(!(LunExt->DeviceFlags & DFLAGS_INT_DRQ) && (statusByte & IDE_STATUS_DRQ)) {
             KdPrint3((PRINT_PREFIX "  unexpected DRQ, seems it is not our\n"));
-            return FALSE;
+            return INTERRUPT_REASON_IGNORE;
         }
 
         EarlyIntr = TRUE;
@@ -3922,7 +3922,7 @@ skip_dma_stat_check:
             /* clear interrupt and get status */
             GetBaseStatus(chan, statusByte);
             KdPrint3((PRINT_PREFIX "  base status %#x (+BM_STATUS_INTR)\n", statusByte));
-            return TRUE;
+            return INTERRUPT_REASON_OUR;
         }
 
         if(g_WaitBusyInISR) {
@@ -3935,7 +3935,7 @@ skip_dma_stat_check:
             }
             if (statusByte & IDE_STATUS_BUSY) {
                 KdPrint2((PRINT_PREFIX "  still BUSY, seems it is not our\n"));
-                return FALSE;
+                return INTERRUPT_REASON_IGNORE;
             }
         }
 
@@ -3987,7 +3987,7 @@ skip_dma_stat_check:
     //ASSERT(!chan->queue_depth || chan->cur_req);
 
     KdPrint2((PRINT_PREFIX "AtapiCheckInterrupt__: exit with TRUE\n"));
-    return TRUE;
+    return INTERRUPT_REASON_OUR;
 
 } // end AtapiCheckInterrupt__()
 
@@ -8132,6 +8132,19 @@ uata_ctl_queue:
                     status = SRB_STATUS_SUCCESS;
                     break;
                 }
+                case  IOCTL_SCSI_MINIPORT_UNIATA_GET_VERSION: {
+
+                    KdPrint2((PRINT_PREFIX "AtapiStartIo: Get version\n"));
+
+                    AtaCtl->Version.Length      = sizeof(GETDRVVERSION);
+                    AtaCtl->Version.VersionMj   = UNIATA_VER_MJ;
+                    AtaCtl->Version.VersionMn   = UNIATA_VER_MN;
+                    AtaCtl->Version.SubVerMj    = UNIATA_VER_SUB_MJ;
+                    AtaCtl->Version.SubVerMn    = UNIATA_VER_SUB_MN;
+
+                    status = SRB_STATUS_SUCCESS;
+                    break;
+                }
                 case  IOCTL_SCSI_MINIPORT_UNIATA_ADAPTER_INFO: {
 
                     KdPrint2((PRINT_PREFIX "AtapiStartIo: Get adapter info\n"));
@@ -8163,11 +8176,13 @@ uata_ctl_queue:
                     AtaCtl->AdapterInfo.InterruptMode = deviceExtension->InterruptMode;
                     AtaCtl->AdapterInfo.BusInterruptVector = deviceExtension->BusInterruptVector;
                     AtaCtl->AdapterInfo.NumberChannels = deviceExtension->NumberChannels;
+                    AtaCtl->AdapterInfo.NumberLuns = (UCHAR)deviceExtension->NumberLuns;
                     AtaCtl->AdapterInfo.AdapterInterfaceType = deviceExtension->AdapterInterfaceType;
                     if(deviceExtension->FullDevName) {
                         strncpy(AtaCtl->AdapterInfo.DeviceName, deviceExtension->FullDevName, 64);
                     }
                     AtaCtl->AdapterInfo.ChanInfoValid = FALSE;
+                    AtaCtl->AdapterInfo.LunInfoValid = FALSE;
 
                     RtlZeroMemory(&AtaCtl->AdapterInfo.Chan, sizeof(AtaCtl->AdapterInfo.Chan));
 

@@ -857,6 +857,11 @@ UniataAllocateLunExt(
         }
     }
 
+    if(!deviceExtension->NumberLuns) {
+        KdPrint2((PRINT_PREFIX "default NumberLuns=2\n"));
+        deviceExtension->NumberLuns = 2;
+    }
+
     deviceExtension->lun = (PHW_LU_EXTENSION)ExAllocatePool(NonPagedPool, sizeof(HW_LU_EXTENSION) * (deviceExtension->NumberChannels+1) * deviceExtension->NumberLuns);
     if (!deviceExtension->lun) {
         KdPrint2((PRINT_PREFIX "!deviceExtension->lun => SP_RETURN_ERROR\n"));
@@ -1265,7 +1270,7 @@ UniataFindBusMasterController(
         if(deviceExtension->BusMaster && !MasterDev) {
             KdPrint2((PRINT_PREFIX "IsBusMaster == TRUE && !MasterDev\n"));
             statusByte = AtapiReadPort1(&(deviceExtension->chan[0]), IDX_BM_Status);
-            KdPrint2((PRINT_PREFIX "  statusByte = %x\n", statusByte));
+            KdPrint2((PRINT_PREFIX "  BM statusByte = %x\n", statusByte));
             if(statusByte == 0xff) {
                 KdPrint2((PRINT_PREFIX "  invalid port ?\n"));
 /*
@@ -1409,7 +1414,7 @@ UniataFindBusMasterController(
         KdPrint2((PRINT_PREFIX "update ConfigInfo->w2k\n"));
         _ConfigInfo->w2k.Dma64BitAddresses           = 0;
         _ConfigInfo->w2k.ResetTargetSupported        = TRUE;
-        _ConfigInfo->w2k.MaximumNumberOfLogicalUnits = 2;
+        _ConfigInfo->w2k.MaximumNumberOfLogicalUnits = (UCHAR)deviceExtension->NumberLuns;
     }
 
     // Save the Interrupe Mode for later use
@@ -1630,6 +1635,7 @@ UniataFindBusMasterController(
           chan->RegTranslation[IDX_SATA_IO].Addr,
           chan->RegTranslation[IDX_SATA_IO].MemIo ? "mem" : "io"));
 
+        if(!(deviceExtension->HwFlags & UNIATA_AHCI)) {
         UniataDumpATARegs(chan);
 
 #ifndef UNIATA_CORE
@@ -1676,6 +1682,7 @@ UniataFindBusMasterController(
 //#ifdef UNIATA_INIT_ON_PROBE
 //        }
 #endif //UNIATA_INIT_ON_PROBE
+        }
         found = TRUE;
 
         chan->PrimaryAddress = FALSE;
@@ -1942,14 +1949,7 @@ UniataFindFakeBusMasterController(
         goto exit_notfound;
     }
 
-    switch(SubClass) {
-    case PCI_DEV_SUBCLASS_IDE:
-    case PCI_DEV_SUBCLASS_RAID:
-    case PCI_DEV_SUBCLASS_ATA:
-    case PCI_DEV_SUBCLASS_SATA:
-        // ok
-        break;
-    default:
+    if(!UniataCheckPCISubclass(FALSE, BMList[i].RaidFlags, SubClass)) {
         KdPrint2((PRINT_PREFIX "Subclass not supported\n"));
         goto exit_notfound;
     }
@@ -1986,12 +1986,12 @@ UniataFindFakeBusMasterController(
         if (found)
             break;
         KdPrint2((PRINT_PREFIX "Default device\n"));
-        if(!Ata_is_supported_dev(&pciData)) {
-            KdPrint2((PRINT_PREFIX "!Ata_is_supported_dev => found = FALSE\n"));
-            found = FALSE;
-        } else {
+        if(Ata_is_supported_dev(&pciData)) {
             KdPrint2((PRINT_PREFIX "Ata_is_supported_dev\n"));
             found = TRUE;
+        } else {
+            KdPrint2((PRINT_PREFIX "!Ata_is_supported_dev => found = FALSE\n"));
+            found = FALSE;
         }
         deviceExtension->UnknownDev = TRUE;
         break;
@@ -2354,6 +2354,7 @@ AtapiFindController(
     }
 
     chan = &(deviceExtension->chan[0]);
+    AtapiSetupLunPtrs(chan, deviceExtension, 0);
 
     deviceExtension->AdapterInterfaceType =
     deviceExtension->OrigAdapterInterfaceType
@@ -2412,7 +2413,7 @@ AtapiFindController(
         portBase = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"PortBase", portBase);
         irq      = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"Irq", irq);
         
-        for (i = 0; i < 4; i++) {
+        for (i = 0; i < deviceExtension->NumberLuns; i++) {
             // Zero device fields to ensure that if earlier devices were found,
             // but not claimed, the fields are cleared.
             deviceExtension->lun[i].DeviceFlags &= ~(DFLAGS_ATAPI_DEVICE | DFLAGS_DEVICE_PRESENT | DFLAGS_TAPE_DEVICE);
@@ -2818,6 +2819,11 @@ CheckDevice(
 
     KdPrint2((PRINT_PREFIX "CheckDevice: Device %#x\n",
                deviceNumber));
+
+    if(deviceNumber > chan->NumberLuns) {
+        return 0;
+    }
+
     if(ResetDev) {
         KdPrint2((PRINT_PREFIX "CheckDevice: reset dev\n"));
 
