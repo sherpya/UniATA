@@ -186,6 +186,9 @@ CLEAN :
 "$(DistDir)" :
     if not exist "$(DistDir)/$(NULL)" mkdir "$(DistDir)"
 
+"$(SymDir)" :
+    if not exist "$(SymDir)/$(NULL)" mkdir "$(SymDir)"
+
 !IF  "$(CFG)" == "UniATA - Win32 Release"
 
 CPP_PROJ_BASE=/nologo /Gz /MT /W3 /GX /O2 /Oy- $(DDKINC) /DNDEBUG /DWIN32 /D_WINDOWS /D_MBCS /D_USRDLL /DIdeDma_EXPORTS /D_X86_ /D_WIN32_WINNT=0x0400 /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
@@ -250,7 +253,7 @@ LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\L
   $(LINK32_FLAGS) $(LINK32_OBJS)
 <<
 
-".\copy.msg" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)" "$(DistDir)" "build_inf.exe" "atactl.exe"
+".\copy.msg" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)" "$(DistDir)" "$(SymDir)" "build_inf.exe" "atactl.exe"
 	<<tempfile.bat 
 	@echo off 
 	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDma.sys 
@@ -313,10 +316,10 @@ CPP_PROJ=$(CPP_PROJ_BASE) /Yc"stdafx.h"
 <<
 
 
-SRC=idedma
-
 "uataerr.h" : uataerr.mc
     $(MCC) uataerr.mc
+
+SRC=idedma
 
 "uniata_ver.h_.lk" :
     echo "." > "uniata_ver.h_.lk"

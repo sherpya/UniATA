@@ -2363,6 +2363,7 @@ AtapiFindController(
     }
 
     chan = &(deviceExtension->chan[0]);
+    AtapiSetupLunPtrs(chan, deviceExtension, 0);
 
     deviceExtension->AdapterInterfaceType =
     deviceExtension->OrigAdapterInterfaceType
@@ -2421,7 +2422,7 @@ AtapiFindController(
         portBase = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"PortBase", portBase);
         irq      = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"Irq", irq);
         
-        for (i = 0; i < 4; i++) {
+        for (i = 0; i < deviceExtension->NumberLuns; i++) {
             // Zero device fields to ensure that if earlier devices were found,
             // but not claimed, the fields are cleared.
             deviceExtension->lun[i].DeviceFlags &= ~(DFLAGS_ATAPI_DEVICE | DFLAGS_DEVICE_PRESENT | DFLAGS_TAPE_DEVICE);
@@ -2849,6 +2850,7 @@ CheckDevice(
         AtapiSoftReset(chan, deviceNumber);
 
         if(!UniataAnybodyHome(HwDeviceExtension, lChannel, deviceNumber)) {
+            KdPrint2((PRINT_PREFIX "CheckDevice: nobody at home 1\n"));
             return 0;
         }
         statusByte = WaitOnBusy(chan);
@@ -2904,6 +2906,7 @@ CheckDevice(
         SelectDrive(chan, deviceNumber);
 
         if(!UniataAnybodyHome(HwDeviceExtension, lChannel, deviceNumber)) {
+            KdPrint2((PRINT_PREFIX "CheckDevice: nobody at home 2\n"));
             return 0;
         }
 

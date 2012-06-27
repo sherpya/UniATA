@@ -30,6 +30,7 @@
 ..\driver\idedma.mak
 ..\driver\idedma.rc
 ..\driver\idedma.rc
+..\driver\uataerr.mc
 ..\driver\uniata_ver.h
 ..\driver\uniata_ver.h_
 ..\driver\*.BAT
@@ -48,6 +49,8 @@
 ..\build_inf\build_inf.dsp
 ..\build_inf\build_inf.dsw
 ..\build_inf\build_inf.mak
+..\build_inf\SvcManLib.cpp
+..\build_inf\SvcManLib.h  
 ..\build_inf\Makefile
 ..\atactl\atactl.cpp
 ..\atactl\atactl.dsp
