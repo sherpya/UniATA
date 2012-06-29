@@ -1778,7 +1778,7 @@ AtapiChipInit(
                 if(ChipFlags & I6CH2) {
                     KdPrint2((PRINT_PREFIX "I6CH2\n"));
                     chan->ChannelCtrlFlags |= CTRFLAGS_NO_SLAVE;
-                    chan->lun[0]->SATA_lun_map = c ? 4 : 5;
+                    chan->lun[0]->SATA_lun_map = c ? 0 : 1;
                     chan->lun[1]->SATA_lun_map = 0;
                 } else {
                     KdPrint2((PRINT_PREFIX "other Intel\n"));

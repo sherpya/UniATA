@@ -1716,6 +1716,7 @@ UniataFindBusMasterController(
 
         AtapiDmaAlloc(HwDeviceExtension, ConfigInfo, c);
 #else //UNIATA_CORE
+        }
         found = TRUE;
 #endif //UNIATA_CORE
     } // end for(channel)
@@ -2850,7 +2851,7 @@ CheckDevice(
         AtapiSoftReset(chan, deviceNumber);
 
         if(!UniataAnybodyHome(HwDeviceExtension, lChannel, deviceNumber)) {
-            KdPrint2((PRINT_PREFIX "CheckDevice: nobody at home 1\n"));
+            //KdPrint2((PRINT_PREFIX "CheckDevice: nobody at home 1\n"));
             return 0;
         }
         statusByte = WaitOnBusy(chan);
@@ -2906,7 +2907,7 @@ CheckDevice(
         SelectDrive(chan, deviceNumber);
 
         if(!UniataAnybodyHome(HwDeviceExtension, lChannel, deviceNumber)) {
-            KdPrint2((PRINT_PREFIX "CheckDevice: nobody at home 2\n"));
+            //KdPrint2((PRINT_PREFIX "CheckDevice: nobody at home 2\n"));
             return 0;
         }
 

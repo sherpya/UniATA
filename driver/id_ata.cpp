@@ -2094,6 +2094,7 @@ AtapiResetController__(
             switch(VendorID) {
             case ATA_INTEL_ID: {
                 ULONG mask;
+                ULONG pshift;
                 ULONG timeout;
                 if(!(ChipFlags & UNIATA_SATA))
                     goto default_reset;
@@ -2117,7 +2118,7 @@ AtapiResetController__(
 #else
                 mask = 1 << chan->lun[0]->SATA_lun_map;
                 if (MaxLuns > 1) {
-                	mask |= (1 << chan->lun[1]->SATA_lun_map);
+                    mask |= (1 << chan->lun[1]->SATA_lun_map);
                 }
 #endif
                 ChangePciConfig2(0x92, a & ~mask);
@@ -2126,18 +2127,20 @@ AtapiResetController__(
                 timeout = 100;
 
                 /* Wait up to 1 sec for "connect well". */
-                if (ChipFlags & (I6CH | I6CH2))
-                    mask = mask << 8;
-                else
-                    mask = mask << 4;
-
+                if (ChipFlags & (I6CH | I6CH2)) {
+                    pshift = 8;
+                } else {
+                    pshift = 4;
+                }
                 while (timeout--) {
-                    AtapiStallExecution(10000);
                     GetPciConfig2(0x92, tmp16);
-                    if ((tmp16 & mask) == mask) {
-                        AtapiStallExecution(10000);
-                        break;
+                    if (((tmp16 >> pshift) & mask) == mask) {
+                        GetBaseStatus(chan, statusByte);
+                        if(statusByte != 0xff) {
+                            break;
+                        }
                     }
+                    AtapiStallExecution(10000);
                 }
                 break; }
             case ATA_SIS_ID:
@@ -8863,7 +8866,7 @@ DriverEntry(
             }
             continue;
         }
-        BMList[i].AltInitMasterDev = (UCHAR)0xff;
+        //BMList[i].AltInitMasterDev = (UCHAR)0xff;
 
         if(GlobalConfig->AtDiskPrimaryAddressClaimed)
             PrimaryClaimed = TRUE;
