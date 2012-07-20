@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2011 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2012 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     bm_devs.h

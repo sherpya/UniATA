@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2011 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2012 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     atapi.h
@@ -249,6 +249,7 @@ typedef struct _IDE_REGISTERS_2 {
 #define DFLAGS_REINIT_DMA            0x4000    // 
 #define DFLAGS_HIDDEN                0x8000    // Hidden device, available only with special IOCTLs
                                                // via communication virtual device
+#define DFLAGS_MANUAL_CHS            0x10000   // For devices those have no IDENTIFY commands
 //#define DFLAGS_            0x10000    // 
 //
 // Used to disable 'advanced' features.
@@ -379,6 +380,9 @@ typedef struct _MODE_PARAMETER_HEADER_10 {
 #define IDE_STATUS_DRDY              0x40
 #define IDE_STATUS_IDLE              0x50
 #define IDE_STATUS_BUSY              0x80
+
+#define IDE_STATUS_WRONG             0xff
+#define IDE_STATUS_MASK              0xff
 
 
 //
@@ -1219,6 +1223,12 @@ AtapiDisableInterrupts(
     IN ULONG c
     );
 
+extern VOID
+UniataExpectChannelInterrupt(
+    IN struct _HW_CHANNEL* chan,
+    IN BOOLEAN Expecting
+    );
+
 #define CHAN_NOT_SPECIFIED                  (0xffffffffL)
 #define CHAN_NOT_SPECIFIED_CHECK_CABLE      (0xfffffffeL)
 #define DEVNUM_NOT_SPECIFIED                (0xffffffffL)
@@ -1303,7 +1313,7 @@ UniAtaCalculateLBARegsBack(
     ULONGLONG            lba
     );
 
-BOOLEAN
+ULONG
 NTAPI
 UniataAnybodyHome(
     IN PVOID   HwDeviceExtension,
@@ -1311,10 +1321,18 @@ UniataAnybodyHome(
     IN ULONG   deviceNumber
     );
 
+#define ATA_AT_HOME_HDD        0x01
+#define ATA_AT_HOME_ATAPI      0x02
+#define ATA_AT_HOME_XXX        0x04
+#define ATA_AT_HOME_NOBODY     0x00
+
 #define ATA_CMD_FLAG_LBAIOsupp 0x01
 #define ATA_CMD_FLAG_48supp    0x02
 #define ATA_CMD_FLAG_48        0x04
 #define ATA_CMD_FLAG_DMA       0x08
+#define ATA_CMD_FLAG_FUA       0x10
+#define ATA_CMD_FLAG_In        0x40
+#define ATA_CMD_FLAG_Out       0x80
 
 extern UCHAR AtaCommands48[256];
 extern UCHAR AtaCommandFlags[256];
@@ -1326,6 +1344,15 @@ extern UCHAR AtaCommandFlags[256];
 #define UniAta_need_lba48(command, lba, count, supp48) \
     (  ((AtaCommandFlags[command] & ATA_CMD_FLAG_LBAIOsupp) && (supp48) && (((lba+count) >= ATA_MAX_IOLBA28) || (count > 256)) ) || \
        (lba > ATA_MAX_LBA28) || (count > 255) )
+
+#define UniAtaClearAtaReq(AtaReq) \
+{  \
+        RtlZeroMemory((PCHAR)(AtaReq), FIELD_OFFSET(ATA_REQ, ata)); \
+}
+
+
+//#define ATAPI_DEVICE(de, ldev)    (de->lun[ldev].DeviceFlags & DFLAGS_ATAPI_DEVICE)
+#define ATAPI_DEVICE(chan, dev)    ((chan->lun[dev]->DeviceFlags & DFLAGS_ATAPI_DEVICE) ? TRUE : FALSE)
 
 #ifdef _DEBUG
 #define PrintNtConsole  _PrintNtConsole

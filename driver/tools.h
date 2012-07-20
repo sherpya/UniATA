@@ -298,7 +298,7 @@ if((a)!=NULL) {                             \
     KdPrint(("\n"));                        \
 }
 
-#define BrutePoint() {}
+#define BrutePoint() { ASSERT(0); }
 
 #define DbgAllocatePool(x,y) ExAllocatePool(x,y)
 #define DbgFreePool(x) ExFreePool(x)

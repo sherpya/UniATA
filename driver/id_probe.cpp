@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2011 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2012 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     id_probe.cpp
@@ -112,7 +112,36 @@ AtapiGetIoRange(
         (*ConfigInfo->AccessRanges)[rid].RangeInMemory
         ));
 
+    if(!(*ConfigInfo->AccessRanges)[rid].RangeInMemory) {
+        io_start = (pciData->u.type0.BaseAddresses[rid] & ~0x07/*PCI_ADDRESS_IOMASK*/) + offset;
+        // if(pciData->u.type0.BaseAddresses[rid] != 0) ;)
+        if(io_start > offset) {
+            if(/*(WinVer_Id() <= WinVer_NT) &&*/ offset && rid == 4) {
+                // MS atapi.sys does so for BusMaster controllers
+                (*ConfigInfo->AccessRanges)[rid+1].RangeStart =
+                    ScsiPortConvertUlongToPhysicalAddress(io_start);
+                (*ConfigInfo->AccessRanges)[rid+1].RangeLength = length;
+            } else {
+                (*ConfigInfo->AccessRanges)[rid].RangeStart =
+                    ScsiPortConvertUlongToPhysicalAddress(io_start);
+                (*ConfigInfo->AccessRanges)[rid].RangeLength = length;
+            }
+            if((pciData->u.type0.BaseAddresses[rid] & PCI_ADDRESS_IO_SPACE)) {
+                (*ConfigInfo->AccessRanges)[rid].RangeInMemory = FALSE;
+            } else {
+                KdPrint2((PRINT_PREFIX "  AtapiGetIoRange: adjust mem 0 -> 1\n"));
+                (*ConfigInfo->AccessRanges)[rid].RangeInMemory = TRUE;
+            }
+        } else {
+            io_start = 0;
+        }
+    }
+
     if((*ConfigInfo->AccessRanges)[rid].RangeInMemory) {
+        if(offset) {
+            KdPrint2((PRINT_PREFIX "  AtapiGetIoRange: can't map memory range with offset\n"));
+            return 0;
+        }
         io_start =
             // Get the system physical address for this IO range.
             ((ULONG_PTR)ScsiPortGetDeviceBase(HwDeviceExtension,
@@ -132,27 +161,6 @@ AtapiGetIoRange(
    //     }
     }
 
-    io_start = (pciData->u.type0.BaseAddresses[rid] & ~0x07/*PCI_ADDRESS_IOMASK*/) + offset;
-    // if(pciData->u.type0.BaseAddresses[rid] != 0) ;)
-    if(io_start > offset) {
-        if(/*(WinVer_Id() <= WinVer_NT) &&*/ offset && rid == 4) {
-            // MS atapi.sys does so for BusMaster controllers
-            (*ConfigInfo->AccessRanges)[rid+1].RangeStart =
-                ScsiPortConvertUlongToPhysicalAddress(io_start);
-            (*ConfigInfo->AccessRanges)[rid+1].RangeLength = length;
-        } else {
-            (*ConfigInfo->AccessRanges)[rid].RangeStart =
-                ScsiPortConvertUlongToPhysicalAddress(io_start);
-            (*ConfigInfo->AccessRanges)[rid].RangeLength = length;
-        }
-        if((pciData->u.type0.BaseAddresses[rid] & PCI_ADDRESS_IO_SPACE)) {
-            (*ConfigInfo->AccessRanges)[rid].RangeInMemory = FALSE;
-        } else {
-            (*ConfigInfo->AccessRanges)[rid].RangeInMemory = TRUE;
-        }
-    } else {
-        io_start = 0;
-    }
     KdPrint2((PRINT_PREFIX "  AtapiGetIoRange: (2) %#x\n", io_start));
     return io_start;
 
@@ -164,7 +172,7 @@ AtapiGetIoRange(
     Do nothing, but build list of supported IDE controllers
     It is a hack, ScsiPort architecture assumes, that DriverEntry
     can support only KNOWN Vendor/Device combinations.
-    Thus, we build list here. Later will pretend that always knew
+    Thus, we build list here. Later we pretend that always knew
     about found devices.
 
     We shall initiate ISA device init, but callback will use
@@ -298,6 +306,9 @@ UniataEnumBusMasterController__(
                     maxPciBus = busNumber;
                     break;
                 }
+                // indicate that system has PCI bus(es)
+                hasPCI =TRUE;
+
                 // no device in this slot
                 if(busDataRead == 2) {
                     NeedPciAltInit = TRUE;
@@ -321,12 +332,14 @@ UniataEnumBusMasterController__(
 
                 //KdPrint2((PRINT_PREFIX "DevId = %8.8X Class = %4.4X/%4.4X\n", dev_id, BaseClass, SubClass ));
 
+                // check for (g_opt_VirtualMachine == VM_AUTO) is performed inside each
+                // VM check for debug purposes
+                // Do not optimize :)
                 if(VendorID == 0x80ee && DeviceID == 0xcafe) {
                     KdPrint2((PRINT_PREFIX "-- BusID: %#x:%#x:%#x - VirtualBox Guest Service\n",busNumber,slotNumber,funcNumber));
                     if(g_opt_VirtualMachine == VM_AUTO) {
                         g_opt_VirtualMachine = VM_VBOX;
                     }
-                    //continue;
                 } else
                 if((VendorID == 0x15ad) ||
                    (SubVendorID == 0x15ad && SubSystemID == 0x1976)) {
@@ -334,7 +347,6 @@ UniataEnumBusMasterController__(
                     if(g_opt_VirtualMachine == VM_AUTO) {
                         g_opt_VirtualMachine = VM_VMWARE;
                     }
-                    //g_opt_VirtualBox = TRUE;
                 } else
                 if(SubVendorID == 0x1af4 && SubSystemID == 0x1100) {
                     KdPrint2((PRINT_PREFIX "-- BusID: %#x:%#x:%#x - QEmu\n",busNumber,slotNumber,funcNumber));
@@ -350,7 +362,7 @@ UniataEnumBusMasterController__(
 
                 KdPrint2((PRINT_PREFIX "-- BusID: %#x:%#x:%#x\n",busNumber,slotNumber,funcNumber));
                 KdPrint2((PRINT_PREFIX "Storage Class\n"));
-                KdPrint2((PRINT_PREFIX "DevId = %8.8X Class = %4.4X/%4.4X\n", dev_id, BaseClass, SubClass ));
+                KdPrint2((PRINT_PREFIX "DevId = %8.8X Class = %4.4X/%4.4X, ProgIf %2.2X\n", dev_id, BaseClass, SubClass, pciData.ProgIf ));
                 // look for known chipsets
                 found = FALSE;
                 known = FALSE;
@@ -837,52 +849,6 @@ UniataFindCompatBusMasterController2(
         );
 } // end UniataFindCompatBusMasterController2()
 
-BOOLEAN
-NTAPI
-UniataAllocateLunExt(
-    PHW_DEVICE_EXTENSION  deviceExtension,
-    ULONG NewNumberChannels
-    )
-{
-    PHW_LU_EXTENSION old_luns = NULL;
-    PHW_CHANNEL old_chans = NULL;
-
-    KdPrint2((PRINT_PREFIX "allocate Luns for %d channels\n", deviceExtension->NumberChannels));
-
-    old_luns = deviceExtension->lun;
-    old_chans = deviceExtension->chan;
-
-    if(old_luns || old_chans) {
-        if(NewNumberChannels == UNIATA_ALLOCATE_NEW_LUNS) {
-            KdPrint2((PRINT_PREFIX "already allocated!\n"));
-            return FALSE;
-        }
-    }
-
-    if(!deviceExtension->NumberLuns) {
-        KdPrint2((PRINT_PREFIX "default NumberLuns=2\n"));
-        deviceExtension->NumberLuns = 2;
-    }
-
-    deviceExtension->lun = (PHW_LU_EXTENSION)ExAllocatePool(NonPagedPool, sizeof(HW_LU_EXTENSION) * (deviceExtension->NumberChannels+1) * deviceExtension->NumberLuns);
-    if (!deviceExtension->lun) {
-        KdPrint2((PRINT_PREFIX "!deviceExtension->lun => SP_RETURN_ERROR\n"));
-        return FALSE;
-    }
-    RtlZeroMemory(deviceExtension->lun, sizeof(HW_LU_EXTENSION) * (deviceExtension->NumberChannels+1) * deviceExtension->NumberLuns);
-    
-    deviceExtension->chan = (PHW_CHANNEL)ExAllocatePool(NonPagedPool, sizeof(HW_CHANNEL) * (deviceExtension->NumberChannels+1));
-    if (!deviceExtension->chan) {
-        ExFreePool(deviceExtension->lun);
-        deviceExtension->lun = NULL;
-        KdPrint2((PRINT_PREFIX "!deviceExtension->chan => SP_RETURN_ERROR\n"));
-        return FALSE;
-    }
-    RtlZeroMemory(deviceExtension->chan, sizeof(HW_CHANNEL) * (deviceExtension->NumberChannels+1));
-    return TRUE;
-} // end UniataAllocateLunExt()
-
-
 /*++
 
 Routine Description:
@@ -1277,7 +1243,7 @@ UniataFindBusMasterController(
             KdPrint2((PRINT_PREFIX "IsBusMaster == TRUE && !MasterDev\n"));
             statusByte = AtapiReadPort1(&(deviceExtension->chan[0]), IDX_BM_Status);
             KdPrint2((PRINT_PREFIX "  BM statusByte = %x\n", statusByte));
-            if(statusByte == 0xff) {
+            if(statusByte == IDE_STATUS_WRONG) {
                 KdPrint2((PRINT_PREFIX "  invalid port ?\n"));
 /*
                 if(BaseIoAddressBM_0) {
@@ -1315,7 +1281,7 @@ UniataFindBusMasterController(
 
     KdPrint2((PRINT_PREFIX "simplexOnly = %d (2)", simplexOnly));
 
-    //TODO: fix hang with UseDpn=TRUE in Simplex mode
+    //TODO: fix hang with UseDpc=TRUE in Simplex mode
     //deviceExtension->UseDpc = TRUE;
     if(simplexOnly) {
         KdPrint2((PRINT_PREFIX "simplexOnly => UseDpc = FALSE\n"));
@@ -1413,7 +1379,12 @@ UniataFindBusMasterController(
         KdPrint2((PRINT_PREFIX "update ConfigInfo->nt4\n"));
         _ConfigInfo->nt4.DeviceExtensionSize         = sizeof(HW_DEVICE_EXTENSION);
         _ConfigInfo->nt4.SpecificLuExtensionSize     = sizeof(HW_LU_EXTENSION);
-        _ConfigInfo->nt4.SrbExtensionSize            = sizeof(ATA_REQ);
+        if(deviceExtension->HwFlags & UNIATA_AHCI) {
+           _ConfigInfo->nt4.SrbExtensionSize            = sizeof(ATA_REQ);
+        } else {
+           _ConfigInfo->nt4.SrbExtensionSize            = FIELD_OFFSET(ATA_REQ, dma_tab) + sizeof(BM_DMA_ENTRY)*ATA_DMA_ENTRIES;
+        }
+        KdPrint2((PRINT_PREFIX "using AtaReq sz %x\n", _ConfigInfo->nt4.SrbExtensionSize));
     }
     if((WinVer_Id() > WinVer_2k) ||
        (ConfigInfo->Length >= sizeof(_ConfigInfo->comm) + sizeof(_ConfigInfo->nt4) + sizeof(_ConfigInfo->w2k))) {
@@ -1477,10 +1448,6 @@ UniataFindBusMasterController(
         ConfigInfo->CachesData    = TRUE;
         ConfigInfo->ScatterGather = TRUE;
     }
-
-    // Note: now we can support only 4 channels !!!
-    // in order to add support for multichannel controllers we must rewrite
-    // io-range claiming algorithm
 
     KdPrint2((PRINT_PREFIX "BMList[i].channel %#x, NumberChannels %#x, channel %#x\n",BMList[i].channel, deviceExtension->NumberChannels, channel));
 
@@ -1645,7 +1612,9 @@ UniataFindBusMasterController(
           chan->RegTranslation[IDX_SATA_IO].MemIo ? "mem" : "io"));
 
         if(!(deviceExtension->HwFlags & UNIATA_AHCI)) {
+#if DBG
             UniataDumpATARegs(chan);
+#endif
 
 #ifndef UNIATA_CORE
 #ifdef UNIATA_INIT_ON_PROBE
@@ -1796,13 +1765,11 @@ exit_findbm:
     return SP_RETURN_FOUND;
 
 exit_error:
-    if (deviceExtension->lun) ExFreePool(deviceExtension->lun);
-    if (deviceExtension->chan) ExFreePool(deviceExtension->chan);
+    UniataFreeLunExt(deviceExtension);
     return SP_RETURN_ERROR;
     
 exit_notfound:
-    ExFreePool(deviceExtension->lun);
-    ExFreePool(deviceExtension->chan);
+    UniataFreeLunExt(deviceExtension);
     return SP_RETURN_NOT_FOUND;
 
 } // end UniataFindBusMasterController()
@@ -2129,13 +2096,11 @@ exit_findbm:
     return SP_RETURN_FOUND;
     
 exit_error:
-    if (deviceExtension->lun) ExFreePool(deviceExtension->lun);
-    if (deviceExtension->chan) ExFreePool(deviceExtension->chan);
+    UniataFreeLunExt(deviceExtension);
     return SP_RETURN_ERROR;
     
 exit_notfound:
-    ExFreePool(deviceExtension->lun);
-    ExFreePool(deviceExtension->chan);
+    UniataFreeLunExt(deviceExtension);
     return SP_RETURN_NOT_FOUND;
 
 } // end UniataFindFakeBusMasterController()
@@ -2184,6 +2149,13 @@ UniataConnectIntr2(
        TRUE) {
         // Ok, continue...
         KdPrint2((PRINT_PREFIX "Multichannel native mode, go...\n"));
+#ifndef UNIATA_USE_XXableInterrupts
+        // If we raise IRQL to TIMER value, other interrupt cannot occure on the same CPU
+        if(*KeNumberProcessors < 2) {
+            KdPrint2((PRINT_PREFIX "Unnecessary (?), UP machine\n"));
+            //return STATUS_SUCCESS;
+        }
+#endif //UNIATA_USE_XXableInterrupts
     } else {
         KdPrint2((PRINT_PREFIX "Unnecessary\n"));
         return STATUS_SUCCESS;
@@ -2500,6 +2472,10 @@ AtapiFindController(
         UniataInitMapBase(chan, BaseIoAddress1, BaseIoAddress2);
         UniataInitMapBM(deviceExtension, 0, FALSE);
 
+#if DBG
+        UniataDumpATARegs(chan);
+#endif
+
 retryIdentifier:
 
         // Select master.
@@ -2577,6 +2553,12 @@ not_found:
 
             (*ConfigInfo->AccessRanges)[0].RangeLength = 8;
             (*ConfigInfo->AccessRanges)[0].RangeInMemory = FALSE;
+
+            if(BaseIoAddress2) {
+                (*ConfigInfo->AccessRanges)[0].RangeStart = ScsiPortConvertUlongToPhysicalAddress((ULONG)BaseIoAddress2);
+                (*ConfigInfo->AccessRanges)[0].RangeLength = 2;
+                (*ConfigInfo->AccessRanges)[0].RangeInMemory = FALSE;
+            }
 
             // Indicate the interrupt level corresponding to this IO range.
             if (irq) {
@@ -2661,6 +2643,8 @@ not_found:
 
         // Save the Interrupe Mode for later use
         deviceExtension->InterruptMode = ConfigInfo->InterruptMode;
+        deviceExtension->BusInterruptLevel = ConfigInfo->BusInterruptLevel;
+        deviceExtension->BusInterruptVector = ConfigInfo->BusInterruptVector;
 
         KdPrint2((PRINT_PREFIX
                    "AtapiFindController: look for devices\n"));
@@ -2702,6 +2686,7 @@ not_found:
                 MCACount++;
             }
 
+            ConfigInfo->NumberOfBuses++; // add virtual channel for communication port
             KdPrint2((PRINT_PREFIX 
                        "AtapiFindController: return SP_RETURN_FOUND\n"));
             return(SP_RETURN_FOUND);
@@ -2720,18 +2705,16 @@ not_found:
 
     KdPrint2((PRINT_PREFIX
                "AtapiFindController: return SP_RETURN_NOT_FOUND\n"));
-    ExFreePool(deviceExtension->lun);
-    ExFreePool(deviceExtension->chan);
+    UniataFreeLunExt(deviceExtension);
     return(SP_RETURN_NOT_FOUND);
 
 exit_error:
-    if (deviceExtension->lun) ExFreePool(deviceExtension->lun);
-    if (deviceExtension->chan) ExFreePool(deviceExtension->chan);
+    UniataFreeLunExt(deviceExtension);
     return SP_RETURN_ERROR;
     
 } // end AtapiFindController()
 
-BOOLEAN
+ULONG
 NTAPI
 UniataAnybodyHome(
     IN PVOID   HwDeviceExtension,
@@ -2747,64 +2730,98 @@ UniataAnybodyHome(
     SATA_SSTATUS_REG     SStatus;
     UCHAR                signatureLow;
     UCHAR                signatureHigh;
-
+    
     if(LunExt->DeviceFlags & DFLAGS_HIDDEN) {
         KdPrint2((PRINT_PREFIX "  hidden\n"));
         UniataForgetDevice(LunExt);
-        return FALSE;
+        return ATA_AT_HOME_NOBODY;
     }
-    // Select the device.
-    SelectDrive(chan, deviceNumber);
-
-    signatureLow = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow);
-    signatureHigh = AtapiReadPort1(chan, IDX_IO1_i_CylinderHigh);
-
-    if (signatureLow == ATAPI_MAGIC_LSB && signatureHigh == ATAPI_MAGIC_MSB) {
-        KdPrint2((PRINT_PREFIX "  ATAPI at home\n", signatureLow));
-        return TRUE;
-    }
-
-    if(!UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
-        AtapiStallExecution(10);
-
-        AtapiWritePort1(chan, IDX_IO1_o_BlockNumber, 0x55);
-        AtapiWritePort1(chan, IDX_IO1_o_BlockNumber, 0x55);
-        AtapiStallExecution(5);
-        signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockNumber);
-        if(signatureLow != 0x55) {
-            KdPrint2((PRINT_PREFIX "  nobody home! %#x != 0x55\n", signatureLow));
-            UniataForgetDevice(LunExt);
-            return FALSE;
-        }
-
-        AtapiWritePort1(chan, IDX_IO1_o_BlockNumber, 0xAA);
-        AtapiWritePort1(chan, IDX_IO1_o_BlockNumber, 0xAA);
-        AtapiStallExecution(5);
-        signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockNumber);
-        if(signatureLow != 0xAA) {
-            KdPrint2((PRINT_PREFIX "  nobody home! %#x != 0xAA\n", signatureLow));
-            UniataForgetDevice(LunExt);
-            return FALSE;
-        }
-    } else {
+    if(UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
 
         SStatus.Reg = UniataSataReadPort4(chan, IDX_SATA_SStatus, deviceNumber);
         KdPrint2((PRINT_PREFIX "SStatus %x\n", SStatus.Reg));
         if(SStatus.DET <= SStatus_DET_Dev_NoPhy) {
             KdPrint2((PRINT_PREFIX "  SATA DET <= SStatus_DET_Dev_NoPhy\n"));
-            return FALSE;
+            return ATA_AT_HOME_NOBODY;
         }
         if(SStatus.SPD < SStatus_SPD_Gen1) {
             KdPrint2((PRINT_PREFIX "  SATA SPD < SStatus_SPD_Gen1\n"));
-            return FALSE;
+            return ATA_AT_HOME_NOBODY;
         }
         if(SStatus.IPM == SStatus_IPM_NoDev) {
             KdPrint2((PRINT_PREFIX "  SATA IPN == SStatus_IPM_NoDev\n"));
-            return FALSE;
+            return ATA_AT_HOME_NOBODY;
         }
+        if(!(deviceExtension->HwFlags & UNIATA_AHCI)) {
+            // Select the device for legacy.
+            goto legacy_select;
+        }
+
+    } else {
+legacy_select:
+        // Select the device.
+        SelectDrive(chan, deviceNumber);
+        AtapiStallExecution(5);
     }
 
-    return TRUE;
+    if((deviceExtension->HwFlags & UNIATA_AHCI) &&
+       UniataIsSATARangeAvailable(deviceExtension, lChannel)) {
+        KdPrint2((PRINT_PREFIX "  AHCI check\n"));
+        ULONG SIG = UniataAhciReadChannelPort4(chan, IDX_AHCI_P_SIG);
+        signatureLow = (UCHAR)(SIG >> 16);
+        signatureHigh = (UCHAR)(SIG >> 24);
+    } else {
+        signatureLow = AtapiReadPort1(chan, IDX_IO1_i_CylinderLow);
+        signatureHigh = AtapiReadPort1(chan, IDX_IO1_i_CylinderHigh);
+    }
+
+    if (signatureLow == ATAPI_MAGIC_LSB && signatureHigh == ATAPI_MAGIC_MSB) {
+        KdPrint2((PRINT_PREFIX "  ATAPI at home\n"));
+        return ATA_AT_HOME_ATAPI;
+    }
+    if(deviceExtension->HwFlags & UNIATA_AHCI) {
+        KdPrint2((PRINT_PREFIX "  AHCI HDD at home\n"));
+        return ATA_AT_HOME_HDD;
+    }
+
+    AtapiStallExecution(10);
+
+    AtapiWritePort1(chan, IDX_IO1_o_BlockNumber, 0x55);
+    AtapiWritePort1(chan, IDX_IO1_o_BlockNumber, 0x55);
+    AtapiStallExecution(5);
+    signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockNumber);
+    if(signatureLow != 0x55) {
+        if(signatureLow == 0xff || signatureLow == 0) {
+            KdPrint2((PRINT_PREFIX "  nobody home! %#x != 0x55\n", signatureLow));
+            UniataForgetDevice(LunExt);
+            return ATA_AT_HOME_NOBODY;
+        }
+        // another chance
+        signatureLow = AtapiReadPort1(chan, IDX_ATAPI_IO1_o_ByteCountHigh);
+        signatureLow += 2;
+        AtapiWritePort1(chan, IDX_ATAPI_IO1_o_ByteCountHigh, signatureLow);
+        AtapiStallExecution(5);
+        signatureHigh = AtapiReadPort1(chan, IDX_ATAPI_IO1_o_ByteCountHigh);
+        if(signatureLow != signatureHigh) {
+            KdPrint2((PRINT_PREFIX "  nobody home! last chance failed %#x != %#x\n", signatureLow, signatureHigh));
+            UniataForgetDevice(LunExt);
+            return ATA_AT_HOME_NOBODY;
+        }
+        return ATA_AT_HOME_XXX;
+    }
+
+    AtapiWritePort1(chan, IDX_IO1_o_BlockNumber, 0xAA);
+    AtapiWritePort1(chan, IDX_IO1_o_BlockNumber, 0xAA);
+    AtapiStallExecution(5);
+    signatureLow = AtapiReadPort1(chan, IDX_IO1_i_BlockNumber);
+    if(signatureLow != 0xAA) {
+        KdPrint2((PRINT_PREFIX "  nobody home! %#x != 0xAA\n", signatureLow));
+        UniataForgetDevice(LunExt);
+        return ATA_AT_HOME_NOBODY;
+    }
+
+    KdPrint2((PRINT_PREFIX "  HDD at home\n"));
+    return ATA_AT_HOME_HDD;
 } // end UniataAnybodyHome()
 
 ULONG
@@ -2830,10 +2847,14 @@ CheckDevice(
     KdPrint2((PRINT_PREFIX "CheckDevice: Device %#x\n",
                deviceNumber));
 
-    if(deviceNumber > chan->NumberLuns) {
+    if(deviceNumber >= chan->NumberLuns) {
         return 0;
     }
-
+    if(deviceExtension->HwFlags & UNIATA_AHCI) {
+        if(!UniataAnybodyHome(HwDeviceExtension, lChannel, deviceNumber)) {
+            return 0;
+        }
+    }
     LunExt = chan->lun[deviceNumber];
 
     if(ResetDev && (deviceExtension->HwFlags & UNIATA_AHCI)) {
@@ -2856,11 +2877,11 @@ CheckDevice(
         }
         statusByte = WaitOnBusy(chan);
 
-        if((statusByte | IDE_STATUS_BUSY) == 0xff) {
+        if((statusByte | IDE_STATUS_BUSY) == IDE_STATUS_WRONG) {
             KdPrint2((PRINT_PREFIX
                         "CheckDevice: bad status %x\n", statusByte));
         } else
-        if(statusByte != 0xff && (statusByte & IDE_STATUS_BUSY)) {
+        if(statusByte != IDE_STATUS_WRONG && (statusByte & IDE_STATUS_BUSY)) {
             // Perform hard-reset.
             KdPrint2((PRINT_PREFIX
                         "CheckDevice: BUSY\n"));
@@ -2882,7 +2903,7 @@ CheckDevice(
                         "CheckDevice: status after hard reset %x\n", statusByte));
         }
 
-        if((statusByte | IDE_STATUS_BUSY) == 0xff) {
+        if((statusByte | IDE_STATUS_BUSY) == IDE_STATUS_WRONG) {
             KdPrint2((PRINT_PREFIX 
                         "CheckDevice: no dev ?\n"));
         } else
@@ -2891,7 +2912,7 @@ CheckDevice(
             KdPrint2((PRINT_PREFIX
                         "CheckDevice: try enable SATA Phy\n"));
             statusByte = UniataSataPhyEnable(HwDeviceExtension, lChannel, deviceNumber);
-            if(statusByte == 0xff) {
+            if(statusByte == IDE_STATUS_WRONG) {
                 KdPrint2((PRINT_PREFIX "CheckDevice: status %#x (no dev)\n", statusByte));
                 UniataForgetDevice(LunExt);
                 return 0;
@@ -2919,7 +2940,7 @@ CheckDevice(
         }
 
         KdPrint2((PRINT_PREFIX "CheckDevice: status %#x\n", statusByte));
-        if(((statusByte | IDE_STATUS_BUSY) == 0xff) ||
+        if(((statusByte | IDE_STATUS_BUSY) == IDE_STATUS_WRONG) ||
             (statusByte & IDE_STATUS_BUSY)) {
             KdPrint2((PRINT_PREFIX "CheckDevice: busy => return\n"));
             UniataForgetDevice(LunExt);
@@ -2946,8 +2967,11 @@ CheckDevice(
                 KdPrint2((PRINT_PREFIX "CheckDevice: detected AHCI Device %#x\n",
                            deviceNumber));
             } else {
-                RetVal &= ~DFLAGS_ATAPI_DEVICE;
-                LunExt->DeviceFlags &= ~DFLAGS_ATAPI_DEVICE;
+                //RetVal &= ~DFLAGS_ATAPI_DEVICE;
+                //LunExt->DeviceFlags &= ~DFLAGS_ATAPI_DEVICE;
+
+                UniataForgetDevice(LunExt);
+                RetVal = 0;
             }
         }
     } else
@@ -3074,7 +3098,7 @@ FindDevices(
 //    AtapiWritePort1(chan, IDX_IO2_o_Control,IDE_DC_DISABLE_INTERRUPTS | IDE_DC_A_4BIT );
 
     // Clear expecting interrupt flag and current SRB field.
-    chan->ExpectingInterrupt = FALSE;
+    UniataExpectChannelInterrupt(chan, FALSE);
 //    chan->CurrentSrb = NULL;
 //    max_ldev = (chan->ChannelCtrlFlags & CTRFLAGS_NO_SLAVE) ? 1 : IDE_MAX_LUN_PER_CHAN;
     max_ldev = (chan->ChannelCtrlFlags & CTRFLAGS_NO_SLAVE) ? 1 : deviceExtension->NumberLuns;

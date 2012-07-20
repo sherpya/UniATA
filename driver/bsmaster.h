@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2011 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2012 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     bsmaster.h
@@ -163,12 +163,14 @@ typedef struct _IDE_AHCI_REGISTERS {
     // HBA Capabilities
     struct {
         ULONG NOP:5;   // number of ports
-        ULONG Reserved5_7:1;
+        ULONG SXS:1;   // Supports External SATA
+        ULONG EMS:1;   // Enclosure Management Supported
+        ULONG CCCS:1;  // Command Completion Coalescing Supported
         ULONG NCS:5;   // number of command slots
         ULONG PSC:1;   // partial state capable
         ULONG SSC:1;   // slumber state capable
         ULONG PMD:1;   // PIO multiple DRQ block
-        ULONG Reserved16:1;
+        ULONG FBSS:1;  // FIS-based Switching Supported
 
         ULONG SPM:1;   // port multiplier
         ULONG SAM:1;   // AHCI mode only
@@ -179,7 +181,7 @@ typedef struct _IDE_AHCI_REGISTERS {
         ULONG SALP:1;  // aggressive link power management
         ULONG SSS:1;   // staggered spin-up
         ULONG SIS:1;   // interlock switch
-        ULONG Reserved29:1;
+        ULONG SSNTF:1; // Supports SNotification Register
         ULONG SNCQ:1;  // native command queue
         ULONG S64A:1;  // 64bit addr
     } CAP;
@@ -206,14 +208,40 @@ typedef struct _IDE_AHCI_REGISTERS {
 #define AHCI_GHC_AE    0x80000000
 
     // Interrupt status (bit mask)
-    ULONG IS;
+    ULONG IS; //  0x08
     // Ports implemented (bit mask)
-    ULONG PI;
+    ULONG PI; //  0x0c
     // AHCI Version
-    ULONG VS;
-    ULONG Reserved[3];
+    ULONG VS; //  0x10
 
-    UCHAR Reserved2[0x80];
+    ULONG CCC_CTL; //  0x14
+    ULONG CCC_PORTS; //  0x18
+    ULONG EM_LOC; //  0x1c
+    ULONG EM_CTL; //  0x20
+
+    // Extended HBA Capabilities
+    struct { //  0x24
+        ULONG BOH:1;   // BIOS/OS Handoff
+        ULONG NVMP:1;  // NVMHCI Present
+        ULONG APST:1;  // Automatic Partial to Slumber Transitions
+        ULONG Reserved:29;
+    } CAP2;
+
+#define AHCI_CAP2_BOH       0x00000001
+#define AHCI_CAP2_NVMP      0x00000002
+#define AHCI_CAP2_APST      0x00000004
+
+    // BIOS/OS Handoff Control and Status
+    struct { //  0x28
+        ULONG BB:1;    // BIOS Busy
+        ULONG OOC:1;   // OS Ownership Change
+        ULONG SOOE:1;  // SMI on OS Ownership Change Enable
+        ULONG OOS:1;   // OS Owned Semaphore
+        ULONG BOS:1;   // BIOS Owned Semaphore
+        ULONG Reserved:27;
+    } BOHC;
+
+    UCHAR Reserved2[0x74];
 
     UCHAR VendorSpec[0x60];
 } IDE_AHCI_REGISTERS, *PIDE_AHCI_REGISTERS;
@@ -223,6 +251,8 @@ typedef struct _IDE_AHCI_REGISTERS {
 #define IDX_AHCI_IS                     (FIELD_OFFSET(IDE_AHCI_REGISTERS, IS))
 #define IDX_AHCI_VS                     (FIELD_OFFSET(IDE_AHCI_REGISTERS, VS))
 #define IDX_AHCI_PI                     (FIELD_OFFSET(IDE_AHCI_REGISTERS, PI))
+#define IDX_AHCI_CAP2                   (FIELD_OFFSET(IDE_AHCI_REGISTERS, CAP2))
+#define IDX_AHCI_BOHC                   (FIELD_OFFSET(IDE_AHCI_REGISTERS, BOHC))
 
 
 typedef union _SATA_SSTATUS_REG {
@@ -617,9 +647,14 @@ typedef struct _IDE_AHCI_PRD_ENTRY {
     };
     ULONG Reserved1;
 
-    ULONG DBC:22;
-    ULONG Reserved2:9;
-    ULONG I:1;
+    union {
+        struct {
+            ULONG DBC:22;
+            ULONG Reserved2:9;
+            ULONG I:1;
+        };
+        ULONG DBC_ULONG;
+    };
 
 } IDE_AHCI_PRD_ENTRY, *PIDE_AHCI_PRD_ENTRY;
 
@@ -678,7 +713,7 @@ typedef struct _IDE_AHCI_RCV_FIS {
 typedef struct _IDE_AHCI_CHANNEL_CTL_BLOCK {
     IDE_AHCI_CMD_LIST  cmd_list[ATA_AHCI_MAX_TAGS]; // 1K-size (32*32)
     IDE_AHCI_RCV_FIS   rcv_fis;
-    IDE_AHCI_CMD       cmd; // for single internal comamnds w/o associated AtaReq
+    IDE_AHCI_CMD       cmd; // for single internal commands w/o associated AtaReq
 } IDE_AHCI_CHANNEL_CTL_BLOCK, *PIDE_AHCI_CHANNEL_CTL_BLOCK;
 
 
@@ -781,7 +816,8 @@ typedef union _ATA_REQ {
 #define REQ_STATE_EXPECTING_INTR        0x40
 #define REQ_STATE_ATAPI_EXPECTING_CMD_INTR     0x41
 #define REQ_STATE_ATAPI_EXPECTING_DATA_INTR    0x42
-#define REQ_STATE_ATAPI_DO_NOTHING_INTR        0x43
+#define REQ_STATE_ATAPI_EXPECTING_DATA_INTR2   0x43
+#define REQ_STATE_ATAPI_DO_NOTHING_INTR        0x44
 
 #define REQ_STATE_EARLY_INTR            0x48
 
@@ -834,7 +870,7 @@ struct _HW_LU_EXTENSION;
 typedef struct _IORES {
     ULONG Addr;          /* Base address*/
     ULONG MemIo:1;       /* Memory mapping (1) vs IO ports (0) */
-    ULONG Proc:1;        /* Need special process via IO_Proc */
+    ULONG Proc:1;        /* Need special processing via IO_Proc */
     ULONG Reserved:30;
 } IORES, *PIORES;
 
@@ -867,12 +903,13 @@ typedef struct _HW_CHANNEL {
     //BOOLEAN             MemIo;
     BOOLEAN             AltRegMap;
 
-    //UCHAR               Reserved[3];
+    UCHAR               Reserved[3];
 
     MECHANICAL_STATUS_INFORMATION_HEADER MechStatusData;
     SENSE_DATA          MechStatusSense;
     ULONG               MechStatusRetryCount;
     SCSI_REQUEST_BLOCK  InternalSrb;
+    PATA_REQ            AhciInternalAtaReq;
 
     ULONG               MaxTransferMode; // may differ from Controller's value due to 40-pin cable
 
@@ -923,6 +960,8 @@ typedef struct _HW_CHANNEL {
     PIDE_AHCI_CHANNEL_CTL_BLOCK       AhciCtlBlock;  // 128-byte aligned
     ULONGLONG                         AHCI_CTL_PhAddr;
     IORES                             BaseIoAHCI_Port;
+    ULONG                             AhciPrevCI;
+    ULONG                             AhciCompleteCI;
     //PVOID                    AHCI_FIS;  // is not actually used by UniATA now, but is required by AHCI controller
     //ULONGLONG                AHCI_FIS_PhAddr;
     // Note: in contrast to FBSD, we keep PRD and CMD item in AtaReq structure 
@@ -1072,6 +1111,7 @@ typedef struct _HW_DEVICE_EXTENSION {
 
     ULONG       ActiveDpcChan;
     ULONG       FirstDpcChan;
+    ULONG       ExpectingInterrupt;    // Indicates entire controller expecting an interrupt
 /*
     PHW_TIMER   HwScsiTimer1;
     PHW_TIMER   HwScsiTimer2;
@@ -1115,16 +1155,19 @@ typedef struct _HW_DEVICE_EXTENSION {
     INTERFACE_TYPE AdapterInterfaceType;
     ULONG MaximumDmaTransferLength;
     ULONG AlignmentMask;
+    ULONG DmaSegmentLength;
+    ULONG DmaSegmentAlignmentMask; // must be PAGE-aligned
 
     //ULONG BaseMemAddress;
 
     //PIDE_SATA_REGISTERS       BaseIoAddressSATA_0;
-    IORES                     BaseIoAddressSATA_0;
+    IORES          BaseIoAddressSATA_0;
     //PIDE_SATA_REGISTERS       BaseIoAddressSATA[IDE_MAX_CHAN];
 
-    IORES                     BaseIoAHCI_0;
+    IORES          BaseIoAHCI_0;
     //PIDE_AHCI_PORT_REGISTERS  BaseIoAHCIPort[AHCI_MAX_PORT];
-    ULONG                     AHCI_CAP;
+    ULONG          AHCI_CAP;
+    PATA_REQ       AhciInternalAtaReq0;
 
     BOOLEAN        opt_AtapiDmaZeroTransfer; // default FALSE
     BOOLEAN        opt_AtapiDmaControlCmd;   // default FALSE
@@ -1186,11 +1229,15 @@ UniataFindCompatBusMasterController2(
 
 #define UNIATA_ALLOCATE_NEW_LUNS  0x00
 
-extern BOOLEAN
-NTAPI
+extern BOOLEAN NTAPI
 UniataAllocateLunExt(
     PHW_DEVICE_EXTENSION  deviceExtension,
     ULONG NewNumberChannels
+    );
+
+extern VOID NTAPI
+UniataFreeLunExt(
+    PHW_DEVICE_EXTENSION  deviceExtension
     );
 
 extern ULONG NTAPI
@@ -1655,6 +1702,7 @@ UniataForgetDevice(
 extern ULONG SkipRaids;
 extern ULONG ForceSimplex;
 extern BOOLEAN g_opt_AtapiDmaRawRead;
+extern BOOLEAN hasPCI;
 
 extern BOOLEAN InDriverEntry;
 

@@ -111,15 +111,16 @@
  #define  DEF_I64(x)     (x##LL)
 
  /* ReactOS-specific defines */
- #ifdef USE_REACTOS_DDK
-  #define DDKFASTAPI __attribute__((fastcall))
- #else //USE_REACTOS_DDK
 
+ #ifndef DDKAPI
   #define DDKAPI          __attribute__((stdcall))
-  #define DDKFASTAPI      __attribute__((fastcall))
+ #endif
+ #ifndef DDKCDECLAPI
   #define DDKCDECLAPI     __attribute__((cdecl))
-
- #endif  //DDKAPI
+ #endif
+ #ifndef DDKFASTAPI
+  #define DDKFASTAPI      __attribute__((fastcall))
+ #endif
 
  #define DECLSPEC_NAKED   __attribute__((naked))
 
@@ -129,14 +130,16 @@
  #define  DEF_I64(x)     (x##I64)
 
  /* ReactOS-specific defines */
- //#ifdef USE_REACTOS_DDK
- //#else //USE_REACTOS_DDK
 
+ #ifndef DDKAPI
   #define DDKAPI          __stdcall
-  #define DDKFASTAPI      __fastcall
+ #endif
+ #ifndef DDKCDECLAPI
   #define DDKCDECLAPI     _cdecl
-
- //#endif  //DDKAPI
+ #endif
+ #ifndef DDKFASTAPI
+  #define DDKFASTAPI      __fastcall
+ #endif
 
  #define DECLSPEC_NAKED   __declspec(naked)
 
