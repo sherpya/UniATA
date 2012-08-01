@@ -451,7 +451,7 @@ unknown_dev:
                                        deviceExtension->BaseIoAddressBM_0);
 
             deviceExtension->BaseIoAddressBM_0 = 0;
-            deviceExtension->BusMaster = FALSE;
+            deviceExtension->BusMaster = DMA_MODE_NONE;
             deviceExtension->MaxTransferMode = ATA_PIO4;
             break;
 
@@ -2382,9 +2382,13 @@ AtapiSetupLunPtrs(
         chan->lun[i]->Lun             = i;
     }
     if((deviceExtension->HwFlags & UNIATA_AHCI) &&
-       deviceExtension->AhciInternalAtaReq0) {
+       deviceExtension->AhciInternalAtaReq0 &&
+       deviceExtension->AhciInternalSrb0) {
         chan->AhciInternalAtaReq = &(deviceExtension->AhciInternalAtaReq0[c]);
+        chan->AhciInternalSrb = &(deviceExtension->AhciInternalSrb0[c]);
         UniataAhciSetupCmdPtr(chan->AhciInternalAtaReq);
+        chan->AhciInternalSrb->SrbExtension = chan->AhciInternalAtaReq;
+        chan->AhciInternalAtaReq->Srb = chan->AhciInternalSrb;
     }
     return;
 } // end AtapiSetupLunPtrs()
@@ -2425,6 +2429,15 @@ UniataAllocateLunExt(
             }
             RtlZeroMemory(deviceExtension->AhciInternalAtaReq0, sizeof(ATA_REQ)*deviceExtension->NumberChannels);
         }
+        if(!deviceExtension->AhciInternalSrb0) {
+            deviceExtension->AhciInternalSrb0 = (PSCSI_REQUEST_BLOCK)ExAllocatePool(NonPagedPool, sizeof(SCSI_REQUEST_BLOCK)*deviceExtension->NumberChannels);
+            if (!deviceExtension->AhciInternalSrb0) {
+                KdPrint2((PRINT_PREFIX "!deviceExtension->AhciInternalSrb0 => SP_RETURN_ERROR\n"));
+                UniataFreeLunExt(deviceExtension);
+                return FALSE;
+            }
+            RtlZeroMemory(deviceExtension->AhciInternalSrb0, sizeof(SCSI_REQUEST_BLOCK)*deviceExtension->NumberChannels);
+        }
     }
 
     deviceExtension->lun = (PHW_LU_EXTENSION)ExAllocatePool(NonPagedPool, sizeof(HW_LU_EXTENSION) * (deviceExtension->NumberChannels+1) * deviceExtension->NumberLuns);
@@ -2463,6 +2476,11 @@ UniataFreeLunExt(
         ExFreePool(deviceExtension->AhciInternalAtaReq0);
         deviceExtension->AhciInternalAtaReq0 = NULL;
     }
+    if(deviceExtension->AhciInternalSrb0) {
+        ExFreePool(deviceExtension->AhciInternalSrb0);
+        deviceExtension->AhciInternalSrb0 = NULL;
+    }
+    
     return;
 } // end UniataFreeLunExt()
 

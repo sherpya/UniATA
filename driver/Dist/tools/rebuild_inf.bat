@@ -14,6 +14,8 @@ copy $set_root$.ba_ $set_root$.bat >nul 2>nul
 call %SET_BAT% ver_ts
 del %SET_BAT%
 
+.\build_inf.exe --html > ..\doc\devices.html
+
 srchrep -src "%%BUILD_TS%%" -dest "%ver_ts%"      uata_2k.inf > nul
 srchrep -src "%%DRIVER_VER%%" -dest "%ver_dot%"   uata_2k.inf > nul
 

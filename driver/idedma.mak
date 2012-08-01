@@ -123,7 +123,7 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 	nmake /A CFG="build_inf - Win32 Release"
 	cd ..\driver
 	copy ..\build_inf\Release\build_inf.exe .\build_inf.exe
-	copy ..\build_inf\Release\build_inf.exe .\Dist\build_inf.exe
+	copy ..\build_inf\Release\build_inf.exe .\Dist\tools\build_inf.exe
 	.\build_inf.exe --ver_h > uniata_ver.h
 !ENDIF
 

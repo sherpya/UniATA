@@ -239,8 +239,21 @@ GetAtaTypeStr(
             return "SATA";
         case ATA_SA300:
             return "SATA2";
+        case ATA_SA600:
+            return "SATA3";
     }
     return "IDE";
+}
+
+char*
+GetControllerTypeStr(
+    int k
+    )
+{
+    if(BusMasterAdapters[k].RaidFlags & UNIATA_AHCI) {
+        return "AHCI";
+    }
+    return "";
 }
 
 void main (int argc, char* argv[]) {
@@ -340,14 +353,25 @@ void main (int argc, char* argv[]) {
     } else
     if(!strcmp(argv[i], "--html")) {
         ULONG prev_ven=-1;
+        PCHAR xdev_str="";
+        PCHAR prev_str = &xdev_str[0];
         g_html = TRUE;
         for(k=0; k<NUM_BUSMASTER_ADAPTERS; k++) {
-            if(prev_ven != BusMasterAdapters[k].nVendorId) {
-                printf("\n<li>");
-            } else {
-                printf("\n,");
+
+            if(!BusMasterAdapters[k].FullDevName) {
+                continue;
             }
-            printf("%s %s", BusMasterAdapters[k].FullDevName, GetAtaTypeStr(k));
+            if(!strcmp(prev_str, BusMasterAdapters[k].FullDevName)) {
+                continue;
+            }
+            prev_str = BusMasterAdapters[k].FullDevName;
+            if(prev_ven != BusMasterAdapters[k].nVendorId) {
+                printf("\n<li> ");
+            } else {
+                printf("\n , ");
+            }
+            prev_ven = BusMasterAdapters[k].nVendorId;
+            printf("%s %s %s", prev_str, GetAtaTypeStr(k), GetControllerTypeStr(k));
         }
         printf("\n");
         exit(0);

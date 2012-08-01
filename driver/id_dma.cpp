@@ -261,6 +261,7 @@ AtapiDmaSetup(
         KdPrint2((PRINT_PREFIX "AtapiDmaSetup: already setup, %d entries\n", AtaReq->dma_entries));
         return TRUE;
     }
+    AtaReq->ata.dma_base = 0;
     AtaReq->Flags &= ~REQ_FLAG_DMA_OPERATION;
 
     KdPrint2((PRINT_PREFIX "AtapiDmaSetup: mode %#x, data %x, count %x, lCh %x, dev %x\n",
@@ -724,7 +725,7 @@ AtapiDmaReinit(
         if(!AtaReq->ahci.ahci_base64) {
             KdPrint2((PRINT_PREFIX
                         "AtapiDmaReinit: no AHCI PRD, fatal on Device %d\n", LunExt->Lun));
-            return;
+            goto exit;
         }
     } else
     if(!AtaReq->ata.dma_base) {
@@ -790,6 +791,9 @@ limit_pio:
                     "AtapiDmaReinit: restore IO mode on Device %d\n", LunExt->Lun));
         AtapiDmaInit__(deviceExtension, LunExt);
     }
+
+exit:
+    return;
 } // end AtapiDmaReinit()
 
 VOID
@@ -844,9 +848,15 @@ AtaSetTransferMode(
     if(LunExt->DeviceFlags & DFLAGS_MANUAL_CHS) {
         statusByte = mode <= ATA_PIO2 ? IDE_STATUS_IDLE : IDE_STATUS_ERROR;
     } else {
+        if(deviceExtension->HwFlags & UNIATA_AHCI) {
+            AtapiDisableInterrupts(deviceExtension, lChannel);
+        }
         statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                             IDE_COMMAND_SET_FEATURES, 0, 0, 0,
                             (UCHAR)((mode > ATA_UDMA6) ? ATA_UDMA6 : mode), ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        if(deviceExtension->HwFlags & UNIATA_AHCI) {
+            AtapiEnableInterrupts(deviceExtension, lChannel);
+        }
     }
     if(statusByte & IDE_STATUS_ERROR) {
         KdPrint3((PRINT_PREFIX "  wait ready after error\n"));
@@ -1447,7 +1457,7 @@ set_new_acard:
                     SetPciConfig2(0x4a, (reg4a & ~(0x3 << (dev<<2))) |
                                         (0x01 + !(i & 0x01))  );
                 }
-                if(i >= 3) {
+                if(i >= 2) {
                     reg54 |= (0x1 << dev);
                 } else {
                     reg54 &= ~(0x1 << dev);
@@ -1495,8 +1505,7 @@ set_new_acard:
         GetPciConfig1(0x44, reg44);
 
 	/* Allow PIO/WDMA timing controls. */
-        reg40 &= ~0x00ff00ff;
-        reg40 |= ~0x40774077;
+        mask40 = 0x000000ff;
 	/* Set PIO/WDMA timings. */
         if(!(DeviceNumber & 1)) {
             mask40 |= 0x00003300;
@@ -1506,6 +1515,7 @@ set_new_acard:
             new44 = ((intel_timings[idx] & 0x30) >> 2) |
                      (intel_timings[idx] & 0x03);
         }
+        new40 |= 0x00004077;
 
         if (Channel) {
             mask40 <<= 16;
@@ -2072,7 +2082,7 @@ try_generic_dma:
     /* if controller says its setup for DMA take the easy way out */
     /* the downside is we dont know what DMA mode we are in */
     if ((udmamode >= 0 || /*wdmamode > 1*/ wdmamode >= 0) &&
-         /*deviceExtension->BaseIoAddressBM[lChannel]*/ deviceExtension->BusMaster &&
+         /*deviceExtension->BaseIoAddressBM[lChannel]*/ (deviceExtension->BusMaster==DMA_MODE_BM) &&
         (GetDmaStatus(deviceExtension, lChannel) &
          (!(DeviceNumber & 1) ?
           BM_STATUS_DRIVE_0_DMA : BM_STATUS_DRIVE_1_DMA))) {

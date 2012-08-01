@@ -1,0 +1,103 @@
+*) minor change
++) feature added
+-) something removed
+!) fix
+!!) critical fix
+
+
+--
+2012.07.26 - v0.42c
+
++) added code for ATAPI BUSY wait auto-adjustment. We poll and measure
+BUSY-after-Interrupt delay. Next time we use this value to defere interrupt service
+instead of polling.
+
+--
+2012.07.26 - v0.42c1
+
+!) undone newer FreeBSD changes in Intel UDMA setup. Caused significant performance degrade on ATAPI.
+
+--
+2012.07.27 - v0.42d
+
+!) fixed bug with setting ATAPI flag in AHCI IO flags for non-packet commands on ATAPI devices.
+
+--
+2012.07.27 - v0.42d1
+
+!) fixed drive size reporting bug for CHS-only hardware. Was reported as 0,
+since UserAddresableBlocks is not valid.
+
+--
+2012.07.27 - v0.42d2
+
+!!) fixed bug with concurrent use of InternalSrb by ATAPI internal requests and AHCI internal requests.
+Added AhciInternalSrb.
+
+--
+2012.07.28 - v0.42d3
+
+!) added code for handling ATAPI on AHCI those generate interrupt,
+but do not clear BUSY and do not affect any bit in channel IS register.
+We should treat such case as in Native/Legacy ATA mode - just wait for BUSY release.
+*) optimized Interrupt disable/enable case in AHCI branch of AtapiDmaReinit() and AtaSetTransferMode()
+We shall not touch IE registers if no operaion is required.
+
+--
+2012.07.29 - v0.42d4
+
+*) added logs to AHCI ATAPI pre-ready state checks.
+!) fixed code for ATAPI BUSY wait auto-adjustment. Delay time was not stored in LunExt properly
++) added internal glabal option MaxIsrWait, which determines ATAPI BUSY wait threshold.
+If expected delay is above MaxIsrWait, interrupt service shall be immediately posted to DPC.
+It is defaulted to 40us for real hardware and to 200us for VBOX.
+Previously shreshold was hardcoded.
+
+--
+2012.07.29 - v0.42d5
+
++) added chglog.txt
++) added ATA_REQ.ahci field to store error status observed in UniataAhciEndTransaction()
+*) added logs to  UniataAhciEndTransaction() to study ATAPI completion in more details
+*) removed extra logs from AtapiCheckInterrupt__(), added in v0.42d4
+
+--
+2012.07.29 - v0.42d5
+
++) added registry key for MaxIsrWait
+
+
+--
+2012.07.30 - v0.42d6
+
++) added FBS AHCI register definition (not used now)
++) added IDENTIFY and COMMAND definitions from ATA/ATAPI Command Set 2
++) added SCSI ERASE10 command definition
+!) direct access to ATA Command register is replaced with call to AtaCommand() for
+AHCI compatibility
+*) added check for .Removable flag before sending SCSIOP_MEDIUM_REMOVAL
++) added ByteCount extraction from RFIS for ATAPI devices.
+
+--
+2012.07.30 - v0.42e
+
++) added MODE_SENSE6, Page CACHING support for HDDs
++) added more logs and fixed ByteCount extraction from RFIS for ATAPI devices.
+
+--
+2012.07.30 - v0.42e1
+
+*) added setting of DRIVE_SELECT to AHCI ATAPI branch in H2D setup
+
+--
+2012.07.31 - v0.42e2
+
++) added definition of H2D FIS structure
++) added definition of FIS types (codes)
+*) clarified definition (size) of ACMD block in IDE_AHCI_CMD and
+PFIS, RFIS, SDBFIS in IDE_AHCI_RCV_FIS
+*) defined constants for FIS filed offsets IDX_AHCI_i_Xxxx
+*) added setting of IDE_DC_A_4BIT to AHCI H2D FIS setup
+!) fixed bug with incorrect setting of high-order LBA bits in DriveSelect register for LBA48 commands
+(should be 0 since 24-31 bits are stored in BlockNumberExp)
+*) used UniataAhciWaitCommandReady() in ATAPI 'Special case' completion to wait for CI release.

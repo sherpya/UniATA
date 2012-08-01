@@ -321,7 +321,7 @@ UniataAhciUlongFromRFIS(
 	     (((ULONG)(RCV_FIS[5])) << 16) |
 	     (((ULONG)(RCV_FIS[4])) << 8) |
 	      ((ULONG)(RCV_FIS[12])) );
-}
+} // end UniataAhciUlongFromRFIS()
 
 __inline
 USHORT
@@ -346,7 +346,7 @@ UniAtaAhciAdjustIoFlags(
     }
 */
     return ahci_flags;
-}
+} // end UniAtaAhciAdjustIoFlags()
 
 BOOLEAN
 NTAPI

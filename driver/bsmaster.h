@@ -591,7 +591,22 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
         };
     } SNTF;  // 0x100 + 0x80*c + 0x003c
 
-    ULONG FIS_Switching_Reserved[12];
+    // AHCI 1.2
+    union {
+        ULONG Reg;
+        struct {
+            ULONG EN:1;     // Enable
+            ULONG DEC:1;    // Device Error Clear
+            ULONG SDE:1;    // Single Device Error
+            ULONG Reserved_3_7:5;  // Reserved
+            ULONG DEV:4;    // Device To Issue
+            ULONG ADO:4;    // Active Device Optimization (recommended parallelism)
+            ULONG DWE:4;    // Device With Error
+            ULONG Reserved_20_31:12;  // Reserved
+        };
+    } FBS;  // 0x100 + 0x80*c + 0x0040
+
+    ULONG Reserved_44_7f[11];
     UCHAR VendorSpec[16];
 
 } IDE_AHCI_PORT_REGISTERS, *PIDE_AHCI_PORT_REGISTERS;
@@ -663,6 +678,50 @@ typedef struct _IDE_AHCI_PRD_ENTRY {
 
 #define AHCI_FIS_TYPE_ATA_H2D           0x27
 #define AHCI_FIS_TYPE_ATA_D2H           0x34
+#define AHCI_FIS_TYPE_DMA_D2H           0x39
+#define AHCI_FIS_TYPE_DMA_BiDi          0x41
+#define AHCI_FIS_TYPE_DATA_BiDi         0x46
+#define AHCI_FIS_TYPE_BIST_BiDi         0x58
+#define AHCI_FIS_TYPE_PIO_D2H           0x5f
+#define AHCI_FIS_TYPE_DEV_BITS_D2H      0xA1
+
+typedef struct _AHCI_ATA_H2D_FIS {
+    UCHAR    FIS_Type; // = 0x27
+    UCHAR    Reserved1:7;
+    UCHAR    Cmd:1;    // update Command register
+    UCHAR    Command;                  // [2]
+    UCHAR    Feature;                  // [3]
+
+    UCHAR    BlockNumber;              // [4]
+    UCHAR    CylinderLow;              // [5]
+    UCHAR    CylinderHigh;             // [6]
+    UCHAR    DriveSelect;              // [7]
+
+    UCHAR    BlockNumberExp;           // [8]
+    UCHAR    CylinderLowExp;           // [9]
+    UCHAR    CylinderHighExp;          // [10]
+    UCHAR    FeatureExp;               // [11]
+
+    UCHAR    BlockCount;               // [12]
+    UCHAR    BlockCountExp;            // [13]
+    UCHAR    Reserved14;               // [14]
+    UCHAR    Control;                  // [15]
+
+} AHCI_ATA_H2D_FIS, *PAHCI_ATA_H2D_FIS;
+
+#define IDX_AHCI_o_Command              (FIELD_OFFSET(AHCI_ATA_H2D_FIS, Command))
+#define IDX_AHCI_o_Feature              (FIELD_OFFSET(AHCI_ATA_H2D_FIS, Feature))
+#define IDX_AHCI_o_BlockNumber          (FIELD_OFFSET(AHCI_ATA_H2D_FIS, BlockNumber ))
+#define IDX_AHCI_o_CylinderLow          (FIELD_OFFSET(AHCI_ATA_H2D_FIS, CylinderLow ))
+#define IDX_AHCI_o_CylinderHigh         (FIELD_OFFSET(AHCI_ATA_H2D_FIS, CylinderHigh))
+#define IDX_AHCI_o_DriveSelect          (FIELD_OFFSET(AHCI_ATA_H2D_FIS, DriveSelect ))
+#define IDX_AHCI_o_BlockCount           (FIELD_OFFSET(AHCI_ATA_H2D_FIS, BlockCount))
+#define IDX_AHCI_o_Control              (FIELD_OFFSET(AHCI_ATA_H2D_FIS, Control))
+#define IDX_AHCI_o_FeatureExp           (FIELD_OFFSET(AHCI_ATA_H2D_FIS, FeatureExp))
+#define IDX_AHCI_o_BlockNumberExp       (FIELD_OFFSET(AHCI_ATA_H2D_FIS, BlockNumberExp ))
+#define IDX_AHCI_o_CylinderLowExp       (FIELD_OFFSET(AHCI_ATA_H2D_FIS, CylinderLowExp ))
+#define IDX_AHCI_o_CylinderHighExp      (FIELD_OFFSET(AHCI_ATA_H2D_FIS, CylinderHighExp))
+#define IDX_AHCI_o_BlockCountExp        (FIELD_OFFSET(AHCI_ATA_H2D_FIS, BlockCountExp))
 
 #define AHCI_FIS_COMM_PM                (0x80 | AHCI_DEV_SEL_PM)
 
@@ -673,8 +732,8 @@ typedef struct _IDE_AHCI_PRD_ENTRY {
 /* 128-byte aligned */
 typedef struct _IDE_AHCI_CMD {
     UCHAR              cfis[64];
-    UCHAR              acmd[32];
-    UCHAR              Reserved[32];
+    UCHAR              acmd[16];
+    UCHAR              Reserved[48];
     IDE_AHCI_PRD_ENTRY prd_tab[ATA_AHCI_DMA_ENTRIES]; // also 128-byte aligned
 } IDE_AHCI_CMD, *PIDE_AHCI_CMD;
 
@@ -700,11 +759,11 @@ typedef struct _IDE_AHCI_CMD_LIST {
 typedef struct _IDE_AHCI_RCV_FIS {
     UCHAR              dsfis[28];
     UCHAR              Reserved1[4];
-    UCHAR              psfis[24];
-    UCHAR              Reserved2[8];
-    UCHAR              rfis[24];
+    UCHAR              psfis[20];
+    UCHAR              Reserved2[12];
+    UCHAR              rfis[20];
     UCHAR              Reserved3[4];
-    ULONG              SDBFIS;
+    UCHAR              SDBFIS[8];
     UCHAR              ufis[64];
     UCHAR              Reserved4[96];
 } IDE_AHCI_RCV_FIS, *PIDE_AHCI_RCV_FIS;
@@ -776,7 +835,7 @@ typedef union _ATA_REQ {
                     ULONG           in_bcount;
                     ULONG           in_status;
                     USHORT          io_cmd_flags; // out
-
+                    UCHAR           in_error;
                 } ahci;
             };
         };
@@ -868,7 +927,10 @@ struct _HW_DEVICE_EXTENSION;
 struct _HW_LU_EXTENSION;
 
 typedef struct _IORES {
-    ULONG Addr;          /* Base address*/
+    union {
+        ULONG Addr;          /* Base address*/
+        PVOID pAddr;         /* Base address in pointer form */
+    };
     ULONG MemIo:1;       /* Memory mapping (1) vs IO ports (0) */
     ULONG Proc:1;        /* Need special processing via IO_Proc */
     ULONG Reserved:30;
@@ -909,7 +971,6 @@ typedef struct _HW_CHANNEL {
     SENSE_DATA          MechStatusSense;
     ULONG               MechStatusRetryCount;
     SCSI_REQUEST_BLOCK  InternalSrb;
-    PATA_REQ            AhciInternalAtaReq;
 
     ULONG               MaxTransferMode; // may differ from Controller's value due to 40-pin cable
 
@@ -962,9 +1023,12 @@ typedef struct _HW_CHANNEL {
     IORES                             BaseIoAHCI_Port;
     ULONG                             AhciPrevCI;
     ULONG                             AhciCompleteCI;
+    ULONG                             AhciLastIS;
     //PVOID                    AHCI_FIS;  // is not actually used by UniATA now, but is required by AHCI controller
     //ULONGLONG                AHCI_FIS_PhAddr;
     // Note: in contrast to FBSD, we keep PRD and CMD item in AtaReq structure 
+    PATA_REQ                          AhciInternalAtaReq;
+    PSCSI_REQUEST_BLOCK               AhciInternalSrb;
 
 #ifdef QUEUE_STATISTICS
     LONGLONG QueueStat[MAX_QUEUE_STAT];
@@ -1038,6 +1102,7 @@ typedef struct _HW_LU_EXTENSION {
     ULONG          last_write;
 
     ULONG          LunSelectWaitCount;
+    ULONG          AtapiReadyWaitDelay;
 
     // tuning options
     ULONG          opt_GeomType;
@@ -1168,6 +1233,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     //PIDE_AHCI_PORT_REGISTERS  BaseIoAHCIPort[AHCI_MAX_PORT];
     ULONG          AHCI_CAP;
     PATA_REQ       AhciInternalAtaReq0;
+    PSCSI_REQUEST_BLOCK AhciInternalSrb0;
 
     BOOLEAN        opt_AtapiDmaZeroTransfer; // default FALSE
     BOOLEAN        opt_AtapiDmaControlCmd;   // default FALSE
@@ -1523,9 +1589,13 @@ AtapiGetIoRange(
     SetPciConfig4(offs, a);                                      \
 }
 
+#define DMA_MODE_NONE  0x00
+#define DMA_MODE_BM    0x01
+#define DMA_MODE_AHCI  0x02
+
 #ifndef GetDmaStatus
 #define GetDmaStatus(de, c) \
-    (((de)->BusMaster) ? AtapiReadPort1(&((de)->chan[c]), IDX_BM_Status) : 0)
+    (((de)->BusMaster == DMA_MODE_BM) ? AtapiReadPort1(&((de)->chan[c]), IDX_BM_Status) : 0)
 #endif //GetDmaStatus
 
 #ifdef USE_OWN_DMA
