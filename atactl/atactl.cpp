@@ -882,6 +882,7 @@ ata_adapter_info(
     ULONG returned;
     SCSI_ADDRESS addr;
     PCI_SLOT_NUMBER       slotData;
+    char mode_str[12];
 
     sprintf(dev_name, "\\\\.\\Scsi%d:", bus_id);
     h = ata_open_dev(dev_name);
@@ -896,7 +897,10 @@ ata_adapter_info(
                             &AdapterInfo, sizeof(AdapterInfo),
                             &AdapterInfo, sizeof(AdapterInfo),
                             &returned);
-    printf("Scsi%d: %s\n", bus_id, status ? "[UniATA]" : "");
+    if(status) {
+        ata_mode_to_str(mode_str, AdapterInfo.MaxTransferMode);
+    }
+    printf("Scsi%d: %s     %s\n", bus_id, status ? "[UniATA]" : "", status ? mode_str : "");
     if(print_info) {
         if(!status) {
             printf("Can't get adapter info\n");
@@ -1520,7 +1524,7 @@ main (
     int persistent_hide=0;
 
     printf("Console ATA control utility for Windows NT3.51/NT4/2000/XP/2003\n"
-           "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2008\n"
+           "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2012\n"
            "Home site: http://alter.org.ua\n");
 
     for(i=1; i<argc; i++) {

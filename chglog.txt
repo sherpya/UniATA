@@ -3,6 +3,7 @@
 -) something removed
 !) fix
 !!) critical fix
+i) info
 
 
 --
@@ -101,3 +102,102 @@ PFIS, RFIS, SDBFIS in IDE_AHCI_RCV_FIS
 !) fixed bug with incorrect setting of high-order LBA bits in DriveSelect register for LBA48 commands
 (should be 0 since 24-31 bits are stored in BlockNumberExp)
 *) used UniataAhciWaitCommandReady() in ATAPI 'Special case' completion to wait for CI release.
+*) changed AHCI ready wait granularity to 200 us (was 1 ms) in UniataAhciWaitCommandReady()
+
+--
+2012.08.01 - v0.42e3
+
+*) added ACMD dump in UniataAhciBeginTransaction() for ATAPI debug
+*) removed (for DEBUG) AHCI prefetch on ATAPI
++) added SACT AHCI register update before CI
+*) removed unnecessary CMD register update in UniataAhciBeginTransaction(). ACT+CI is enough
+i) analyzed SeaBIOS code v1.7 (http://code.coreboot.org/p/seabios/source/tree/bf079e16f8b0d016eb09787c2aebda359c41391a/src/ahci.c)
+*) added ATA_AHCI_P_IX_INF flag to list of allowed interrupts
+*) removed unnecessary RtlZeroMemory before UniataAhciSetupFIS_H2D in AHCI ATAPI branch
+
+--
+2012.08.01 - v0.42e4
+
++) (test) DMA-only mode for AHCI ATAPI
+
+--
+2012.08.01 - v0.42f
+
+*) (test) DMA-only mode for AHCI ATAPI SCSIOP_REQUEST_SENSE
+!) added handling for error-related IS bits. We should restart AHCI engine on all error conditions.
+otherwise device comes into indetermined state.
+*) adapter max transfer rate is now displayed in atactl -a output
+
+--
+2012.08.02 - v0.42f1
+
+*) undone experimental changes with force DMA on AHCI ATAPI (will check later)
+*) AHCI abort sequence is moved to UniataAhciAbortOperation()
++) implemented error handling in AHCI StopXxx() calls
+*) added use of AHCI ACT register to WaitReady and internal SendCommand
+
+--
+2012.08.02 - v0.42f2
+
++) added support for v12 and v16 READ/WRITE/VERIFY SCSI command emulation.
+It extends addressable space to 64bits (v16)
+and gives supports for HDDs above 2Tb, they use more than 32bits for LBA.
+*) undone all operations with AHCI ACT register
+
+--
+2012.08.02 - v0.42g
+
+!) fixed bug with incorrect ATA_AHCI_CMD_WRITE setting in AHCI ATAPI branch.
++) added DMADIR bit support to ATAPI
+
+--
+2012.08.02 - v0.42g1
+
+*) (test again) DMA-only mode for AHCI and SATA ATAPI
+!) fixed command version specific LBA decoding in IdeReadWrite
+
+--
+2012.08.03 - v0.42g2
+
+*) fixes in LBA logging
+
+--
+2012.08.03 - v0.42g3
+
+*) reduced amount of logs in AtapiCheckRegValue()
+!) fixed bug with 0 number of luns (in log only) in AtapiSetupLunPtrs()
+*) added logs to find why on some ICHxxx debug version with attached debugger crashes
+on controller reset
+
+--
+2012.08.04 - v0.42g4
+
+*) added log to catch damaged Chan pointer in DeviceExtension (observed on Reset in Native/Legacy mode on ICHxxx)
+!) added handler for 'unexpected' ATAPI READY interrupt.
+*) added small delay after ATAPI PIO read, finished with BUSY status when all requested bytes are transferred.
+If BUSY is released, command is assumed to be completed, otherwise further processing is posted to DPC.
++) added SCSIOP_SERVICE_ACTION16/SCSIOP_SA_READ_CAPACITY16 support
+
+--
+2012.08.04 - v0.42g5
+
+*) added logs to catch damaged (zero-filled) CDB on AHCI ATAPI READ
+*) removed unnecessary FIS logs from UniataAhciEndTransaction()
+!) fixed bug with unconditional ERROR state on AHCI ATAPI with zero transfer.
+
+--
+2012.08.05 - v0.42g6
+
+*) SrbExtensionSize = sizeof(ATA_REQ) regardless of controller type (test)
+
+--
+2012.08.05 - v0.42g7
+
+*) ATA_AHCI_CMD_PREFETCH is used again (test)
+
+--
+2012.08.05 - v0.42h
+
+!) fixed bug with missed call to MapError for AHCI ATAPI
+!) fixed bug with reading error status from improper place in AHCI ATAPI branch
+
