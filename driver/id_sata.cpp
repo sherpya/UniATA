@@ -804,7 +804,7 @@ UniataAhciDetect(
     ULONG NumberChannels;
     ULONG v_Mn, v_Mj;
     ULONG BaseMemAddress;
-    BOOLEAN MemIo;
+    BOOLEAN MemIo = FALSE;
     BOOLEAN found = FALSE;
 
     KdPrint2((PRINT_PREFIX "  UniataAhciDetect:\n"));
@@ -819,7 +819,7 @@ UniataAhciDetect(
         KdPrint2((PRINT_PREFIX "  AHCI init failed - no IoRange\n"));
         return FALSE;
     }
-    if(BaseMemAddress && (*ConfigInfo->AccessRanges)[5].RangeInMemory) {
+    if((*ConfigInfo->AccessRanges)[5].RangeInMemory) {
         KdPrint2((PRINT_PREFIX "MemIo\n"));
         MemIo = TRUE;
     }
@@ -1513,7 +1513,7 @@ UniataAhciSendPIOCommandDirect(
     //PIDE_AHCI_CMD  AHCI_CMD = &(chan->AhciCtlBlock->cmd);
     PIDE_AHCI_CMD  AHCI_CMD = NULL;
     USHORT ahci_flags=0;
-    USHORT bcount=0;
+//    USHORT bcount=0;
 
     //PIDE_AHCI_CMD_LIST AHCI_CL = &(chan->AhciCtlBlock->cmd_list[tag]);
 

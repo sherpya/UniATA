@@ -2905,6 +2905,11 @@ AtapiHwInitialize(
     if(WinVer_WDM_Model) {
         AtapiResetController__(HwDeviceExtension, CHAN_NOT_SPECIFIED, RESET_COMPLETE_ALL);
     }
+    if(deviceExtension->MasterDev) {
+        KdPrint2((PRINT_PREFIX "  mark chan %d of master controller [%x] as inited\n",
+            deviceExtension->Channel, deviceExtension->DevIndex));
+        BMList[deviceExtension->DevIndex].ChanInitOk |= 0x01 << deviceExtension->Channel;
+    }
 
     /* do extra chipset specific setups */
     AtapiChipInit(HwDeviceExtension, DEVNUM_NOT_SPECIFIED, CHAN_NOT_SPECIFIED);
@@ -7485,7 +7490,7 @@ IdeSendCommand(
     SetCheckPoint(4);
 
     UCHAR statusByte,errorByte;
-    ULONG status;
+    ULONG status = SRB_STATUS_INVALID_REQUEST;
     ULONG i;
     ULONGLONG lba;
     PMODE_PARAMETER_HEADER   modeData;
@@ -8939,7 +8944,7 @@ do_bus_reset:
 
             if(!AtapiStringCmp( (PCHAR)(((PSRB_IO_CONTROL)(Srb->DataBuffer))->Signature),"SCSIDISK",sizeof("SCSIDISK")-1)) {
 
-                ULONG targetId = -1;
+                ULONG targetId = (ULONG)(-1);
 
                 if(len < sizeof(SRB_IO_CONTROL)) {
                     goto wrong_buffer_size;
@@ -8988,7 +8993,7 @@ invalid_request:
                 } // end switch()
 
                 // adjust (if necessary) bus address
-                if(targetId != -1) {
+                if(targetId != (ULONG)(-1)) {
 
                     // This is done because of how the IOCTL_SCSI_MINIPORT
                     // determines 'targetid's'. Disk.sys places the real target id value
@@ -9006,7 +9011,7 @@ invalid_request:
                         // due to DISK.SYS design bug, we have invalid SCSI address in SRB
                         KdPrint2((PRINT_PREFIX "AtapiStartIo: legacy call (2)\n"));
                         if(deviceExtension->HwFlags & UNIATA_AHCI) {
-                            lChannel = (UCHAR)targetId;
+                            lChannel = (UCHAR)targetId / 2;
                             DeviceNumber = 0;
                         } else {
                             lChannel = (UCHAR)(targetId / 2);
@@ -10059,7 +10064,15 @@ DriverEntry(
                     statusToReturn = newStatus;
                 }
                 if (newStatus == STATUS_SUCCESS) {
-                    BMList[i].ChanInitOk |= 0x01 << c;
+                    if(WinVer_Id() < WinVer_2k) {
+                        // This should be done in HwInitialize under w2k+ to ensure that 
+                        // channel is actually initialized
+                        BMList[i].ChanInitOk |= 0x01 << c;
+                    } else {
+                        if(BMList[i].ChanInitOk & (0x01 << c)) {
+                            KdPrint2((PRINT_PREFIX "HwInit passed\n"));
+                        }
+                    }
 /*
                     if(BMList[i].MasterDev && (WinVer_Id() > WinVer_NT)) {
                         c = 1; // this will break our for()
@@ -10068,19 +10081,27 @@ DriverEntry(
 */
                 }
             }
-            if(WinVer_Id() >= WinVer_2k) {
-                // the following doesn't work under higher OSes
+/*            if(WinVer_Id() >= WinVer_2k) {
+                // the following didn't work under higher OSes,
+                // until we move setting of FLAGS to HwInit
                 KdPrint2((PRINT_PREFIX "make still one attempt\n"));
                 continue;
-            }
+            }*/
             if(BMList[i].ChanInitOk & 0x03) {
-                // under NT we receive status immediately, so
-                // we can omit alternative init method if STATUS_SUCCESS returned
+                // Under NT we receive status immediately, so
+                // we can omit alternative init method if STATUS_SUCCESS returned.
+                // Under w2k+ we relay on flags, set in HwInitialize.
                 KdPrint2((PRINT_PREFIX "Ok, no more retries required\n"));
                 break;
+            } else
+            if(WinVer_Id() >= WinVer_2k) {
+                // try AltInit if HwInit was not called immediately under w2k+
+                KdPrint2((PRINT_PREFIX "make still one attempt w2k+\n"));
+            } else {
+                // if (WinVer_Id() == WinVer_NT) and some error occured
+                // try alternative init method
+                KdPrint2((PRINT_PREFIX "make still one attempt w2k+\n"));
             }
-            // if (WinVer_Id() == WinVer_NT) and some error occured
-            // try alternative init method
         } // for(alt...)
 #if 0
         if(WinVer_WDM_Model) {

@@ -1420,6 +1420,11 @@ generic_cable80(
     ULONG slotNumber = deviceExtension->slotNumber;
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
 
+    if(deviceExtension->MaxTransferMode <= ATA_UDMA2) {
+        KdPrint2((PRINT_PREFIX "generic_cable80(%d, %#x, %d) <= UDMA2\n", channel, pci_reg, bit_offs));
+        return FALSE;
+    }
+
     //ULONG ChipType  = deviceExtension->HwFlags & CHIPTYPE_MASK;
     PHW_CHANNEL chan;
     ULONG  c; // logical channel (for Compatible Mode controllers)
@@ -1810,7 +1815,7 @@ AtapiChipInit(
                          AtapiReadPortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0), 0x0c) | 0xff);
                 }
                 /* enable PCI interrupt */
-                ChangePciConfig2(/*PCIR_COMMAND*/0x04, (a & ~0x0400));
+                ChangePciConfig2(offsetof(PCI_COMMON_CONFIG, Command), (a & ~0x0400));
 
             } else {
 
@@ -1898,7 +1903,7 @@ AtapiChipInit(
 
             break;
         }
-        if(deviceExtension->MaxTransferMode < ATA_UDMA2)
+        if(deviceExtension->MaxTransferMode <= ATA_UDMA2)
             break;
         // check 80-pin cable
         if(c == CHAN_NOT_SPECIFIED) {
@@ -2215,7 +2220,7 @@ AtapiChipInit(
             // no init for SATA
             if(ChipFlags & (UNIATA_SATA | VIASATA)) {
                 /* enable PCI interrupt */
-                ChangePciConfig2(/*PCIR_COMMAND*/0x04, (a & ~0x0400));
+                ChangePciConfig2(offsetof(PCI_COMMON_CONFIG, Command), (a & ~0x0400));
 
                /*
                 * vt6420/1 has problems talking to some drives.  The following

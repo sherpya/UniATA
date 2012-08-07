@@ -329,7 +329,6 @@ UniataEnumBusMasterController__(
                 SubVendorID = pciData.u.type0.SubVendorID;
                 SubSystemID = pciData.u.type0.SubSystemID;
 
-
                 //KdPrint2((PRINT_PREFIX "DevId = %8.8X Class = %4.4X/%4.4X\n", dev_id, BaseClass, SubClass ));
 
                 // check for (g_opt_VirtualMachine == VM_AUTO) is performed inside each
@@ -366,6 +365,14 @@ UniataEnumBusMasterController__(
                 // look for known chipsets
                 found = FALSE;
                 known = FALSE;
+
+                if(pciData.u.type0.InterruptPin == 14 ||
+                   pciData.u.type0.InterruptPin == 15 ||
+                   pciData.u.type0.InterruptLine == 14 ||
+                   pciData.u.type0.InterruptLine == 15) {
+                    KdPrint2((PRINT_PREFIX "(!) InterruptPin = %#x\n", pciData.u.type0.InterruptPin));
+                    KdPrint2((PRINT_PREFIX "(!) InterruptLine = %#x\n", pciData.u.type0.InterruptLine));
+                }
 
                 if(deviceExtension) {
                     deviceExtension->slotNumber = slotData.u.AsULONG;
@@ -1364,6 +1371,7 @@ UniataFindBusMasterController(
         KdPrint2((PRINT_PREFIX "!MasterDev\n"));
         ConfigInfo->SlotNumber = slotNumber;
         ConfigInfo->SystemIoBusNumber = SystemIoBusNumber;
+        ConfigInfo->InterruptMode = LevelSensitive;
 
         /* primary and secondary channels share the same interrupt */
         if(!ConfigInfo->BusInterruptVector ||
@@ -1396,7 +1404,11 @@ UniataFindBusMasterController(
        (ConfigInfo->Length >= sizeof(_ConfigInfo->comm) + sizeof(_ConfigInfo->nt4) + sizeof(_ConfigInfo->w2k))) {
         KdPrint2((PRINT_PREFIX "update ConfigInfo->w2k: 64bit %d\n",
             deviceExtension->Host64));
+#ifdef USE_OWN_DMA
+        // We need not set Dma64BitAddresses since we perform address translation manually.
+#else
         _ConfigInfo->w2k.Dma64BitAddresses           = deviceExtension->Host64;
+#endif //USE_OWN_DMA
         _ConfigInfo->w2k.ResetTargetSupported        = TRUE;
         _ConfigInfo->w2k.MaximumNumberOfLogicalUnits = (UCHAR)deviceExtension->NumberLuns;
     }
@@ -1412,26 +1424,32 @@ UniataFindBusMasterController(
     deviceExtension->AlignmentMask      = ConfigInfo->AlignmentMask;
     deviceExtension->AdapterInterfaceType = PCIBus;
 
-    KdPrint2((PRINT_PREFIX "chan[%d] InterruptMode: %d, Level %d, Vector %d\n",
+    KdPrint2((PRINT_PREFIX "chan[%d] InterruptMode: %d, Level %d, Level2 %d, Vector %d, Vector2 %d\n",
         channel,
         ConfigInfo->InterruptMode,
         ConfigInfo->BusInterruptLevel,
-        ConfigInfo->BusInterruptVector));
+        ConfigInfo->BusInterruptLevel2,
+        ConfigInfo->BusInterruptVector,
+        ConfigInfo->BusInterruptVector2
+        ));
 
     found = FALSE;
 
     if(deviceExtension->BusMaster) {
 
         KdPrint2((PRINT_PREFIX "Reconstruct ConfigInfo\n"));
-        ConfigInfo->MapBuffers = TRUE;
 #ifdef USE_OWN_DMA
         ConfigInfo->NeedPhysicalAddresses = FALSE;
 #else
         ConfigInfo->NeedPhysicalAddresses = TRUE;
 #endif //USE_OWN_DMA
         if(!MasterDev) {
+#ifdef USE_OWN_DMA
+            KdPrint2((PRINT_PREFIX "!MasterDev, own DMA\n"));
+#else
             KdPrint2((PRINT_PREFIX "set Dma32BitAddresses\n"));
             ConfigInfo->Dma32BitAddresses = TRUE;
+#endif //USE_OWN_DMA
         }
 
         // thanks to Vitaliy Vorobyov aka deathsoft@yandex.ru for
@@ -1457,10 +1475,11 @@ UniataFindBusMasterController(
 #ifndef USE_OWN_DMA
         ConfigInfo->Master        = TRUE;
         ConfigInfo->DmaWidth      = Width16Bits;
-#endif //USE_OWN_DMA
-        ConfigInfo->CachesData    = TRUE;
         ConfigInfo->ScatterGather = TRUE;
+#endif //USE_OWN_DMA
     }
+    ConfigInfo->MapBuffers = TRUE; // Need for PIO and OWN_DMA
+    ConfigInfo->CachesData = TRUE;
 
     KdPrint2((PRINT_PREFIX "BMList[i].channel %#x, NumberChannels %#x, channel %#x\n",BMList[i].channel, deviceExtension->NumberChannels, channel));
 
@@ -1493,7 +1512,8 @@ UniataFindBusMasterController(
                 (*ConfigInfo->AccessRanges)[channel * 2 + 1].RangeStart =
                     ScsiPortConvertUlongToPhysicalAddress((channel ? IO_WD2 : IO_WD1) + ATA_ALTOFFSET);
                 (*ConfigInfo->AccessRanges)[channel * 2 + 1].RangeLength = ATA_ALTIOSIZE;
-
+// this was test. I supposed, claiming PCI resource on ISA bus may confuse system (w2k3)
+#if 1
                 // do not claim 2nd BM io-range for Secondary channel of
                 // Compatible-mode controllers
                 if(/*(WinVer_Id() <= WinVer_NT) &&*/ !c && channel == 1) {
@@ -1501,6 +1521,11 @@ UniataFindBusMasterController(
                     (*ConfigInfo->AccessRanges)[4].RangeStart = ScsiPortConvertUlongToPhysicalAddress(0);
                     (*ConfigInfo->AccessRanges)[4].RangeLength = 0;
                 }
+#else
+                    KdPrint2((PRINT_PREFIX "hide BM io-range\n"));
+                    (*ConfigInfo->AccessRanges)[4].RangeStart = ScsiPortConvertUlongToPhysicalAddress(0);
+                    (*ConfigInfo->AccessRanges)[4].RangeLength = 0;
+#endif // 0
             } else
             if(AltInit &&
                !(*ConfigInfo->AccessRanges)[channel * 2 + 0].RangeStart.QuadPart &&
@@ -1768,6 +1793,17 @@ exit_findbm:
             found = FALSE;
             goto exit_findbm;
         }
+
+        KdPrint2((PRINT_PREFIX "final chan[%d] InterruptMode: %d, Level %d, Level2 %d, Vector %d, Vector2 %d\n",
+            channel,
+            ConfigInfo->InterruptMode,
+            ConfigInfo->BusInterruptLevel,
+            ConfigInfo->BusInterruptLevel2,
+            ConfigInfo->BusInterruptVector,
+            ConfigInfo->BusInterruptVector2
+            ));
+
+
     }
 #endif //UNIATA_CORE
 

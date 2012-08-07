@@ -1219,6 +1219,9 @@ typedef struct _HW_DEVICE_EXTENSION {
     BOOLEAN MasterDev;
     BOOLEAN Host64;
     BOOLEAN DWordIO;         // Indicates use of 32-bit PIO
+/*    // Indicates, that HW Initialized is already called for this controller
+    // 0 bit for Primary, 1 - for Secondary. Is used to manage AltInit under w2k+
+    UCHAR   Initialized;     */
     UCHAR   Reserved1[2];
 
     LONG  ReCheckIntr;

@@ -1,4 +1,4 @@
-; Copyright (c) 2002-2007 UniATA group
+; Copyright (c) 2002-2012 UniATA group
 
 [Version]
 Signature="$Windows NT$"
@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=hdc
 CatalogFile=uniata.cat
-DriverVer=08/25/2012,0.43.4.2
+DriverVer=08/28/2012,0.43.5.2
 
 
 [DestinationDirs]
@@ -284,9 +284,9 @@ ExcludeFromSelect = *
 %PCI\CC_0104.DeviceDesc% = uniata_Inst,,PCI\CC_0104                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 %PCI\CC_0105.DeviceDesc% = uniata_Inst,,PCI\CC_0105                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 %PCI\CC_0106.DeviceDesc% = uniata_Inst,,PCI\CC_0106                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
-%*PNP0600.PriDeviceDesc% = uniata_Inst, Primary_IDE_Channel
-%*PNP0600.SecDeviceDesc% = uniata_Inst, Secondary_IDE_Channel
-%*PNP0600.DeviceDesc%    = uniata_Inst, *PNP0600                                ; Generic_ESDI_Hard_Disk_Controller   (BAD_IDE)
+%*PNP0600.PriDeviceDesc% = uniata_Inst_Isa, Primary_IDE_Channel
+%*PNP0600.SecDeviceDesc% = uniata_Inst_Isa, Secondary_IDE_Channel
+%*PNP0600.DeviceDesc%    = uniata_Inst_Isa, *PNP0600                                ; Generic_ESDI_Hard_Disk_Controller   (BAD_IDE)
 %UniATA_Name% = uniata_Inst
 
 ;
@@ -296,6 +296,12 @@ ExcludeFromSelect = *
 [uniata_Inst]
 AddReg = uniata_Inst.AddReg
 CopyFiles = uniata_Inst.Miniport
+
+
+[uniata_Inst_Isa]
+AddReg = uniata_Inst.AddReg
+CopyFiles = uniata_Inst.Miniport
+LogConfig = esdilc1, esdilc2, esdilc3, esdilc4
 
 [uniata_Inst.AddReg]
 
@@ -320,7 +326,7 @@ ServiceType    = 1
 StartType      = 0
 ErrorControl   = 0
 LoadOrderGroup = "System Bus Extender"
-ServiceBinary  = %12%\uniata.sys
+ServiceBinary  = %10%\System32\drivers\uniata.sys
 AddReg         = uniata_PNP_Inst_AddReg
 
 [uniata_PNP_Inst_AddReg]
@@ -398,7 +404,7 @@ PCI\VEN_1002&DEV_4390.DeviceDesc="ATI IXP700 SATA controller "
 ;PCI\VEN_1103&DEV_0008&REV_07.DeviceDesc="HighPoint HPT374 ATA-133 controller"
 PCI\VEN_8086&DEV_1230.DeviceDesc="Intel PIIX IDE DMA controller "
 PCI\VEN_8086&DEV_7010.DeviceDesc="Intel PIIX3 IDE DMA controller "
-PCI\VEN_8086&DEV_7111.DeviceDesc="Intel PIIX4e ATA-44 controller "
+PCI\VEN_8086&DEV_7111.DeviceDesc="Intel PIIX3 ATA-33 controller "
 PCI\VEN_8086&DEV_7199.DeviceDesc="Intel PIIX4 ATA-33 controller "
 PCI\VEN_8086&DEV_84ca.DeviceDesc="Intel PIIX4 ATA-33 controller "
 PCI\VEN_8086&DEV_7601.DeviceDesc="Intel ICH0 ATA-33 controller "
@@ -620,6 +626,34 @@ PCI\CC_0104.DeviceDesc  = "Generic RAID IDE Controller (UniATA)"
 PCI\CC_0105.DeviceDesc  = "Generic ATA Controller (UniATA)"
 PCI\CC_0106.DeviceDesc  = "Generic Serial ATA Controller (UniATA)"
 ALTERWARE = "AlterWare"
+
+;Resource claiming for non-PnP
+
+[esdilc1]
+ConfigPriority=HARDWIRED
+IOConfig=1f0-1f7(3ff::)
+IOConfig=3f6-3f6(3ff::)
+IRQConfig=14
+
+[esdilc2]
+ConfigPriority=HARDWIRED
+IOConfig=170-177(3ff::)
+IOConfig=376-376(3ff::)
+IRQConfig=15
+
+[esdilc3]
+ConfigPriority=HARDWIRED
+IOConfig=1e8-1ef(3ff::)
+IOConfig=3ee-3ee(3ff::)
+IRQConfig=11
+
+[esdilc4]
+ConfigPriority=HARDWIRED
+IOConfig=168-16f(3ff::)
+IOConfig=36e-36e(3ff::)
+IRQConfig=10
+
+
 
 ;*******************************************
 ;

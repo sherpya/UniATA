@@ -5,6 +5,7 @@ o) optimization
 !) fix
 !!) critical fix
 i) info
+e) experimantal
 
 
 --
@@ -397,3 +398,40 @@ AtapiSuckDataPort2()
 !) fixed bug with uninitialized chan->MaxTransferMode for VIA VT6421 PATA channel
 (was set to SA150 according to controller default)
 *) added logging of reported interrupt info in UniataFindBusMasterController()
+*) allowed 64-bit physical addresses for controllers with AHCI 64-bit support (experimental)
+
+--
+2012.08.25 - v0.43d3
+
+!) fixed bug with device addressing for SMART/IDENTIFY on AHCI
+
+--
+2012.08.25 - v0.43d4
+
+!) fixed uninitialized MemIo in UniataAhciDetect()
+*) pre-initialized 'status' in IdeSendCommand() to make compiler happy,
+other similar minor changes
+e) AltInit is not issued if HwInitialize() is called in context of ScsiPortInitialize() and we are sure about
+detect status under w2k+
+
+--
+2012.08.26 - v0.43e
+
+*) InterruptMode is set explicitly to LevelSensetive for PCI controllers (since LevelSensetive == 0, 
+was used by default)
+e) BM range for MasterDev (Legacy) controllres in not reported to ScsiPort via ConfigInfo
+*) adjusted setting of ConfigInfo options according to actual needs
+
+--
+2012.08.26 - v0.43e1
+
+e) BM range for MasterDev (Legacy) controllres in not reported to ScsiPort via ConfigInfo
+(fixed, didn't work)
+*) logged PCI devices using 14 and 15 IRQ (conflicting with ISA ATA)
+
+--
+2012.08.27 - v0.43e2
+
+*) fixed PIIX3/PIIX4 device names
+*) in XP .INFs %12% is replaced with %10%\System32\drivers, this fixes problem with 'Invalid INF section'
++) added uata_comm.inf for UniATA virtual communication port

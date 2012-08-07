@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=SCSIAdapter
 CatalogFile=uniata.cat
-DriverVer=08/25/2012,0.43.4.2
+DriverVer=08/28/2012,0.43.5.2
 
 ;
 ; Source file information
@@ -50,6 +50,8 @@ ExcludeFromSelect = *
 %PCI\CC_0104.DeviceDesc% = uniata_Inst,,PCI\CC_0104                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 %PCI\CC_0105.DeviceDesc% = uniata_Inst,,PCI\CC_0105                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 %PCI\CC_0106.DeviceDesc% = uniata_Inst,,PCI\CC_0106                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
+%PCI\CC_0106.DeviceDesc% = uniata_Inst,,PCI\CC_0106                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
+;%PCI\CC_0106&PROGIF_01.DeviceDesc% = uniata_Inst,,PCI\CC_0106&PROGIF_01         ; AHCI
 %*PNP0600.PriDeviceDesc% = uniata_Inst, Primary_IDE_Channel
 %*PNP0600.SecDeviceDesc% = uniata_Inst, Secondary_IDE_Channel
 %*PNP0600.DeviceDesc%    = uniata_Inst, *PNP0600                                ; Generic_ESDI_Hard_Disk_Controller   (BAD_IDE)
@@ -117,6 +119,7 @@ PCI\CC_0101.DeviceDesc  = "Dual Channel PCI BusMaster IDE Controller (UniATA)"
 PCI\CC_0104.DeviceDesc  = "Generic RAID IDE Controller (UniATA)"
 PCI\CC_0105.DeviceDesc  = "Generic ATA Controller (UniATA)"
 PCI\CC_0106.DeviceDesc  = "Generic Serial ATA Controller (UniATA)"
+PCI\CC_0106&PROGIF_01.DeviceDesc  = "Generic AHCI Controller (UniATA)"
 ALTERWARE = "AlterWare"
 
 ;*******************************************
