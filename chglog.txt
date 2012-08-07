@@ -201,3 +201,13 @@ If BUSY is released, command is assumed to be completed, otherwise further proce
 !) fixed bug with missed call to MapError for AHCI ATAPI
 !) fixed bug with reading error status from improper place in AHCI ATAPI branch
 
+--
+2012.08.06 - v0.42h1
+
+*) several fixes for making compilers happy
+
+--
+2012.08.07 - v0.42h2
+
+*) several fixes for making compilers happy
+!) clarified use of SRB_STATUS_DATA_OVERRUN in AHCI branch

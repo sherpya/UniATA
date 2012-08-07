@@ -1190,11 +1190,11 @@ UniataAhciSendPIOCommand(
     UCHAR statusByte;
     PATA_REQ AtaReq;
     ULONG fis_size;
-    ULONG tag=0;
+    //ULONG tag=0;
     //PIDE_AHCI_CMD  AHCI_CMD = &(chan->AhciCtlBlock->cmd);
     PIDE_AHCI_CMD  AHCI_CMD = NULL;
 
-    PIDE_AHCI_CMD_LIST AHCI_CL = &(chan->AhciCtlBlock->cmd_list[tag]);
+    //PIDE_AHCI_CMD_LIST AHCI_CL = &(chan->AhciCtlBlock->cmd_list[tag]);
 
     KdPrint2((PRINT_PREFIX "UniataAhciSendPIOCommand: cntrlr %#x:%#x dev %#x, cmd %#x, lba %#I64x bcount %#x feature %#x, buff %#x, len %#x, WF %#x \n",
                  deviceExtension->DevIndex, lChannel, DeviceNumber, command, lba, bcount, feature, data, length, wait_flags ));

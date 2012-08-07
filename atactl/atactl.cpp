@@ -382,6 +382,12 @@ ata_mode_to_str(
     if(mode == ATA_SA150-1) {
         sprintf(str, "SATA");
     } else
+    if(mode > ATA_SA600) {
+        sprintf(str, "SATA-600+");
+    } else
+    if(mode >= ATA_SA600) {
+        sprintf(str, "SATA-600");
+    } else
     if(mode >= ATA_SA300) {
         sprintf(str, "SATA-300");
     } else
@@ -422,6 +428,12 @@ ata_str_to_mode(
     int mode;
     int len;
 
+    if(!_stricmp(str, "SATA600"))
+        return ATA_SA600;
+    if(!_stricmp(str, "SATA300"))
+        return ATA_SA300;
+    if(!_stricmp(str, "SATA150"))
+        return ATA_SA150;
     if(!_stricmp(str, "SATA"))
         return ATA_SA150;
 
@@ -650,7 +662,7 @@ ata_check_unit(
             
             if(l_dev_id == dev_id || dev_id == -1) {
 
-                if(!memcmp(&inquiryData->InquiryData[8], UNIATA_COMM_PORT_VENDOR_STR, 24)) {
+                if(!memcmp(&(inquiryData->InquiryData[8]), UNIATA_COMM_PORT_VENDOR_STR, 24)) {
                     // skip communication port
                     goto next_dev;
                 }
@@ -1246,12 +1258,12 @@ ata_bblk(
         print_help();
         return FALSE;
     }
-    if((dev_id >> 16) & 0xff == 0xff) {
+    if(((dev_id >> 16) & 0xff) == 0xff) {
         printf("\nERROR: Target device bus number (channel) must be specified with b:<bus id>\n\n");
         print_help();
         return FALSE;
     }
-    if((dev_id >> 8) & 0xff == 0xff) {
+    if(((dev_id >> 8) & 0xff) == 0xff) {
         printf("\nERROR: Target device ID must be specified with d:<device id>\n\n");
         print_help();
         return FALSE;

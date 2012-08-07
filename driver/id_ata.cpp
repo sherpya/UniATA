@@ -508,10 +508,11 @@ WaitOnBusy(
     ULONG i;
     UCHAR Status;
 
+    GetStatus(chan, Status);
     for (i=0; i<g_opt_WaitBusyCount; i++) {
-        GetStatus(chan, Status);
         if (Status & IDE_STATUS_BUSY) {
             AtapiStallExecution(g_opt_WaitBusyDelay);
+            GetStatus(chan, Status);
             continue;
         } else {
             break;
@@ -3917,7 +3918,7 @@ AtapiCheckInterrupt__(
     UCHAR dma_status = 0;
     UCHAR reg8 = 0;
     ULONG reg32 = 0;
-    UCHAR statusByte;
+    UCHAR statusByte = 0;
     ULONG slotNumber = deviceExtension->slotNumber;
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
     ULONG ChipFlags = deviceExtension->HwFlags & CHIPFLAG_MASK;
@@ -5017,16 +5018,21 @@ IntrPrepareResetController:
     KdPrint2((PRINT_PREFIX "AtapiInterrupt: i-reason=%d, status=%#x\n", interruptReason, statusByte));
     if(deviceExtension->HwFlags & UNIATA_AHCI) {
         KdPrint2((PRINT_PREFIX "  AHCI path, WordsTransfered %x, WordsLeft %x\n", AtaReq->WordsTransfered, AtaReq->WordsLeft));
-        if(chan->AhciLastIS & ATA_AHCI_P_IX_OF) {
-            status = SRB_STATUS_DATA_OVERRUN;
+/*        if(chan->AhciLastIS & ATA_AHCI_P_IX_OF) {
+            //status = SRB_STATUS_DATA_OVERRUN;
             DataOverrun = TRUE;
         } else {
             status = SRB_STATUS_SUCCESS;
-        }
+        }*/
         if(AtaReq->WordsTransfered >= AtaReq->WordsLeft) {
             AtaReq->WordsLeft = 0;
         } else {
             AtaReq->WordsLeft -= AtaReq->WordsTransfered;
+        }
+        if(AtaReq->WordsLeft) {
+            status = SRB_STATUS_DATA_OVERRUN;
+        } else {
+            status = SRB_STATUS_SUCCESS;
         }
         chan->ChannelCtrlFlags &= ~CTRFLAGS_DMA_OPERATION;
         goto CompleteRequest;
@@ -7624,13 +7630,8 @@ default_no_prep:
                     LunExt->IdentifyData.NumberOfHeads *
                     LunExt->IdentifyData.NumberOfCylinders;
             }
-            i--;
-
-            //((PREAD_CAPACITY_DATA)Srb->DataBuffer)->LogicalBlockAddress =
-            //    (((PUCHAR)&i)[0] << 24) |  (((PUCHAR)&i)[1] << 16) |
-            //    (((PUCHAR)&i)[2] << 8) | ((PUCHAR)&i)[3];
-
-            MOV_QD_SWP( ((PREAD_CAPACITY16_DATA)Srb->DataBuffer)->LogicalBlockAddress, i );
+            lba--;
+            MOV_QD_SWP( ((PREAD_CAPACITY16_DATA)Srb->DataBuffer)->LogicalBlockAddress, lba );
 
             KdPrint2((PRINT_PREFIX 
                        "** IDE disk %#x - #sectors %#x, #heads %#x, #cylinders %#x (16)\n",
