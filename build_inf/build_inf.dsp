@@ -103,6 +103,10 @@ SOURCE=.\SvcManLib.cpp
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
+SOURCE=..\driver\atapi.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\driver\bm_devs.h
 # End Source File
 # Begin Source File

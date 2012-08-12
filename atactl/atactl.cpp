@@ -46,6 +46,7 @@ int g_extended = 0;
 int g_adapter_info = 0;
 char* g_bb_list = NULL;
 int gRadix = 16;
+PADAPTERINFO g_AdapterInfo = NULL;
 
 void print_help() {
     printf("Usage:\n"
@@ -271,6 +272,14 @@ ata_send_ioctl(
         AtaCtl->addr.Length = sizeof(AtaCtl->addr);
     }
 
+    if(outBufferLength) {
+        if(addr) {
+            memset(&AtaCtl->RawData, 0, outBufferLength);
+        } else {
+            memset(&AtaCtl->addr, 0, outBufferLength);
+        }
+    }
+
     if(inBuffer && inBufferLength) {
         if(addr) {
             memcpy(&AtaCtl->RawData, inBuffer, inBufferLength);
@@ -307,81 +316,12 @@ ata_send_ioctl(
 IO_SCSI_CAPABILITIES g_capabilities;
 UCHAR g_inquiry_buffer[2048];
 
-int
-ata_is_sata(
-    PIDENTIFY_DATA ident
-    )
-{
-    return (ident->SataEnable && ident->SataEnable != 0xffff);
-}
-
-int
-ata_cur_mode_from_ident(
-    PIDENTIFY_DATA ident
-    )
-{
-    if(ata_is_sata(ident)) {
-        return ATA_SA150-1;
-    }
-
-    if (ident->UdmaModesValid) {
-        if (ident->UltraDMAActive & 0x40)
-            return ATA_UDMA0+6;
-        if (ident->UltraDMAActive & 0x20)
-            return ATA_UDMA0+5;
-        if (ident->UltraDMAActive & 0x10)
-            return ATA_UDMA0+4;
-        if (ident->UltraDMAActive & 0x08)
-            return ATA_UDMA0+3;
-        if (ident->UltraDMAActive & 0x04)
-            return ATA_UDMA0+2;
-        if (ident->UltraDMAActive & 0x02)
-            return ATA_UDMA0+1;
-        if (ident->UltraDMAActive & 0x01)
-            return ATA_UDMA0+0;
-    }
-
-    if (ident->MultiWordDMAActive & 0x04)
-        return ATA_WDMA0+2;
-    if (ident->MultiWordDMAActive & 0x02)
-        return ATA_WDMA0+1;
-    if (ident->MultiWordDMAActive & 0x01)
-        return ATA_WDMA0+0;
-
-    if (ident->SingleWordDMAActive & 0x04)
-        return ATA_SDMA0+2;
-    if (ident->SingleWordDMAActive & 0x02)
-        return ATA_SDMA0+1;
-    if (ident->SingleWordDMAActive & 0x01)
-        return ATA_SDMA0+0;
-
-    if (ident->PioTimingsValid) {
-        if (ident->AdvancedPIOModes & AdvancedPIOModes_5)
-            return ATA_PIO0+5;
-        if (ident->AdvancedPIOModes & AdvancedPIOModes_4)
-            return ATA_PIO0+4;
-        if (ident->AdvancedPIOModes & AdvancedPIOModes_3) 
-            return ATA_PIO0+3;
-    }        
-    if (ident->PioCycleTimingMode == 2)
-        return ATA_PIO0+2;
-    if (ident->PioCycleTimingMode == 1)
-        return ATA_PIO0+1;
-    if (ident->PioCycleTimingMode == 0)
-        return ATA_PIO0+0;
-
-    return ATA_PIO;
-} // end ata_cur_mode_from_ident()
-
 void
 ata_mode_to_str(
     char* str,
     int mode
     )
 {
-    if(mode == ATA_SA150-1) {
-        sprintf(str, "SATA");
-    } else
     if(mode > ATA_SA600) {
         sprintf(str, "SATA-600+");
     } else
@@ -641,10 +581,34 @@ ata_check_unit(
         return FALSE;
     }
 
+    // Note: adapterInfo->NumberOfBuses is 1 greater than g_AdapterInfo->NumberChannels
+    // because of virtual communication port
     adapterInfo = (PSCSI_ADAPTER_BUS_INFO)g_inquiry_buffer;
-    for (i = 0; i < adapterInfo->NumberOfBuses; i++) {
+    for (i = 0; i+1 < adapterInfo->NumberOfBuses; i++) {
         inquiryData = (PSCSI_INQUIRY_DATA) (g_inquiry_buffer +
             adapterInfo->BusData[i].InquiryDataOffset);
+
+        if(g_extended && g_AdapterInfo && g_AdapterInfo->ChanHeaderLengthValid &&
+              g_AdapterInfo->NumberChannels < i) {
+            PCHANINFO ChanInfo;
+
+            ChanInfo = (PCHANINFO)
+                         (((PCHAR)g_AdapterInfo)+
+                            sizeof(ADAPTERINFO)+
+                            g_AdapterInfo->ChanHeaderLength*i);
+
+            io_mode = ChanInfo->MaxTransferMode;
+            if(io_mode != -1) {
+                ata_mode_to_str(mode_str, io_mode);
+            } else {
+                mode_str[0] = 0;
+            }
+            printf(" b%u [%s]\n",
+                i,
+                mode_str
+                );
+        }
+
         while (adapterInfo->BusData[i].InquiryDataOffset) {
             /*
             if(dev_id/adapterInfo->BusData[i].NumberOfLogicalUnits ==
@@ -672,7 +636,7 @@ ata_check_unit(
                 if(inquiryData->Lun) {
                     sprintf(lun_str, ":l%d", inquiryData->Lun);
                 } else {
-                    sprintf(lun_str, "  ", inquiryData->Lun);
+                    sprintf(lun_str, "  ");
                 }
 
 
@@ -686,14 +650,17 @@ ata_check_unit(
                 addr.PathId   = inquiryData->PathId;
                 addr.TargetId = inquiryData->TargetId;
                 addr.Lun      = inquiryData->Lun;
-                status = ata_send_ioctl(h, &addr, "-UNIATA-",
+                status = ata_send_ioctl(h, &addr, (PCHAR)"-UNIATA-",
                                         IOCTL_SCSI_MINIPORT_UNIATA_GET_MODE,
                                         NULL, 0,
                                         &IoMode, sizeof(IoMode),
                                         &returned);
                 if(status) {
                     //io_mode = min(IoMode.CurrentMode, IoMode.MaxMode);
-                    io_mode = min(max(IoMode.CurrentMode,IoMode.OrigMode),IoMode.MaxMode);
+                    io_mode = IoMode.PhyMode;
+                    if(!io_mode) {
+                        io_mode = min(max(IoMode.CurrentMode,IoMode.OrigMode),IoMode.MaxMode);
+                    }
                 } else {
                     io_mode = -1;
                 }
@@ -705,7 +672,7 @@ ata_check_unit(
                 // probably, we shall change this in future to support SATA splitters
                 pin.bDriveNumber = inquiryData->PathId*2+inquiryData->TargetId;
 
-                status = ata_send_ioctl(h, NULL, "SCSIDISK",
+                status = ata_send_ioctl(h, NULL, (PCHAR)"SCSIDISK",
                                         IOCTL_SCSI_MINIPORT_IDENTIFY,
                                         &pin, sizeof(pin),
                                         buff, sizeof(buff),
@@ -719,7 +686,7 @@ ata_check_unit(
                     // probably, we shall change this in future to support SATA splitters
                     pin.bDriveNumber = inquiryData->PathId*2+inquiryData->TargetId;
 
-                    status = ata_send_ioctl(h, NULL, "SCSIDISK",
+                    status = ata_send_ioctl(h, NULL, (PCHAR)"SCSIDISK",
                                             IOCTL_SCSI_MINIPORT_IDENTIFY,
                                             &pin, sizeof(pin),
                                             buff, sizeof(buff),
@@ -729,7 +696,7 @@ ata_check_unit(
 
                 if(status) {
                     if(!g_extended) {
-                        printf("  b%d:d%d%s    %24.24s %4.4s ",
+                        printf("  b%u:d%d%s    %24.24s %4.4s ",
                             i,
                             inquiryData->TargetId,
                             lun_str,
@@ -738,7 +705,7 @@ ata_check_unit(
                             (g_extended ? (PUCHAR)"" : &inquiryData->InquiryData[8+24])
                             );
                     } else {
-                        printf("  b%d:d%d%s ",
+                        printf("  b%u:d%d%s ",
                             i,
                             inquiryData->TargetId,
                             lun_str
@@ -827,27 +794,27 @@ ata_check_unit(
 
                     if(BlockMode_valid) {
                         if(ident->MaximumBlockTransfer) {
-                            printf("    Multi-block mode:        %d block%s\n", ident->MaximumBlockTransfer, ident->MaximumBlockTransfer == 1 ? "" : "s");
+                            printf("    Multi-block mode:        %u block%s\n", ident->MaximumBlockTransfer, ident->MaximumBlockTransfer == 1 ? "" : "s");
                         } else {
                             printf("    Multi-block mode:        N/A\n");
                         }
                     }
                     if(print_geom) {
-                        printf("    C/H/S:                   %d/%d/%d \n", chs[0], chs[1], chs[2]);
-                        printf("    LBA:                     %d \n", max_lba);
+                        printf("    C/H/S:                   %u/%u/%u \n", chs[0], chs[1], chs[2]);
+                        printf("    LBA:                     %I64u \n", max_lba);
                         if(max_lba < 2) {
-                            printf("    Size:                    %d kb\n", max_lba/2);
+                            printf("    Size:                    %u kb\n", max_lba/2);
                         } else
                         if(max_lba < 2*1024*1024) {
-                            printf("    Size:                    %d Mb\n", max_lba/2048);
+                            printf("    Size:                    %u Mb\n", max_lba/2048);
                         } else
                         if(max_lba < (ULONG)2*1024*1024*1024) {
-                            printf("    Size:                    %d.%d (%d) Gb\n", (ULONG)(max_lba/2048/1024),
+                            printf("    Size:                    %u.%u (%u) Gb\n", (ULONG)(max_lba/2048/1024),
                                                                               (ULONG)(((max_lba/2048)%1024)/10),
                                                                               (ULONG)(max_lba*512/1000/1000/1000)
                             );
                         } else {
-                            printf("    Size:                    %d.%d (%d) Tb\n", (ULONG)(max_lba/2048/1024/1024),
+                            printf("    Size:                    %u.%u (%u) Tb\n", (ULONG)(max_lba/2048/1024/1024),
                                                                               (ULONG)((max_lba/2048/1024)%1024)/10,
                                                                               (ULONG)(max_lba*512/1000/1000/1000)
                             );
@@ -889,12 +856,13 @@ ata_adapter_info(
 {
     char dev_name[64];
     HANDLE h;
-    ADAPTERINFO AdapterInfo;
+    PADAPTERINFO AdapterInfo;
     ULONG status;
     ULONG returned;
     SCSI_ADDRESS addr;
     PCI_SLOT_NUMBER       slotData;
     char mode_str[12];
+    ULONG len;
 
     sprintf(dev_name, "\\\\.\\Scsi%d:", bus_id);
     h = ata_open_dev(dev_name);
@@ -902,38 +870,52 @@ ata_adapter_info(
         return FALSE;
     addr.PortNumber = bus_id;
 
-    memset(&AdapterInfo, 0, sizeof(AdapterInfo));
+    len = sizeof(ADAPTERINFO)+sizeof(CHANINFO)*AHCI_MAX_PORT;
+    if(!g_AdapterInfo) {
+        AdapterInfo = (PADAPTERINFO)GlobalAlloc(GMEM_FIXED, len);
+        if(!AdapterInfo) {
+            return FALSE;
+        }
+    } else {
+        AdapterInfo = g_AdapterInfo; 
+    }
+    memset(AdapterInfo, 0, len);
 
-    status = ata_send_ioctl(h, &addr, "-UNIATA-",
+    status = ata_send_ioctl(h, &addr, (PCHAR)"-UNIATA-",
                             IOCTL_SCSI_MINIPORT_UNIATA_ADAPTER_INFO,
-                            &AdapterInfo, sizeof(AdapterInfo),
-                            &AdapterInfo, sizeof(AdapterInfo),
+                            AdapterInfo, len,
+                            AdapterInfo, len,
                             &returned);
     if(status) {
-        ata_mode_to_str(mode_str, AdapterInfo.MaxTransferMode);
+        ata_mode_to_str(mode_str, AdapterInfo->MaxTransferMode);
     }
     printf("Scsi%d: %s     %s\n", bus_id, status ? "[UniATA]" : "", status ? mode_str : "");
     if(print_info) {
         if(!status) {
             printf("Can't get adapter info\n");
         } else {
-            if(AdapterInfo.AdapterInterfaceType == PCIBus) {
-                slotData.u.AsULONG = AdapterInfo.slotNumber;
-                printf("  PCI Bus/Dev/Func:   %d/%d/%d%s\n",
-                    AdapterInfo.SystemIoBusNumber, slotData.u.bits.DeviceNumber, slotData.u.bits.FunctionNumber,
-                    AdapterInfo.AdapterInterfaceType == AdapterInfo.OrigAdapterInterfaceType ? "" : " (ISA-Bridged)");
-                printf("  VendorId/DevId/Rev: %#04x/%#04x/%#02x\n", AdapterInfo.DevID >> 16, AdapterInfo.DevID & 0xffff, AdapterInfo.RevID);
-                if(AdapterInfo.DeviceName[0]) {
-                    printf("  Name:               %s\n", AdapterInfo.DeviceName);
+            if(AdapterInfo->AdapterInterfaceType == PCIBus) {
+                slotData.u.AsULONG = AdapterInfo->slotNumber;
+                printf("  PCI Bus/Dev/Func:   %u/%u/%u%s\n",
+                    AdapterInfo->SystemIoBusNumber, slotData.u.bits.DeviceNumber, slotData.u.bits.FunctionNumber,
+                    AdapterInfo->AdapterInterfaceType == AdapterInfo->OrigAdapterInterfaceType ? "" : " (ISA-Bridged)");
+                printf("  VendorId/DevId/Rev: %#04x/%#04x/%#02x\n",
+                    (USHORT)(AdapterInfo->DevID >> 16),
+                    (USHORT)(AdapterInfo->DevID & 0xffff),
+                    (UCHAR)(AdapterInfo->RevID));
+                if(AdapterInfo->DeviceName[0]) {
+                    printf("  Name:               %s\n", AdapterInfo->DeviceName);
                 }
             } else
-            if(AdapterInfo.AdapterInterfaceType == Isa) {
+            if(AdapterInfo->AdapterInterfaceType == Isa) {
                 printf("  ISA Bus\n");
             }
-            printf("  IRQ: %d\n", AdapterInfo.BusInterruptLevel);
+            printf("  IRQ: %d\n", AdapterInfo->BusInterruptLevel);
         }
     }
     ata_close_dev(h);
+    //GlobalFree(AdapterInfo);
+    g_AdapterInfo = AdapterInfo;
     return status ? TRUE : FALSE;
 } // end ata_adapter_info()
 
@@ -1021,7 +1003,7 @@ ata_mode(
 //    IoMode.ApplyImmediately = TRUE;
     IoMode.OrigMode = mode;
 
-    status = ata_send_ioctl(h, &addr, "-UNIATA-",
+    status = ata_send_ioctl(h, &addr, (PCHAR)"-UNIATA-",
                             IOCTL_SCSI_MINIPORT_UNIATA_SET_MAX_MODE,
                             &IoMode, sizeof(IoMode),
                             NULL, 0,
@@ -1119,7 +1101,7 @@ ata_hide(
     if(lock) {
         printf("ATTENTION: you have %d seconds to disconnect cable\n", lock);
     }
-    status = ata_send_ioctl(h, &addr, "-UNIATA-",
+    status = ata_send_ioctl(h, &addr, (PCHAR)"-UNIATA-",
                             IOCTL_SCSI_MINIPORT_UNIATA_DELETE_DEVICE,
                             &to, sizeof(to),
                             NULL, 0,
@@ -1169,7 +1151,7 @@ ata_scan(
         if(lock) {
             printf("You have %d seconds to connect device.\n", lock);
         }
-        status = ata_send_ioctl(h, &addr, "-UNIATA-",
+        status = ata_send_ioctl(h, &addr, (PCHAR)"-UNIATA-",
                                 IOCTL_SCSI_MINIPORT_UNIATA_FIND_DEVICES,
                                 &to, sizeof(to),
                                 NULL, 0,
@@ -1314,7 +1296,7 @@ ata_bblk(
         addr.TargetId = (UCHAR)(dev_id >> 8);
         addr.Lun      = (UCHAR)(dev_id);
 
-        status = ata_send_ioctl(h, &addr, "-UNIATA-",
+        status = ata_send_ioctl(h, &addr, (PCHAR)"-UNIATA-",
                                 IOCTL_SCSI_MINIPORT_UNIATA_RESETBB,
                                 NULL, 0,
                                 NULL, 0,
@@ -1380,7 +1362,7 @@ ata_bblk(
             }
             k = k0;
             if(radix == 10) {
-                b = sscanf(BB_Msg+k, "%I64d\t%I64d", &tmp_bb_lba, &tmp_bb_len);
+                b = sscanf(BB_Msg+k, "%I64u\t%I64u", &tmp_bb_lba, &tmp_bb_len);
             } else {
                 b = sscanf(BB_Msg+k, "%I64x\t%I64x", &tmp_bb_lba, &tmp_bb_len);
             }
@@ -1489,7 +1471,7 @@ ata_bblk(
         while(len >= sizeof(LONGLONG)*2) {
             tmp_bb_lba = ((LONGLONG*)bblist)[i*2+0];
             tmp_bb_len = ((LONGLONG*)bblist)[i*2+1] - tmp_bb_lba;
-            b = sprintf(BB_Msg, "%I64x\t%I64x\n", tmp_bb_lba, tmp_bb_len);
+            b = sprintf(BB_Msg, "%I64u\t%I64u\n", tmp_bb_lba, tmp_bb_len);
             WriteFile(hf, BB_Msg, b, &returned, NULL);
             i++;
             len -= sizeof(LONGLONG)*2;
@@ -1658,7 +1640,7 @@ main (
                 j = strlen(argv[i])-1;
                 break;
             case 'd' :
-                if(cmd && cmd != CMD_ATA_FIND && cmd != CMD_ATA_HIDE) {
+                if(cmd && (cmd != CMD_ATA_FIND) && (cmd != CMD_ATA_HIDE)) {
                     print_help();
                 }
                 i++;
@@ -1705,12 +1687,12 @@ main (
         d_dev = 127;
         l_dev = 127;
     } else
-    if(d_dev == -1 && b_dev != -1) {
+    if((d_dev == -1) && (b_dev != -1)) {
         d_dev = 127;
         l_dev = 127;
     }
 
-    if(d_dev != -1 && b_dev != -1) {
+    if((d_dev != -1) && (b_dev != -1)) {
         dev_id = (b_dev << 16) | (d_dev << 8) | l_dev;
     }
     if(cmd == CMD_ATA_LIST) {

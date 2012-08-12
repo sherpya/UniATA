@@ -68,8 +68,24 @@ UniataSataConnect(
         if(SStatus.SPD == SStatus_SPD_Gen1 ||
            SStatus.SPD == SStatus_SPD_Gen2 ||
            SStatus.SPD == SStatus_SPD_Gen3) {
+            // SATA sets actual transfer rate in LunExt on init.
+            // There is no run-time SATA rate adjustment yet.
+            // On the other hand, we may turn SATA device in PIO mode
+            // TODO: make separate states for interface speed and transfer mode (DMA vs PIO)
+            chan->lun[0]->LimitedTransferMode =
+            chan->lun[0]->PhyTransferMode =
             chan->lun[0]->TransferMode = ATA_SA150 + (UCHAR)(SStatus.SPD - 1);
+
             KdPrint2((PRINT_PREFIX "SATA TransferMode %#x\n", chan->lun[0]->TransferMode));
+            if(chan->MaxTransferMode < chan->lun[0]->TransferMode) {
+                KdPrint2((PRINT_PREFIX "SATA upd chan TransferMode\n"));
+                chan->MaxTransferMode = chan->lun[0]->TransferMode;
+            }
+            if(deviceExtension->MaxTransferMode < chan->lun[0]->TransferMode) {
+                KdPrint2((PRINT_PREFIX "SATA upd controller TransferMode\n"));
+                deviceExtension->MaxTransferMode = chan->lun[0]->TransferMode;
+            }
+
             break;
         }
         AtapiStallExecution(10000);
@@ -664,6 +680,9 @@ UniataAhciInit(
     BaseMemAddress = deviceExtension->BaseIoAHCI_0.Addr;
     MemIo          = deviceExtension->BaseIoAHCI_0.MemIo;
 
+    deviceExtension->MaxTransferMode = ATA_SA150+(((CAP & AHCI_CAP_ISS_MASK) >> 20)-1);
+    KdPrint2((PRINT_PREFIX "  SATA Gen %d\n", ((CAP & AHCI_CAP_ISS_MASK) >> 20) ));
+
     for(c=0; c<deviceExtension->NumberChannels; c++) {
         chan = &deviceExtension->chan[c];
         offs = sizeof(IDE_AHCI_REGISTERS) + c*sizeof(IDE_AHCI_PORT_REGISTERS);
@@ -825,6 +844,7 @@ UniataAhciDetect(
     KdPrint2((PRINT_PREFIX "  AHCI version %#x.%02x controller with %d ports (mask %#x) detected\n",
 		  v_Mj, v_Mn,
 		  NumberChannels, PI));
+    KdPrint(("  AHCI SATA Gen %d\n", (((CAP & AHCI_CAP_ISS_MASK) >> 20)) ));
 
     if(CAP & AHCI_CAP_SPM) {
         KdPrint2((PRINT_PREFIX "  PM supported\n"));
@@ -865,7 +885,7 @@ UniataAhciDetect(
     deviceExtension->DmaSegmentAlignmentMask = -1; // no restrictions
 
     deviceExtension->BusMaster = DMA_MODE_AHCI;
-    deviceExtension->MaxTransferMode = max(deviceExtension->MaxTransferMode, ATA_SA150);
+    deviceExtension->MaxTransferMode = max(deviceExtension->MaxTransferMode, ATA_SA150+(((CAP & AHCI_CAP_ISS_MASK) >> 20)-1) );
 
     return TRUE;
 } // end UniataAhciDetect()

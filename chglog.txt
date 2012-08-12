@@ -211,3 +211,82 @@ If BUSY is released, command is assumed to be completed, otherwise further proce
 
 *) several fixes for making compilers happy
 !) clarified use of SRB_STATUS_DATA_OVERRUN in AHCI branch
+
+--
+2012.08.07 - v0.42i
+
+!) fixes for SATA TransferRate report/detect
+*) added auto-update of controller MaxTransferMode according to actual established SATA transfer rate.
+This is done for incorrectly claimed controllers,
++) added AHCI controller max. transfer rate detect.
+
+--
+2012.08.07 - v0.42i1
+
+*) several fixes for making compilers happy
+
+--
+2012.08.07 - v0.42i2
+
+!) fix for uninitialized DMA PRD in SATA ATAPI branch
+*) added more logs to find why on some ICHxxx debug version with attached debugger crashes
+on controller reset (chan pointer gets damaged)
+
+--
+2012.08.08 - v0.42i3
+
+!) fixes for SATA speed reporting and representation. Doesn't affect actual interface speed.
+!) added minimum buffer size check in UNIATA IOCTL. TODO: perform such check in each IOCTL branch.
+
+--
+2012.08.09 - v0.42i4
+
+*) minor update in AtapiSoftReset timings, need to fix problem with possible late BUSY after RESET.
+
+--
+2012.08.09 - v0.42j
+
+*) artificially broken to cause BusReset and find where chan pointer gets damaged
+
+--
+2012.08.09 - v0.42i5
+
+!) rewrittem code for SRB_STATUS_DATA_OVERRUN reporting. Now check is performed in single place
+on CompleteRequest.
+*) transfer mode reporting is updated
+
+--
+2012.08.09 - v0.42i6
+
++) added PhyMode to LunExt and GETMODE. This value reflects actual bus transfer rate. Is used by atactl.
+*) rewritten OrigTransferMode behavior. Now it exactly reports maximum supported by device transfer rate.
+*) Ident -> MaxTransferMode code is moved to atapi.h and commonly used in both uniata and atactl
+*) transfer rate definition constants are moved to atapi.h
+
+--
+2012.08.09 - v0.42i7
+
+*) added zero-filling of output buffer in atactl before calling IOCTL
+
+--
+2012.08.11 - v0.43
+
++) added buffer size check to all UniATA IOCTLs
+*) added channel info option to AdapterInfo IOCTL
+!) fixed bug with Physical/Logical channel numbering for Legacy controllers in
+AtapiChipInit()
+*) clarified HwRes check code (80-pin detection)
++) channel transfer mode reporting to atactl -lx for controllers those have physically different channels
+
+--
+2012.08.11 - v0.43a
+
+!) fixed bug with buffer overflow in AdapterInfo IOCTL
+!) removed via_cable80(), since it doesn't actually work
+!) fixed bug with wrong channel info offset in AdapterInfo IOCTL
+
+--
+2012.08.12 - v0.43a1
+
+!) fixed bugs with AdapterInfo IOCTL handling
+

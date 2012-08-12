@@ -35,6 +35,7 @@ Revision History:
 #include <windows.h>
 #include <stdio.h>
 #include <time.h>
+#include "..\driver\atapi.h"
 #include "..\driver\bm_devs.h"
 #include "..\driver\uniata_ver.h"
 #include "..\..\..\PCIDump\Head\Driver\PCIDump.h"
