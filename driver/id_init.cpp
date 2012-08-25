@@ -178,6 +178,7 @@ UniataChipDetectChannels(
             KdPrint2((PRINT_PREFIX "New ITE PATA 1 chan\n"));
         }
         break;
+#if 0
     case ATA_INTEL_ID:
         /* New Intel PATA controllers */
         if(g_opt_VirtualMachine != VM_VBOX &&
@@ -193,6 +194,7 @@ UniataChipDetectChannels(
             KdPrint2((PRINT_PREFIX "New Intel PATA 1 chan\n"));
         }
         break;
+#endif // this code is removed from newer FreeBSD
     case ATA_JMICRON_ID:
         /* New JMicron PATA controllers */
         if(deviceExtension->DevID == ATA_JMB361 ||
@@ -1468,6 +1470,27 @@ UniAtaReadLunConfig(
     tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, DeviceNumber, L"PreferedTransferMode", 0xffffffff);
     LunExt->opt_PreferedTransferMode = tmp32;
 
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, DeviceNumber, L"AdvancedPowerMode", ATA_C_F_APM_CNT_MIN_NO_STANDBY);
+    if(tmp32 > 0xfe) {
+        tmp32 = 0xfe; // max. performance
+    }
+    LunExt->opt_AdvPowerMode = (UCHAR)tmp32;
+
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, DeviceNumber, L"AcousticMgmt", ATA_C_F_AAM_CNT_MAX_POWER_SAVE);
+    if(tmp32 > 0xfe) {
+        tmp32 = 0xfe; // max. performance
+    } else
+    if(tmp32 < 0x80) {
+        tmp32 = 0x0; // disable feature
+    }
+    LunExt->opt_AcousticMode = (UCHAR)tmp32;
+
+    tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, DeviceNumber, L"StandbyTimer", 0);
+    if(tmp32 == 0xfe) {
+        tmp32 = 0xff;
+    }
+    LunExt->opt_StandbyTimer = (UCHAR)tmp32;
+
     tmp32 = AtapiRegCheckDevValue(deviceExtension, channel, DeviceNumber, L"ReadOnly", 0);
     if(tmp32 <= 2) {
         LunExt->opt_ReadOnly = (UCHAR)tmp32;
@@ -1778,6 +1801,14 @@ AtapiChipInit(
                 KdPrint2((PRINT_PREFIX "Base init\n"));
                 /* force all ports active "the legacy way" */
                 ChangePciConfig2(0x92, (a | 0x0f));
+
+                if(deviceExtension->BaseIoAddressSATA_0.Addr && (ChipFlags & ICH7)) {
+                    /* Set SCRAE bit to enable registers access. */
+                    ChangePciConfig4(0x94, (a | (1 << 9)));
+                    /* Set Ports Implemented register bits. */
+                    AtapiWritePortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0), 0x0c,
+                         AtapiReadPortEx4(NULL, (ULONGIO_PTR)(&deviceExtension->BaseIoAddressSATA_0), 0x0c) | 0xff);
+                }
                 /* enable PCI interrupt */
                 ChangePciConfig2(/*PCIR_COMMAND*/0x04, (a & ~0x0400));
 
@@ -1875,7 +1906,12 @@ AtapiChipInit(
         } else {
             chan = &deviceExtension->chan[c];
             GetPciConfig2(0x54, reg54);
-            if( ((reg54 >> (channel*2)) & 30) != 30) {
+            KdPrint2((PRINT_PREFIX " intel 80-pin check (reg54=%x)\n", reg54));
+            if(reg54 == 0x0000 || reg54 == 0xffff) {
+                KdPrint2((PRINT_PREFIX " check failed (not supported)\n"));
+            } else
+            if( ((reg54 >> (channel*2)) & 30) == 0) {
+                KdPrint2((PRINT_PREFIX " intel 40-pin\n"));
                 chan->MaxTransferMode = min(deviceExtension->MaxTransferMode, ATA_UDMA2);
             }
         }
@@ -2238,6 +2274,8 @@ AtapiChipInit(
             // no init for SATA
             if(ChipFlags & (UNIATA_SATA | VIASATA)) {
                 if((ChipFlags & VIABAR) && (c >= 2)) {
+                    // this is PATA channel
+                    chan->MaxTransferMode = ATA_UDMA5;
                     break;
                 }
                 UniataSataWritePort4(chan, IDX_SATA_SError, 0xffffffff, 0);

@@ -1394,8 +1394,9 @@ UniataFindBusMasterController(
     }
     if((WinVer_Id() > WinVer_2k) ||
        (ConfigInfo->Length >= sizeof(_ConfigInfo->comm) + sizeof(_ConfigInfo->nt4) + sizeof(_ConfigInfo->w2k))) {
-        KdPrint2((PRINT_PREFIX "update ConfigInfo->w2k\n"));
-        _ConfigInfo->w2k.Dma64BitAddresses           = 0;
+        KdPrint2((PRINT_PREFIX "update ConfigInfo->w2k: 64bit %d\n",
+            deviceExtension->Host64));
+        _ConfigInfo->w2k.Dma64BitAddresses           = deviceExtension->Host64;
         _ConfigInfo->w2k.ResetTargetSupported        = TRUE;
         _ConfigInfo->w2k.MaximumNumberOfLogicalUnits = (UCHAR)deviceExtension->NumberLuns;
     }
@@ -1410,6 +1411,12 @@ UniataFindBusMasterController(
                                         = ConfigInfo->AdapterInterfaceType;
     deviceExtension->AlignmentMask      = ConfigInfo->AlignmentMask;
     deviceExtension->AdapterInterfaceType = PCIBus;
+
+    KdPrint2((PRINT_PREFIX "chan[%d] InterruptMode: %d, Level %d, Vector %d\n",
+        channel,
+        ConfigInfo->InterruptMode,
+        ConfigInfo->BusInterruptLevel,
+        ConfigInfo->BusInterruptVector));
 
     found = FALSE;
 
@@ -2906,6 +2913,10 @@ CheckDevice(
         }
     }
     LunExt = chan->lun[deviceNumber];
+
+    if(ResetDev) {
+        LunExt->PowerState = 0;
+    }
 
     if(ResetDev && (deviceExtension->HwFlags & UNIATA_AHCI)) {
         KdPrint2((PRINT_PREFIX "CheckDevice: reset AHCI dev\n"));

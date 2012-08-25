@@ -562,9 +562,9 @@ typedef struct _IDE_AHCI_PORT_REGISTERS {
         ULONG Reg;           // signature
         struct {
             UCHAR SectorCount;
-            UCHAR LbaLow;
-            UCHAR LbaMid;
-            UCHAR LbaHigh;
+            UCHAR LbaLow;       // IDX_IO1_i_BlockNumber
+            UCHAR LbaMid;       // IDX_IO1_i_CylinderLow
+            UCHAR LbaHigh;      // IDX_IO1_i_CylinderHigh
         };
     } SIG;  // 0x100 + 0x80*c + 0x0024
     union {
@@ -1060,6 +1060,7 @@ typedef struct _HW_CHANNEL {
 #define CTRFLAGS_DSC_BSY                0x0080
 #define CTRFLAGS_NO_SLAVE               0x0100
 //#define CTRFLAGS_PATA                   0x0200
+//#define CTRFLAGS_NOT_PRESENT            0x0200
 #define CTRFLAGS_AHCI_PM                0x0400
 #define CTRFLAGS_AHCI_PM2               0x0800
 
@@ -1086,7 +1087,7 @@ typedef struct _HW_LU_EXTENSION {
     BOOLEAN        DWordIO;        // Indicates use of 32-bit PIO
     UCHAR          ReturningMediaStatus;
     UCHAR          MaximumBlockXfer;
-    UCHAR          Padding0[1];    // padding
+    UCHAR          PowerState;
 
     UCHAR          TransferMode;          // current transfer mode
     UCHAR          LimitedTransferMode;   // user-defined or IDE cable limitation
@@ -1117,8 +1118,10 @@ typedef struct _HW_LU_EXTENSION {
     BOOLEAN        opt_ReadCacheEnable;
     BOOLEAN        opt_WriteCacheEnable;
     UCHAR          opt_ReadOnly;
-    // padding
-    BOOLEAN        opt_reserved[1];
+    UCHAR          opt_AdvPowerMode;
+    UCHAR          opt_AcousticMode;
+    UCHAR          opt_StandbyTimer;
+    UCHAR          opt_Padding[2]; // padding
 
     struct _SBadBlockListItem* bbListDescr;
     struct _SBadBlockRange* arrBadBlocks;
@@ -1238,6 +1241,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     IORES          BaseIoAHCI_0;
     //PIDE_AHCI_PORT_REGISTERS  BaseIoAHCIPort[AHCI_MAX_PORT];
     ULONG          AHCI_CAP;
+    ULONG          AHCI_PI;
     PATA_REQ       AhciInternalAtaReq0;
     PSCSI_REQUEST_BLOCK AhciInternalSrb0;
 

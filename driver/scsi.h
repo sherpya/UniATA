@@ -392,12 +392,21 @@ typedef union _CDB {
         UCHAR Immediate: 1;
         UCHAR Reserved1 : 4;
         UCHAR Lun : 3;
-        UCHAR Reserved2[2];
+        UCHAR Reserved2;
+        UCHAR FormatLayerNumber : 2;
+        UCHAR Reserved2_2 : 6;
         UCHAR Start : 1;
         UCHAR LoadEject : 1;
-        UCHAR Reserved3 : 6;
+        UCHAR FL : 1;
+        UCHAR Reserved3 : 1;
+        UCHAR PowerConditions : 4;
         UCHAR Control;
     } START_STOP, *PSTART_STOP;
+
+#define StartStop_Power_NoChg    0x00
+#define StartStop_Power_Idle     0x02
+#define StartStop_Power_Standby  0x03
+#define StartStop_Power_Sleep    0x05
 
     struct _MEDIA_REMOVAL {
         UCHAR OperationCode;
@@ -1393,6 +1402,9 @@ typedef struct _SENSE_DATA {
 #define IOCTL_SCSI_MINIPORT_ENABLE_DISABLE_AUTOSAVE ((FILE_DEVICE_SCSI << 16) + 0x0507)
 #define IOCTL_SCSI_MINIPORT_SAVE_ATTRIBUTE_VALUES   ((FILE_DEVICE_SCSI << 16) + 0x0508)
 #define IOCTL_SCSI_MINIPORT_EXECUTE_OFFLINE_DIAGS   ((FILE_DEVICE_SCSI << 16) + 0x0509)
+#define IOCTL_SCSI_MINIPORT_ENABLE_DISABLE_AUTO_OFFLINE ((FILE_DEVICE_SCSI << 16) + 0x050a)
+#define IOCTL_SCSI_MINIPORT_READ_SMART_LOG              ((FILE_DEVICE_SCSI << 16) + 0x050b)
+#define IOCTL_SCSI_MINIPORT_WRITE_SMART_LOG             ((FILE_DEVICE_SCSI << 16) + 0x050c)
 
 // Read Capacity Data - returned in Big Endian format
 

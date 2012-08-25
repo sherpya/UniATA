@@ -1,4 +1,5 @@
 *) minor change
+o) optimization
 +) feature added
 -) something removed
 !) fix
@@ -289,4 +290,110 @@ AtapiChipInit()
 2012.08.12 - v0.43a1
 
 !) fixed bugs with AdapterInfo IOCTL handling
++) experimental ATA_PASS_THROUGH handling for AHCI
 
+--
+2012.08.14 - v0.43b
+
++) added AHCI enable code for chipsets, those have GHC_AE disabled by default
++) added MSI reset workaround code.
+*) MaxTransferMode is now checked against channel-specific value
+instead of controller-specific one
+*) merged ICH7 related updates from FreerBSD, e.g. operations with 0x94 DWORD register
+and SATA BAR+0x0C DWORD register
+*) removed unnecessary I1CH flag, indicating single channel controllers
+
+--
+2012.08.16 - v0.43c
+
++) implemented SCSIOP_START_STOP_UNIT Immediate, StartStop flag and PowerCondition handling.
+ATA IDLE, SLEEP (power down) and STANDBY (stop spindel) commands are used.
+Device is returned from Sleep stete via HardReset
+PowerState variable is added to LunExt to track expected power state of the device.
+*) merged atactl compiler warning fixes from ReactOS (bug 7243)
+*) changed intel 40/80-pin cable check
+
+--
+2012.08.16 - v0.43c1
+
++) added AdvancedPowerMode registry option.
+0 - disable
+1 - min perf with standby
+0x80 - min perf. w/o standby
+0xfe - max performance (default)
++) added AcousticMgmt registry option
+0 - disable
+0x80 - min acoustic level
+0xfe - max performance (default)
++) added IDLE/STANDBY timer init
+Note: some devices have non-zero default timer value (used when timer is disabled).
+Value of 0xfd is recommended in such case (max. possible, between 8 and 12 hours, vendor spec.)
+
+--
+2012.08.17 - v0.43c2
+
+!) fixed bug with possible crash when chan pointer becomes NULL in AtapiStartIo.
+Happened when smartctl (from smartmontools) send IDENTIFY to non-existent or communication channel.
+!) fixed bug with improper device type check in ATA_PASS_THROUGH branch (checked for SATA instead of AHCI).
+This caused crash with smartctl
+!) fixed bug with 40/80-pin cable check on drives those do not report valid HwRes
+*) updates (clarification) of DriveNumber meaning in SMART/IDENTIFY IOCTLs
+
+--
+2012.08.18 - v0.43c3
+
+!) fixed bug with confused Active and Supported modes from IDENTIFY. Bug caused drive to be limited to BIOS-selected
+transfer rate instead of maxumum available.
+*) implemented adaptive algorithm of handling DriveNumber in SMART IOCTLs to make smartctl happy.
+When invalid PathId/TargetId comes, if adapter has only 1 channel is is treated as primary or secondary IDE.
+Otherwise valid PathId/TargetId required.
+Note: Due to design bug in DISK.SYS (it doesn't send PathId down for IOCTLs) management tools should
+open ScsiPort%d instead of PhysicalDrive%d when possible and send IOCTL to proper SCSI address.
+
+--
+2012.08.18 - v0.43c4
+
+*) implemented IDENTIFY checksum adjustment to make smartctl happy
++) added power management options to atactl
+o) completly rewritten and unified SCSI address extraction code in SMART IOCTLs
+
+--
+2012.08.18 - v0.43c5
+
+!) fixed bug with reference to uninitialized chan pointer in SCSI address extraction code in SMART IOCTLs
++) added new SMART IOCTLs to make smartctl happy (used for SCT):
+ IOCTL_SCSI_MINIPORT_ENABLE_DISABLE_AUTO_OFFLINE
+ IOCTL_SCSI_MINIPORT_READ_SMART_LOG
+ IOCTL_SCSI_MINIPORT_WRITE_SMART_LOG
++) buffer size check to SMART IOCTLs
+
+--
+2012.08.19 - v0.43c6
+
+*) AdvancedPowerMode and AcousticMgmt are defaulted to max power saving without standby
+!) added validation code for Intel IDE I/O Config Register 0x54.
+Older controllers do not use it to reflect cable type
+
+--
+2012.08.19 - v0.43d
+
+!) changed Intel DMA setup code in order to handle standard modes correctly (according to specs).
++) added special case for pseudo-UDMA3 setup on Intel PIIX4e
+
+--
+2012.08.20 - v0.43d1
+
+!) fixed bug in AHCI ATA registers dump (invalid bit shift for CylHigh)
+o) unified ATA registers dump code (used in SMART and ATA PASSTHROUGH).
++) added buffer size check to ATA PASSTHROUGH dump registers branch
++) added check for CDB16 support (via IDENTIFY) and for requested CdbLength
+o) extra (unexpected) data wait in AtapiSendCommand in replaced with call to 
+AtapiSuckDataPort2()
++) added MODE_SENSE MODE_PAGE_POWER_CONDITION
+
+--
+2012.08.23 - v0.43d2
+
+!) fixed bug with uninitialized chan->MaxTransferMode for VIA VT6421 PATA channel
+(was set to SA150 according to controller default)
+*) added logging of reported interrupt info in UniataFindBusMasterController()
