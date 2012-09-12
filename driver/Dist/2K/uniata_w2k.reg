@@ -6,7 +6,7 @@ REGEDIT4
 "Start"=dword:00000000
 "Tag"=dword:00000019
 "Type"=dword:00000001
-"DisplayName"="Universal BusMaster SATA/ATA/ATAPI Driver v0.43.5.2"
+"DisplayName"="Universal BusMaster SATA/ATA/ATAPI Driver v0.43.6.5"
 "ImagePath"=hex(2):53,79,73,74,65,6d,33,32,5c,44,52,49,56,45,52,53,5c,75,6e,69,\
   61,74,61,2e,73,79,73,00
 

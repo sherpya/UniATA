@@ -628,6 +628,7 @@ ata_check_unit(
     GETTRANSFERMODE IoMode;
     PSENDCMDOUTPARAMS pout;
     PIDENTIFY_DATA   ident;
+    PINQUIRYDATA     scsi_ident;
     char buff[sizeof(SENDCMDOUTPARAMS)+/*sizeof(IDENTIFY_DATA)*/2048];
     char mode_str[12];
     //ULONG bus_id = (dev_id >> 24) & 0xff;
@@ -710,7 +711,8 @@ ata_check_unit(
             
             if(l_dev_id == dev_id || dev_id == -1) {
 
-                if(!memcmp(&(inquiryData->InquiryData[8]), UNIATA_COMM_PORT_VENDOR_STR, 24)) {
+                scsi_ident = (PINQUIRYDATA)&(inquiryData->InquiryData);
+                if(!memcmp(&(scsi_ident->VendorId[0]), UNIATA_COMM_PORT_VENDOR_STR, 24)) {
                     // skip communication port
                     goto next_dev;
                 }
@@ -778,29 +780,27 @@ ata_check_unit(
 
                 }
 
+                if(!g_extended) {
+                    printf("  b%lu:d%d%s    %24.24s %4.4s ",
+                        i,
+                        inquiryData->TargetId,
+                        lun_str,
+                        /*(inquiryData->DeviceClaimed) ? "Y" : "N",*/
+                        (g_extended ? (PUCHAR)"" : &scsi_ident->VendorId[0]),
+                        (g_extended ? (PUCHAR)"" : &scsi_ident->ProductRevisionLevel[0])
+                        );
+                } else {
+                    printf("  b%lu:d%d%s ",
+                        i,
+                        inquiryData->TargetId,
+                        lun_str
+                        );
+                }
+
                 if(status) {
-                    if(!g_extended) {
-                        printf("  b%lu:d%d%s    %24.24s %4.4s ",
-                            i,
-                            inquiryData->TargetId,
-                            lun_str,
-                            /*(inquiryData->DeviceClaimed) ? "Y" : "N",*/
-                            (g_extended ? (PUCHAR)"" : &inquiryData->InquiryData[8]),
-                            (g_extended ? (PUCHAR)"" : &inquiryData->InquiryData[8+24])
-                            );
-                    } else {
-                        printf("  b%lu:d%d%s ",
-                            i,
-                            inquiryData->TargetId,
-                            lun_str
-                            );
-                    }
                     if(io_mode == -1) {
                         io_mode = ata_cur_mode_from_ident(ident, IDENT_MODE_ACTIVE);
                     }
-                } else {
-                    goto next_dev;
-
                 }
                 if(io_mode != -1) {
                     ata_mode_to_str(mode_str, io_mode);
@@ -818,100 +818,139 @@ ata_check_unit(
                 }
                 printf("\n");
 
-                if(status && g_extended) {
+                if(g_extended) {
+                    if(status) {
 
-                    BOOLEAN BlockMode_valid = TRUE;
-                    BOOLEAN print_geom = FALSE;
+                        BOOLEAN BlockMode_valid = TRUE;
+                        BOOLEAN print_geom = FALSE;
 
-                    switch(ident->DeviceType) {
-                    case ATAPI_TYPE_DIRECT:
-                        if(ident->Removable) {
-                            printf("    Floppy        ");
-                        } else {
+                        switch(ident->DeviceType) {
+                        case ATAPI_TYPE_DIRECT:
+                            if(ident->Removable) {
+                                printf("    Floppy        ");
+                            } else {
+                                printf("    Hard Drive    ");
+                            }
+                            break;
+                        case ATAPI_TYPE_TAPE:
+                            printf("    Tape Drive    ");
+                            break;
+                        case ATAPI_TYPE_CDROM:
+                            printf("    CD/DVD Drive  ");
+                            BlockMode_valid = FALSE;
+                            break;
+                        case ATAPI_TYPE_OPTICAL:
+                            printf("    Optical Drive ");
+                            BlockMode_valid = FALSE;
+                            break;
+                        default:
                             printf("    Hard Drive    ");
+                            print_geom = TRUE;
+                            //MOV_DD_SWP(max_lba, ident->UserAddressableSectors);
+                            max_lba = ident->UserAddressableSectors;
+                            if(ident->FeaturesSupport.Address48) {
+                               max_lba = ident->UserAddressableSectors48;
+                            }
+                            //MOV_DW_SWP(chs[0], ident->NumberOfCylinders);
+                            //MOV_DW_SWP(chs[1], ident->NumberOfHeads);
+                            //MOV_DW_SWP(chs[2], ident->SectorsPerTrack);
+                            chs[0] = ident->NumberOfCylinders;
+                            chs[1] = ident->NumberOfHeads;
+                            chs[2] = ident->SectorsPerTrack;
+                            if(!max_lba) {
+                                max_lba = (ULONG)(chs[0])*(ULONG)(chs[1])*(ULONG)(chs[2]);
+                            }
                         }
-                        break;
-                    case ATAPI_TYPE_TAPE:
-                        printf("    Tape Drive    ");
-                        break;
-                    case ATAPI_TYPE_CDROM:
-                        printf("    CD/DVD Drive  ");
-                        BlockMode_valid = FALSE;
-                        break;
-                    case ATAPI_TYPE_OPTICAL:
-                        printf("    Optical Drive ");
-                        BlockMode_valid = FALSE;
-                        break;
-                    default:
-                        printf("    Hard Drive    ");
-                        print_geom = TRUE;
-                        //MOV_DD_SWP(max_lba, ident->UserAddressableSectors);
-                        max_lba = ident->UserAddressableSectors;
-                        if(ident->FeaturesSupport.Address48) {
-                           max_lba = ident->UserAddressableSectors48;
+                        if(io_mode != -1) {
+                            printf("           %.12s\n", mode_str);
                         }
-                        //MOV_DW_SWP(chs[0], ident->NumberOfCylinders);
-                        //MOV_DW_SWP(chs[1], ident->NumberOfHeads);
-                        //MOV_DW_SWP(chs[2], ident->SectorsPerTrack);
-                        chs[0] = ident->NumberOfCylinders;
-                        chs[1] = ident->NumberOfHeads;
-                        chs[2] = ident->SectorsPerTrack;
-                        if(!max_lba) {
-                            max_lba = (ULONG)(chs[0])*(ULONG)(chs[1])*(ULONG)(chs[2]);
+                        for (j = 0; j < 40; j += 2) {
+                            MOV_DW_SWP(SerNum[j], ((PUCHAR)ident->ModelNumber)[j]);
                         }
-                    }
-                    if(io_mode != -1) {
-                        printf("           %.12s\n", mode_str);
-                    }
-                    for (j = 0; j < 40; j += 2) {
-                        MOV_DW_SWP(SerNum[j], ((PUCHAR)ident->ModelNumber)[j]);
-                    }
-                    printf("    Mod: %40.40s\n", SerNum);
-                    for (j = 0; j < 8; j += 2) {
-                        MOV_DW_SWP(SerNum[j], ((PUCHAR)ident->FirmwareRevision)[j]);
-                    }
-                    printf("    Rev: %8.8s\n", SerNum);
-                    for (j = 0; j < 20; j += 2) {
-                        MOV_DW_SWP(SerNum[j], ((PUCHAR)ident->SerialNumber)[j]);
-                    }
-                    printf("    S/N: %20.20s\n", SerNum);
+                        printf("    Mod: %40.40s\n", SerNum);
+                        for (j = 0; j < 8; j += 2) {
+                            MOV_DW_SWP(SerNum[j], ((PUCHAR)ident->FirmwareRevision)[j]);
+                        }
+                        printf("    Rev: %8.8s\n", SerNum);
+                        for (j = 0; j < 20; j += 2) {
+                            MOV_DW_SWP(SerNum[j], ((PUCHAR)ident->SerialNumber)[j]);
+                        }
+                        printf("    S/N: %20.20s\n", SerNum);
 
-                    if(BlockMode_valid) {
-                        if(ident->MaximumBlockTransfer) {
-                            printf("    Multi-block mode:        %u block%s\n", ident->MaximumBlockTransfer, ident->MaximumBlockTransfer == 1 ? "" : "s");
-                        } else {
-                            printf("    Multi-block mode:        N/A\n");
+                        if(BlockMode_valid) {
+                            if(ident->MaximumBlockTransfer) {
+                                printf("    Multi-block mode:        %u block%s\n", ident->MaximumBlockTransfer, ident->MaximumBlockTransfer == 1 ? "" : "s");
+                            } else {
+                                printf("    Multi-block mode:        N/A\n");
+                            }
                         }
-                    }
-                    if(print_geom) {
-                        printf("    C/H/S:                   %u/%u/%u \n", chs[0], chs[1], chs[2]);
-                        printf("    LBA:                     %I64u \n", max_lba);
-                        if(max_lba < 2) {
-                            printf("    Size:                    %lu kb\n", (ULONG)(max_lba/2));
-                        } else
-                        if(max_lba < 2*1024*1024) {
-                            printf("    Size:                    %lu Mb\n", (ULONG)(max_lba/2048));
-                        } else
-                        if(max_lba < (ULONG)2*1024*1024*1024) {
-                            printf("    Size:                    %lu.%lu (%lu) Gb\n", (ULONG)(max_lba/2048/1024),
-                                                                              (ULONG)(((max_lba/2048)%1024)/10),
-                                                                              (ULONG)(max_lba*512/1000/1000/1000)
-                            );
-                        } else {
-                            printf("    Size:                    %lu.%lu (%lu) Tb\n", (ULONG)(max_lba/2048/1024/1024),
-                                                                              (ULONG)((max_lba/2048/1024)%1024)/10,
-                                                                              (ULONG)(max_lba*512/1000/1000/1000)
-                            );
+                        if(print_geom) {
+                            printf("    C/H/S:                   %u/%u/%u \n", chs[0], chs[1], chs[2]);
+                            printf("    LBA:                     %I64u \n", max_lba);
+                            if(max_lba < 2) {
+                                printf("    Size:                    %lu kb\n", (ULONG)(max_lba/2));
+                            } else
+                            if(max_lba < 2*1024*1024) {
+                                printf("    Size:                    %lu Mb\n", (ULONG)(max_lba/2048));
+                            } else
+                            if(max_lba < (ULONG)2*1024*1024*1024) {
+                                printf("    Size:                    %lu.%lu (%lu) Gb\n", (ULONG)(max_lba/2048/1024),
+                                                                                  (ULONG)(((max_lba/2048)%1024)/10),
+                                                                                  (ULONG)(max_lba*512/1000/1000/1000)
+                                );
+                            } else {
+                                printf("    Size:                    %lu.%lu (%lu) Tb\n", (ULONG)(max_lba/2048/1024/1024),
+                                                                                  (ULONG)((max_lba/2048/1024)%1024)/10,
+                                                                                  (ULONG)(max_lba*512/1000/1000/1000)
+                                );
+                            }
                         }
-                    }
-                    len = 0;
-                    if((hKey2 = ata_get_bblist_regh(ident, DevSerial, TRUE))) {
-                        if(RegQueryValueEx(hKey2, DevSerial, NULL, NULL, NULL, &len) == ERROR_SUCCESS) {
-                            printf("    !!! Assigned bad-block list !!!\n");
+                        len = 0;
+                        if((hKey2 = ata_get_bblist_regh(ident, DevSerial, TRUE))) {
+                            if(RegQueryValueEx(hKey2, DevSerial, NULL, NULL, NULL, &len) == ERROR_SUCCESS) {
+                                printf("    !!! Assigned bad-block list !!!\n");
+                            }
+                            RegCloseKey(hKey2);
                         }
-                        RegCloseKey(hKey2);
+                    } else {
+                        switch(scsi_ident->DeviceType) {
+                        case DIRECT_ACCESS_DEVICE:
+                            if(scsi_ident->RemovableMedia) {
+                                printf("    Floppy        ");
+                            } else {
+                                printf("    Hard Drive    ");
+                            }
+                            break;
+                        case SEQUENTIAL_ACCESS_DEVICE:
+                            printf("    Tape Drive    ");
+                            break;
+                        case PRINTER_DEVICE:
+                            printf("    Printer       ");
+                            break;
+                        case PROCESSOR_DEVICE:
+                            printf("    Processor     ");
+                            break;
+                        case WRITE_ONCE_READ_MULTIPLE_DEVICE:
+                            printf("    WORM Drive    ");
+                            break;
+                        case READ_ONLY_DIRECT_ACCESS_DEVICE:
+                            printf("    CDROM Drive   ");
+                            break;
+                        case SCANNER_DEVICE:
+                            printf("    Scanner       ");
+                            break;
+                        case OPTICAL_DEVICE:
+                            printf("    Optical Drive ");
+                            break;
+                        case MEDIUM_CHANGER:
+                            printf("    Changer       ");
+                            break;
+                        case COMMUNICATION_DEVICE:
+                            printf("    Comm. device  ");
+                            break;
+                        }
+                        printf("\n");
                     }
-
                 }
                 memcpy(&g_ident, ident, sizeof(IDENTIFY_DATA));
             }

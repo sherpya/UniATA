@@ -77,9 +77,12 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
     CHAR    MasterDev;
     BOOLEAN Known;
 #ifndef USER_MODE
-    CHAR    ChanInitOk;             // 0x01 - primary,  0x02 - secondary
+    UCHAR   ChanInitOk;             // 0x01 - primary,  0x02 - secondary, 0x80 - PciIde claimed
     BOOLEAN Isr2Enable;
-    PDEVICE_OBJECT Isr2DevObj;
+    union {
+        PDEVICE_OBJECT Isr2DevObj;
+        PDEVICE_OBJECT PciIdeDevObj;
+    };
     KIRQL      Isr2Irql;
     KAFFINITY  Isr2Affinity;
     ULONG      Isr2Vector;

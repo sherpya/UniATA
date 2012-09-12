@@ -1651,6 +1651,7 @@ AtapiChipInit(
     ULONG  tmp32;
     ULONG  c; // logical channel (for Compatible Mode controllers)
     BOOLEAN CheckCable = FALSE;
+    BOOLEAN GlobalInit = FALSE;
     //ULONG BaseIoAddress;
 
     switch(channel) {
@@ -1659,6 +1660,7 @@ AtapiChipInit(
         /* FALLTHROUGH */
     case CHAN_NOT_SPECIFIED:
         c = CHAN_NOT_SPECIFIED;
+        GlobalInit = TRUE;
         break;
     default:
         //c = channel - deviceExtension->Channel; // logical channel (for Compatible Mode controllers)
@@ -1694,6 +1696,27 @@ AtapiChipInit(
         } else {
             KdPrint2((PRINT_PREFIX "  AHCI non-existent channel\n" ));
             return FALSE;
+        }
+    }
+
+    if((WinVer_Id() > WinVer_NT) &&
+       GlobalInit &&
+       deviceExtension->MasterDev) {
+        PCI_COMMON_CONFIG pciData;
+        ULONG busDataRead;
+
+        KdPrint2((PRINT_PREFIX "  re-enable IO resources of MasterDev\n" ));
+
+        busDataRead = HalGetBusData
+                      //ScsiPortGetBusData
+                                   (
+                                    //HwDeviceExtension,
+                                    PCIConfiguration, SystemIoBusNumber, slotNumber,
+                                    &pciData, PCI_COMMON_HDR_LENGTH);
+        if(busDataRead == PCI_COMMON_HDR_LENGTH) {
+            UniataEnableIoPCI(SystemIoBusNumber, slotNumber, &pciData);
+        } else {
+            KdPrint2((PRINT_PREFIX "  re-enable IO resources of MasterDev FAILED\n" ));
         }
     }
 

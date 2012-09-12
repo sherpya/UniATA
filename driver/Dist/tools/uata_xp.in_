@@ -49,13 +49,15 @@ LogConfig = esdilc1, esdilc2, esdilc3, esdilc4
 
 [uniata_Inst.AddReg]
 
-
 ;
 ; File sections
 ;
 
 [uniata_Inst.Miniport]
 ..\uniata.sys
+
+[Sys32DestDir]
+atactl.exe
 
 
 ;
@@ -71,7 +73,7 @@ StartType      = 0
 ErrorControl   = 0
 LoadOrderGroup = "System Bus Extender"
 ServiceBinary  = %10%\System32\drivers\uniata.sys
-AddReg         = uniata_PNP_Inst_AddReg
+AddReg         = uniata_EventLog_AddReg, uniata_PNP_Inst_AddReg
 
 [uniata_PNP_Inst_AddReg]
 HKR, "Parameters\PnpInterface", "1", 0x00010001, 0x00000000

@@ -2068,6 +2068,7 @@ UniataForgetDevice(
 
 Routine Description:
     Reset IDE controller and/or Atapi device.
+    ->HwResetBus
 
 Arguments:
     HwDeviceExtension - HBA miniport driver's adapter data storage
@@ -2087,7 +2088,6 @@ AtapiResetController(
     KdPrint2((PRINT_PREFIX "AtapiResetController(%x)\n", PathId));
     return AtapiResetController__(HwDeviceExtension, PathId, RESET_COMPLETE_ALL);
 } // end AtapiResetController()
-
 
 BOOLEAN
 NTAPI
@@ -2884,6 +2884,7 @@ Routine Description:
 
 Arguments:
     HwDeviceExtension - HBA miniport driver's adapter data storage
+    ->HwInitialize
 
 Return Value:
     TRUE - if initialization successful.
@@ -7660,6 +7661,31 @@ default_no_prep:
 
         break;
 
+    case SCSIOP_REPORT_LUNS: {
+
+        ULONG alen;
+        PREPORT_LUNS_INFO_HDR LunInfo;
+        
+        KdPrint2((PRINT_PREFIX 
+                   "IdeSendCommand: SCSIOP_REPORT_LUNS PATH:LUN:TID = %#x:%#x:%#x\n",
+                   Srb->PathId, Srb->Lun, Srb->TargetId));
+
+        MOV_DD_SWP(alen, cdb->REPORT_LUNS.AllocationLength);
+
+        if(alen < 16) {
+            goto invalid_cdb;
+        }
+        alen = 8;
+
+        LunInfo = (PREPORT_LUNS_INFO_HDR)(Srb->DataBuffer);
+        RtlZeroMemory(LunInfo, 16);
+
+        MOV_DD_SWP( LunInfo->ListLength, alen );
+        Srb->DataTransferLength = 16;
+        status = SRB_STATUS_SUCCESS;
+
+        break; }
+
     case SCSIOP_MODE_SENSE:
 
         KdPrint2((PRINT_PREFIX 
@@ -8465,6 +8491,7 @@ Routine Description:
 
     This routine is called from the SCSI port driver synchronized
     with the kernel to start an IO request.
+    ->HwStartIo
 
 Arguments:
 
@@ -8710,6 +8737,7 @@ reject_srb:
                 KdPrint2((PRINT_PREFIX "AtapiStartIo: Already have %d request(s)!\n", chan->queue_depth));
 
             } else {
+
                 // Send command to device.
                 KdPrint2((PRINT_PREFIX "Send to device %x\n", Srb->Cdb[0]));
                 if(TopLevel) {
@@ -8749,7 +8777,8 @@ reject_srb:
 #endif //NAVO_TEST
 
                 if(atapiDev &&
-                   (Srb->Cdb[0] != SCSIOP_ATA_PASSTHROUGH)) {
+                   (Srb->Cdb[0] != SCSIOP_ATA_PASSTHROUGH)/* &&
+                   (Srb->Cdb[0] != SCSIOP_REPORT_LUNS)*/) {
                     KdPrint3((PRINT_PREFIX "Try ATAPI send %x\n", Srb->Cdb[0]));
                     status = AtapiSendCommand(HwDeviceExtension, Srb, CMD_ACTION_ALL);
                 } else {
@@ -10006,6 +10035,15 @@ DriverEntry(
         if(GlobalConfig->AtDiskSecondaryAddressClaimed)
             SecondaryClaimed = TRUE;
 
+        if(!WinVer_WDM_Model && !PrimaryClaimed && !SecondaryClaimed &&
+            !(BMList[i].ChanInitOk & 0x80)) {
+            newStatus = UniataClaimLegacyPCIIDE(i);
+            if(newStatus != STATUS_SUCCESS) {
+                KdPrint2((PRINT_PREFIX "Can't acquire PCI part of BusMaster, try as pure ISA later.\n"));
+                break;
+            }
+        }
+
         if(g_opt_Verbose) {
             _PrintNtConsole("Init standard Dual-channel PCI ATA controller:");
         }
@@ -10103,29 +10141,6 @@ DriverEntry(
                 KdPrint2((PRINT_PREFIX "make still one attempt w2k+\n"));
             }
         } // for(alt...)
-#if 0
-        if(WinVer_WDM_Model) {
-            hwInitializationData.comm.HwFindAdapter = UniataFindFakeBusMasterController;
-            hwInitializationData.comm.NumberOfAccessRanges = 5;
-            hwInitializationData.comm.AdapterInterfaceType = PCIBus;
-
-            hwInitializationData.comm.VendorId             = BMList[i].VendorId;
-            hwInitializationData.comm.VendorIdLength       = (USHORT) BMList[i].VendorIdLength;
-            hwInitializationData.comm.DeviceId             = BMList[i].DeviceId;
-            hwInitializationData.comm.DeviceIdLength       = (USHORT) BMList[i].DeviceIdLength;
-
-            //BMList[i].channel = 0/*(UCHAR)c*/;
-
-            KdPrint2((PRINT_PREFIX "Try init fake: %4.4s %4.4s \n",
-                                   hwInitializationData.comm.VendorId,
-                                   hwInitializationData.comm.DeviceId));
-            newStatus = ScsiPortInitialize(DriverObject,
-                                           Argument2,
-                                           &hwInitializationData.comm,
-                                           (PVOID)i);
-            KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x\n", newStatus));
-        }
-#endif //0
         if(g_opt_Verbose) {
             if(BMList[i].ChanInitOk & 0x03) {
                 _PrintNtConsole("  OK\n");

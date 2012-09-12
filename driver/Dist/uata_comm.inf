@@ -24,7 +24,8 @@ ExcludeFromSelect = *
 
 [UNIATA_COMM]
 ;Well-known adapters
-%SCSI\NET&VEN_UNIATA&PROD_MANAGEMENT_PORT.DeviceDesc%=uniata_Inst, SCSI\NET&VEN_UNIATA&PROD_MANAGEMENT_PORT
+%UNIATA__MANAGEMENT_PORT.DeviceDesc%=uniata_Inst, SCSI\NetUNIATA__MANAGEMENT_PORT
+%UNIATA__MANAGEMENT_PORT.DeviceDesc%=uniata_Inst, IDE\NetUNIATA__MANAGEMENT_PORT
 
 ;
 ; General installation section
@@ -65,7 +66,7 @@ AddService =
 
 [Strings]
 ;Well-known adapters
-SCSI\NET&VEN_UNIATA&PROD_MANAGEMENT_PORT.DeviceDesc="UniATA virtual communication device"
+UNIATA__MANAGEMENT_PORT.DeviceDesc="UniATA virtual communication device"
 UniATA_Name = "Universal ATA Driver (Win XP)"
 ALTERWARE = "AlterWare"
 

@@ -435,3 +435,87 @@ e) BM range for MasterDev (Legacy) controllres in not reported to ScsiPort via C
 *) fixed PIIX3/PIIX4 device names
 *) in XP .INFs %12% is replaced with %10%\System32\drivers, this fixes problem with 'Invalid INF section'
 +) added uata_comm.inf for UniATA virtual communication port
+
+--
+2012.08.28 - v0.43e3
+
+e) Legacy IDE IO ports are now queried from Isa bus. PCIBus was used before.
+*) atactl can now display device info even if ATA/ATAPI identify failed, SCSI INQUIRY is used instead.
+
+--
+2012.08.29 - v0.43e4
+
++) added SCSIOP_REPORT_LUNS support for newer OSes
+e) uncommented code for  fake controller to PCI part of Legacy IDE
+This is done to prevent system and/or other drivers from deinitializing
+PCI part of Legacy IDE
+(hangs)
+
+--
+2012.08.29 - v0.43e5
+
+e) fake BM controller is inited with 1 bus and 1 lun (was all zeros)
+*) PCI IO enable code is moved to separate function since it is used in multiple places
+
+--
+2012.08.29 - v0.43e6
+
+!) fix in device identification for fake PCI BM
+
+--
+2012.08.29 - v0.43e7
+
+e) temporary disabled call to UniataEnableIoPCI() on Fake claim
+(fails)
+
+--
+2012.08.29 - v0.43e8
+
+e) disabled Fake claim again
+
+--
+2012.08.29 - v0.43e9
+
+e) re-enabled Fake claim
+e) used NULL HwInterrupt
+(fails)
+
+--
+2012.08.29 - v0.43f
+
+*) removed Fake claim
++) added UniataEnableIoPCI() to AtapiChipInit() in global branch for w2k+
+
+--
+2012.08.30 - v0.43f1
+
+e) added UniataClaimLegacyPCIIDE() to claim Legacy PCI IDE with 
+HalAssignSlotResources
+(fails)
+*) SCSIOP_REPORT_LUNS is emulated for HDD only
+
+--
+2012.08.30 - v0.43f2
+
+!) added UniataClaimLegacyPCIIDE() is called BEFORE attempts to init Isa+PCI
+it works
+!) BM IO ranges are no longer reported with ISA parts.
+TODO: check if Fake claim works if called before ISA.
+
+--
+2012.08.30 - v0.43f3
+
+e) check if Fake claim works if called before ISA.
+(doesn't work, Scsiport returns STATUS_DEVICE_DOES_NOT_EXIST)
+
+--
+2012.08.31 - v0.43f4
+
+!!) reverted to UniataClaimLegacyPCIIDE(), this fixes resource conflict with other PCIIDE drivers
+
+--
+2012.08.31 - v0.43f5
+
+!) fixed uata_comm.inf, now it works
+*) if PCI part cannot be acquired, controller is initialized in legacy ISA way without DMA
+

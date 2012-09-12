@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=hdc
 CatalogFile=uniata.cat
-DriverVer=08/28/2012,0.43.5.2
+DriverVer=09/01/2012,0.43.6.5
 
 ;
 ; Source file information
@@ -306,7 +306,6 @@ ExcludeFromSelect = *
 %PCI\CC_0104.DeviceDesc% = uniata_Inst,,PCI\CC_0104                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 %PCI\CC_0105.DeviceDesc% = uniata_Inst,,PCI\CC_0105                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 %PCI\CC_0106.DeviceDesc% = uniata_Inst,,PCI\CC_0106                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
-%PCI\CC_0106.DeviceDesc% = uniata_Inst,,PCI\CC_0106                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 ;%PCI\CC_0106&PROGIF_01.DeviceDesc% = uniata_Inst,,PCI\CC_0106&PROGIF_01         ; AHCI
 %*PNP0600.PriDeviceDesc% = uniata_Inst, Primary_IDE_Channel
 %*PNP0600.SecDeviceDesc% = uniata_Inst, Secondary_IDE_Channel
@@ -353,6 +352,7 @@ StartType      = %SERVICE_BOOT_START%
 ErrorControl   = %SERVICE_ERROR_NORMAL%
 LoadOrderGroup = System Bus Extender
 ServiceBinary  = %12%\uniata.sys
+AddReg         = uniata_EventLog_AddReg
 
 [uniata_Inst.PosDup]            ;; BUGBUG: What does this do?
 *PNP0600
@@ -631,7 +631,6 @@ PCI\CC_0101.DeviceDesc  = "Dual Channel PCI BusMaster IDE Controller (UniATA)"
 PCI\CC_0104.DeviceDesc  = "Generic RAID IDE Controller (UniATA)"
 PCI\CC_0105.DeviceDesc  = "Generic ATA Controller (UniATA)"
 PCI\CC_0106.DeviceDesc  = "Generic Serial ATA Controller (UniATA)"
-PCI\CC_0106&PROGIF_01.DeviceDesc  = "Generic AHCI Controller (UniATA)"
 ALTERWARE = "AlterWare"
 
 ;*******************************************

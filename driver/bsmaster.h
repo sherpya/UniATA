@@ -1267,6 +1267,9 @@ typedef struct _ISR2_DEVICE_EXTENSION {
     ULONG DevIndex;
 } ISR2_DEVICE_EXTENSION, *PISR2_DEVICE_EXTENSION;
 
+typedef ISR2_DEVICE_EXTENSION   PCIIDE_DEVICE_EXTENSION;
+typedef PISR2_DEVICE_EXTENSION  PPCIIDE_DEVICE_EXTENSION;
+
 #define HBAFLAGS_DMA_DISABLED           0x01
 #define HBAFLAGS_DMA_DISABLED_LBA48     0x02
 
@@ -1275,6 +1278,7 @@ extern PBUSMASTER_CONTROLLER_INFORMATION BMList;
 extern ULONG         BMListLen;
 extern ULONG         IsaCount;
 extern ULONG         MCACount;
+extern UNICODE_STRING SavedRegPath;
 
 //extern const CHAR retry_Wdma[MAX_RETRIES+1];
 //extern const CHAR retry_Udma[MAX_RETRIES+1];
@@ -1329,14 +1333,10 @@ UniataFindBusMasterController(
     OUT PBOOLEAN Again
     );
 
-extern ULONG NTAPI
-UniataFindFakeBusMasterController(
-    IN PVOID HwDeviceExtension,
-    IN PVOID Context,
-    IN PVOID BusInformation,
-    IN PCHAR ArgumentString,
-    IN OUT PPORT_CONFIGURATION_INFORMATION ConfigInfo,
-    OUT PBOOLEAN Again
+extern NTSTATUS
+NTAPI
+UniataClaimLegacyPCIIDE(
+    ULONG i
     );
 
 extern NTSTATUS
@@ -1513,6 +1513,14 @@ AtapiGetIoRange(
     IN ULONG rid,
     IN ULONG offset,
     IN ULONG length //range id
+    );
+
+extern USHORT
+NTAPI
+UniataEnableIoPCI(
+    IN  ULONG                  busNumber,
+    IN  ULONG                  slotNumber,
+ IN OUT PPCI_COMMON_CONFIG     pciData
     );
 
 /****************** 1 *****************/

@@ -694,6 +694,14 @@ typedef union _CDB {
         UCHAR Control;
     } SET_READ_AHEAD, *PSET_READ_AHEAD;
 
+    struct _REPORT_LUNS {
+        UCHAR OperationCode;    // 0xA0 - SCSIOP_REPORT_LUNS
+        UCHAR Reserved1[5];
+        UCHAR AllocationLength[4];
+        UCHAR Reserved2[1];
+        UCHAR Control;
+    } REPORT_LUNS, *PREPORT_LUNS;
+
 #define SendOpc_DoOpc   0x01
 
     struct _SEND_OPC_INFO {
@@ -910,6 +918,7 @@ typedef union _CDB {
 
   #define SCSIOP_SA_READ_CAPACITY16     0x10
 
+#define SCSIOP_REPORT_LUNS          0xA0
 #define SCSIOP_BLANK                0xA1
 #define SCSIOP_SEND_KEY             0xA3
 #define SCSIOP_REPORT_KEY           0xA4
@@ -2913,6 +2922,12 @@ typedef struct _DVD_RPC_KEY {
     UCHAR RpcScheme;
     UCHAR Reserved2[1];
 } DVD_RPC_KEY, * PDVD_RPC_KEY;
+
+typedef struct _REPORT_LUNS_INFO_HDR {
+    UCHAR ListLength[4];
+    UCHAR Reserved[4];
+} REPORT_LUNS_INFO_HDR, *PREPORT_LUNS_INFO_HDR;
+
 
 #pragma pack(pop)
 
