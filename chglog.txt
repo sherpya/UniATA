@@ -519,3 +519,44 @@ e) check if Fake claim works if called before ISA.
 !) fixed uata_comm.inf, now it works
 *) if PCI part cannot be acquired, controller is initialized in legacy ISA way without DMA
 
+--
+2012.09.18 - v0.44
+
+!) fixed LogToDisplay by KtP
+*) changed VendorString definition to make newer compilers and cove checkers happy
+*) made an attempt to change .mak file and fix build problems after clean or build errors
+
+--
+2012.09.20 - v0.44a
+
+!) UniataEnableIoPci doesn't touch PCI Command reg. if it is not necessary (no update required),
+because on some systems (e.g. some ICH7) may produce interrupt storm.
+
+--
+2012.09.22 - v0.44b
+
+*) fixed bug with access to non-existent Lun in interrupt cleaning on init in PROBE_ON_INIT branch
++) added interrupt cleaning code for !PROBE_ON_INIT branch
++) added ICH7-specific SATA register access
+
+--
+2012.09.24 - v0.44b1
+
+!) fixed .mak file (.res rebuild)
+*) experimental fix for SATA ATAPI, those do not interrupt after DMA packet command error
+(check for error immediately after sending packet)
+
+--
+2012.09.24 - v0.44b2
+
+*) experimental fix for SATA ATAPI, check for DRQ (appeared, not asserted on error)
+
+--
+2012.09.25 - v0.44b3
+
+*) removed experimental DMA-only mode for SATA ATAPI. Some devices hangs.
+
+--
+2012.10.06 - v0.44b4
+
+*) fixed DMA->PIO condition in AtapiDmaInit() for non-AHCI SATA devices (was never switched)

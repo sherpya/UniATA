@@ -1,5 +1,5 @@
 #////////////////////////////////////////////////////////////////////
-#// Alexander A. Telyatnikov (Alter) 2002-2008. Kiev, Ukraine
+#// Alexander A. Telyatnikov (Alter) 2002-2012. Kiev, Ukraine
 #// All rights reserved
 #////////////////////////////////////////////////////////////////////
 
@@ -124,7 +124,7 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 	cd ..\driver
 	copy ..\build_inf\Release\build_inf.exe .\build_inf.exe
 	copy ..\build_inf\Release\build_inf.exe .\Dist\tools\build_inf.exe
-	.\build_inf.exe --ver_h > uniata_ver.h
+#	.\build_inf.exe --ver_h > uniata_ver.h
 !ENDIF
 
 
@@ -144,23 +144,23 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 PKG : "BusMaster_v$(VER).rar"
 
 
-"Release\idedma.sys" :
+"Release\idedma.sys" : "uniata_ver.h"
 	nmake /A CFG="UniATA - Win32 Release"
 
-"Debug\idedma.sys" :
+"Debug\idedma.sys" : "uniata_ver.h"
 	nmake /A CFG="UniATA - Win32 Debug"
 
-"BusMaster_v$(VER).rar" : "uniata_ver.h" "$(ALTDIR)\IdeDma.sys" ".\copy.msg"
+"BusMaster_v$(VER).rar" : ".\Debug\idedma.res" "uniata_ver.h" "..\pkg_files.dist" "..\pkg_files.src" "Release\idedma.sys" "Debug\idedma.sys"
 	cd ..
 	driver\Dist\tools\fix_dep.bat
 	cd driver
-!IF  "$(CFG)" == "UniATA - Win32 Release"
-	nmake /A CFG="UniATA - Win32 Debug"
-#	nmake /A CFG="UniATA - Win32 Release"
-!ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
-	nmake /A CFG="UniATA - Win32 Release"
+#!IF  "$(CFG)" == "UniATA - Win32 Release"
 #	nmake /A CFG="UniATA - Win32 Debug"
-!ENDIF 
+#	nmake /A CFG="UniATA - Win32 Release"
+#!ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
+#	nmake /A CFG="UniATA - Win32 Release"
+#	nmake /A CFG="UniATA - Win32 Debug"
+#!ENDIF 
 	copy $(ALTDIR)\IdeDma.sys C:\WINNT\System32\Drivers\IdeDma.sys 
 	copy $(ALTDIR)\IdeDma.sys C:\WINNT\System32\Drivers\IdeDmb.sys 
 
@@ -168,6 +168,7 @@ PKG : "BusMaster_v$(VER).rar"
 	rar a -r -s -mdD -m5 BusMaster_v$(VER)_Dbg.rar Debug_Dist
 	rar a    -s -mdD -m5 BusMaster_v$(VER)_src.rar @..\pkg_files.src
 	rar a    -s -mdD -m5 BusMaster_v$(VER)_sym.rar Release_sym
+
 
 CLEAN :
 	-@erase $(LINK32_OBJS)
@@ -248,12 +249,12 @@ LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\L
 !ENDIF 
 !ENDIF 
 
-"$(OUTDIR)\IdeDma.sys" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS)
+"$(OUTDIR)\IdeDma.sys" : "$(OUTDIR)" $(DEF_FILE) $(LINK32_OBJS) "uniata_ver.h"
     $(LINK32) @<<
   $(LINK32_FLAGS) $(LINK32_OBJS)
 <<
 
-".\copy.msg" : $(SOURCE) "$(INTDIR)" "$(OUTDIR)" "$(DistDir)" "$(SymDir)" "build_inf.exe" "atactl.exe"
+".\copy.msg" : "$(INTDIR)\idedma.res" $(SOURCE) "$(INTDIR)" "$(OUTDIR)" "$(DistDir)" "$(SymDir)"
 	<<tempfile.bat 
 	@echo off 
 	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDma.sys 
@@ -328,19 +329,20 @@ SRC=idedma
     del "uniata_ver.h_.lk"
 
 
-"uniata_ver.h" : "uniata_ver.h_"
+"uniata_ver.h" : "uniata_ver.h_" "build_inf.exe"
 !IF "$(VER)" != ""
     copy "uniata_ver.h_" "uniata_ver.h"
     .\Dist\tools\srchrep.exe -src "**VER**" -dest "$(VER)" "uniata_ver.h"
-    cd ..\build_inf
-    nmake /A CFG="build_inf - Win32 Release"
-    cd ..\driver
-    copy ..\build_inf\Release\build_inf.exe .\build_inf.exe
-    copy ..\build_inf\Release\build_inf.exe .\Dist\tools\build_inf.exe
+#    cd ..\build_inf
+#    nmake /A CFG="build_inf - Win32 Release"
+#    cd ..\driver
+#    copy ..\build_inf\Release\build_inf.exe .\build_inf.exe
+#    copy ..\build_inf\Release\build_inf.exe .\Dist\tools\build_inf.exe
     .\build_inf.exe --ver_h > uniata_ver.h
+#!MESSAGE  "$(INTDIR)\IdeDma.sys"  "$(ALTDIR)\IdeDma.sys"
 !ENDIF 
 
-"$(INTDIR)\$(SRC).res" : "$(SRC).rc" "$(INTDIR)" "uniata_ver.h" "uataerr.h"
+"$(INTDIR)\$(SRC).res" : "$(SRC).rc" "$(INTDIR)" "uniata_ver.h" "uataerr.h" "build_inf.exe"
     -@erase ".\$(SRC).res"
     $(RSC) $(RSC_PROJ) "$(SRC).rc"
     -@erase "$(INTDIR)\$(SRC).res"
