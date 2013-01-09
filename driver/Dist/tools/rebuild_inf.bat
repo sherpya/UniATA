@@ -34,6 +34,7 @@ copy uata_2k.inf uata_2kh.inf
 srchrep -src "%%COMMENT%%" -dest " (SCSI)"           uata_2k.inf  > nul
 srchrep -src "Class=SCSIAdapter" -dest "Class=hdc"   uata_2kh.inf > nul
 srchrep -src "ClassGuid={4D36E97B-E325-11CE-BFC1-08002BE10318}" -dest "ClassGuid={4D36E96A-E325-11CE-BFC1-08002BE10318}" uata_2kh.inf > nul
+srchrep -src " %%COMMENT%%" -dest ""                 uata_2kh.inf > nul
 srchrep -src "%%COMMENT%%" -dest ""                  uata_2kh.inf > nul
 srchrep -src "uata_2k.inf" -dest "uata_2kh.inf"      uata_2kh.inf > nul
 srchrep -src "%%CLASSNAME%%" -dest "IDE ATA/ATAPI"   uata_2kh.inf > nul
@@ -44,6 +45,7 @@ srchrep -src "%%BUILD_TS%%" -dest "%ver_ts%"         uata_xp.inf > nul
 srchrep -src "%%DRIVER_VER%%" -dest "%ver_dot%"      uata_xp.inf > nul
 
 copy uata_xp.inf uata_xph.inf
+srchrep -src " %%COMMENT%%" -dest ""                 uata_xph.inf > nul
 srchrep -src "%%COMMENT%%" -dest ""                  uata_xph.inf > nul
 srchrep -src "Class=SCSIAdapter" -dest "Class=hdc"   uata_xph.inf > nul
 srchrep -src "ClassGuid={4D36E97B-E325-11CE-BFC1-08002BE10318}" -dest "ClassGuid={4D36E96A-E325-11CE-BFC1-08002BE10318}" uata_xph.inf > nul

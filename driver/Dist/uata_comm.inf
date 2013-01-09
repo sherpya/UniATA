@@ -42,7 +42,7 @@ CopyFiles =
 ;
 
 [uniata_Inst.Miniport]
-..\uniata.sys
+uniata.sys
 
 
 ;
@@ -61,7 +61,7 @@ AddService =
 
 [SourceDisksFiles]
 ; Files for disk UniATA Installation Disk #1 (SCSIAdapter)
-..\uniata.sys = 1,,
+uniata.sys = 1,,
 
 
 [Strings]

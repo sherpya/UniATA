@@ -569,3 +569,15 @@ previous cmd execution failure. Now next command also treated as failed under VP
 since ERR bit and Error Code is not cleared after PACKET command
 *) added call to BuildRequestSenseSrb() after immediately failed ATAPI command,
 I hope this will clear error status properly.
+
+--
+2012.12.28 - v0.44c1
+
+!) fixed IDE interrupt reason processing bug. Appeared due to mistake during replacement of
+numeric values with constants.
+
+
+--
+2012.12.29 - v0.44c2
+
+!) added INF patches by Gerhard Wiesinger, should fix problems with paths to binaries during setup.

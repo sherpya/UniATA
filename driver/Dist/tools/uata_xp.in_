@@ -55,7 +55,7 @@ LogConfig = esdilc1, esdilc2, esdilc3, esdilc4
 ;
 
 [uniata_Inst.Miniport]
-..\uniata.sys
+uniata.sys
 
 [Sys32DestDir]
 atactl.exe
@@ -105,8 +105,8 @@ HKLM, "system\currentcontrolset\services\pciide", "Start", %REG_DWORD%, 0x000000
 
 [SourceDisksFiles]
 ; Files for disk UniATA Installation Disk #1 (SCSIAdapter)
-..\uniata.sys = 1,,
-atactl.exe = 1,,
+uniata.sys = 1,..\,
+atactl.exe = 1,..\,
 
 
 [Strings]
@@ -119,6 +119,22 @@ PCI\CC_0104.DeviceDesc  = "Generic RAID IDE Controller (UniATA)"
 PCI\CC_0105.DeviceDesc  = "Generic ATA Controller (UniATA)"
 PCI\CC_0106.DeviceDesc  = "Generic Serial ATA Controller (UniATA)"
 ALTERWARE = "AlterWare"
+
+;*******************************************
+;
+; Non-Localizable Strings
+;
+
+REG_SZ         = 0x00000000
+REG_MULTI_SZ   = 0x00010000
+REG_EXPAND_SZ  = 0x00020000
+REG_BINARY     = 0x00000001
+REG_DWORD      = 0x00010001
+SERVICEROOT    = "System\CurrentControlSet\Services"
+
+IOLOGMSGDLL    = "IoLogMsg.dll"
+
+DiskId1 = "UniATA Installation disk"
 
 ;Resource claiming for non-PnP
 
@@ -145,22 +161,4 @@ ConfigPriority=HARDWIRED
 IOConfig=168-16f(3ff::)
 IOConfig=36e-36e(3ff::)
 IRQConfig=10
-
-
-
-;*******************************************
-;
-; Non-Localizable Strings
-;
-
-REG_SZ         = 0x00000000
-REG_MULTI_SZ   = 0x00010000
-REG_EXPAND_SZ  = 0x00020000
-REG_BINARY     = 0x00000001
-REG_DWORD      = 0x00010001
-SERVICEROOT    = "System\CurrentControlSet\Services"
-
-IOLOGMSGDLL    = "IoLogMsg.dll"
-
-DiskId1 = "UniATA Installation disk"
 

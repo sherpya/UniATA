@@ -477,7 +477,7 @@ void main (int argc, char* argv[]) {
         if(BusMasterAdapters[k].RaidFlags & UNIATA_RAID_CONTROLLER)
             printf(";");
         if(!BusMasterAdapters[k].nRevId) {
-            printf("PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc=\"%s %s controller %%COMMENT%%\"\n", 
+            printf("PCI\\VEN_%4.4x&DEV_%4.4x.DeviceDesc=\"%s %s controller%%COMMENT%%\"\n", 
                    BusMasterAdapters[k].nVendorId,
                    BusMasterAdapters[k].nDeviceId,
                    BusMasterAdapters[k].FullDevName,
