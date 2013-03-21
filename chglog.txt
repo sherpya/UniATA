@@ -581,3 +581,17 @@ numeric values with constants.
 2012.12.29 - v0.44c2
 
 !) added INF patches by Gerhard Wiesinger, should fix problems with paths to binaries during setup.
+
+--
+2012.12.30 - v0.44c3
+
+*) implemented smart BUSY up/down wait algorithm in AtapiSoftReset().
+It should avoid unnecessary 1 second delay.
+
+--
+2013.03.20 - v0.44c4
+
+!) fixed bug with incorrectly (-1) initialized deviceExtension->MaxTransferMode
+in UniataChipDetect() for SIS 961
+!) fix candidate for unhandled Write PIO completion. Counters were not updated, this caused
+'incomplete transfer' condition and unnecessary endless retry attempts.

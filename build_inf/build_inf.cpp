@@ -355,7 +355,7 @@ void main (int argc, char* argv[]) {
     if(!strcmp(argv[i], "--html")) {
         ULONG prev_ven=-1;
         PCHAR xdev_str="";
-        PCHAR prev_str = &xdev_str[0];
+        PVEN_STR prev_str = &xdev_str[0];
         g_html = TRUE;
         for(k=0; k<NUM_BUSMASTER_ADAPTERS; k++) {
 
