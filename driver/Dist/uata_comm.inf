@@ -26,7 +26,11 @@ ExcludeFromSelect = *
 ;Well-known adapters
 %UNIATA__MANAGEMENT_PORT.DeviceDesc%=uniata_Inst, SCSI\NetUNIATA__MANAGEMENT_PORT
 %UNIATA__MANAGEMENT_PORT.DeviceDesc%=uniata_Inst, IDE\NetUNIATA__MANAGEMENT_PORT
-
+%UNIATA__MANAGEMENT_PORT.DeviceDesc%=uniata_Inst, SCSI\NetUNIATA__MANAGEMENT_PORT_
+%UNIATA__MANAGEMENT_PORT.DeviceDesc%=uniata_Inst, IDE\NetUNIATA__MANAGEMENT_PORT_
+; For Win 2003
+%UNIATA__MANAGEMENT_PORT.DeviceDesc%=uniata_Inst, SCSI\NetUNIATA__Management_Port*_*
+%UNIATA__MANAGEMENT_PORT.DeviceDesc%=uniata_Inst, IDE\NetUNIATA__Management_Port*_*
 ;
 ; General installation section
 ;

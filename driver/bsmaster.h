@@ -245,6 +245,12 @@ typedef struct _IDE_AHCI_REGISTERS {
         ULONG Reserved:27;
     } BOHC;
 
+#define AHCI_BOHC_BB      0x00000001
+#define AHCI_BOHC_OOC     0x00000002
+#define AHCI_BOHC_SOOE    0x00000004
+#define AHCI_BOHC_OOS     0x00000008
+#define AHCI_BOHC_BOS     0x00000010
+
     UCHAR Reserved2[0x74];
 
     UCHAR VendorSpec[0x60];

@@ -1527,7 +1527,7 @@ UniAtaReadLunConfig(
         memcpy(LunExt->IdentifyData.FirmwareRevision, ".10", 4);
         if(!LunExt->IdentifyData.SectorsPerTrack ||
            !LunExt->IdentifyData.NumberOfCylinders ||
-           !LunExt->IdentifyData.SectorsPerTrack) {
+           !LunExt->IdentifyData.NumberOfHeads) {
             // ERROR
             KdPrint2((PRINT_PREFIX "Wrong CHS\n"));
             LunExt->opt_GeomType = GEOM_AUTO;

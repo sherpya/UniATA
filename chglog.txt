@@ -595,3 +595,14 @@ It should avoid unnecessary 1 second delay.
 in UniataChipDetect() for SIS 961
 !) fix candidate for unhandled Write PIO completion. Counters were not updated, this caused
 'incomplete transfer' condition and unnecessary endless retry attempts.
+
+--
+2013.03.20 - v0.44d
+
+*) warning fixes
+
+--
+2013.04.05 - v0.44e
+
+*) warning fixes in atactl, PHAR -> PCCH
++) added experimental BIOS handoff (BOH) support
