@@ -1,4 +1,4 @@
-; Copyright (c) 2002-2012 UniATA group
+; Copyright (c) 2002-2014 UniATA group
 
 [Version]
 Signature="$Windows NT$"
@@ -7,6 +7,19 @@ ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=SCSIAdapter
 CatalogFile=uniata.cat
 DriverVer=%BUILD_TS%,%DRIVER_VER%
+
+;
+; Source file information
+;
+
+[SourceDisksNames.x86]
+1 = %DiskId1%,,,""
+
+[SourceDisksFiles]
+; Files for disk UniATA Installation Disk #1 (SCSIAdapter)
+uniata.sys = 1,..\,
+atactl.exe = 1,..\,
+
 
 
 [DestinationDirs]
@@ -29,10 +42,11 @@ ExcludeFromSelect = *
 %PCI\CC_0104.DeviceDesc% = uniata_Inst,,PCI\CC_0104                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 %PCI\CC_0105.DeviceDesc% = uniata_Inst,,PCI\CC_0105                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
 %PCI\CC_0106.DeviceDesc% = uniata_Inst,,PCI\CC_0106                             ; Device ID for generic Dual PCI IDE  (UNKNOWN_PCI_IDE)
+%PCI\CC_0106&PROGIF_01.DeviceDesc% = uniata_Inst,,PCI\CC_0106&PROGIF_01         ; AHCI
 %*PNP0600.PriDeviceDesc% = uniata_Inst_Isa, Primary_IDE_Channel
 %*PNP0600.SecDeviceDesc% = uniata_Inst_Isa, Secondary_IDE_Channel
 %*PNP0600.DeviceDesc%    = uniata_Inst_Isa, *PNP0600                                ; Generic_ESDI_Hard_Disk_Controller   (BAD_IDE)
-%UniATA_Name% = uniata_Inst
+%UniATA_Name% = uniata_Inst, ATA_controller
 
 ;
 ; General installation section
@@ -96,28 +110,17 @@ HKLM, "system\currentcontrolset\services\pciide", "Start", %REG_DWORD%, 0x000000
 ;HKLM, "system\currentcontrolset\control\CriticalDeviceDatabase\secondary_ide_channel", "Service", %REG_SZ%, "uniata"
 
 
-;
-; Source file information
-;
-
-[SourceDisksNames.x86]
-1 = %DiskId1%,,,""
-
-[SourceDisksFiles]
-; Files for disk UniATA Installation Disk #1 (SCSIAdapter)
-uniata.sys = 1,..\,
-atactl.exe = 1,..\,
-
-
 [Strings]
 ;DEVNAMELIST
-UniATA_Name = "Universal ATA Driver (Win XP)"
+UniATA_Name = "Universal ATA Driver%EDITION% (WinXP)"
 *PNP0600.PriDeviceDesc  = "Primary IDE Channel (UniATA)"
 *PNP0600.SecDeviceDesc  = "Secondary IDE Channel (UniATA)"
+*PNP0600.DeviceDesc  = "Generic ESDI Hard Disk Controller (UniATA)"
 PCI\CC_0101.DeviceDesc  = "Dual Channel PCI BusMaster IDE Controller (UniATA)"
 PCI\CC_0104.DeviceDesc  = "Generic RAID IDE Controller (UniATA)"
 PCI\CC_0105.DeviceDesc  = "Generic ATA Controller (UniATA)"
 PCI\CC_0106.DeviceDesc  = "Generic Serial ATA Controller (UniATA)"
+PCI\CC_0106&PROGIF_01.DeviceDesc = "Generic AHCI Controller (UniATA)"
 ALTERWARE = "AlterWare"
 
 ;*******************************************

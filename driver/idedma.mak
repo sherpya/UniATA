@@ -110,7 +110,6 @@ LINK32_OBJS= \
 	"$(INTDIR)\stdafx.obj" \
 	"$(INTDIR)\idedma.res"
 
-
 !IF  "$(CFG)" == "UniATA - Win32 Release"
 ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 !ELSEIF  "$(CFG)" == "UniATA - Win32 Debug"
@@ -119,12 +118,18 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 
 "build_inf.exe" : "bm_devs.h"
 !IF "$(NO_BUILD_INF)" == ""
+!IF "$(VER)" != ""
+	copy "uniata_ver.h_" "uniata_ver.h"
+	.\Dist\tools\srchrep.exe -src "**VER**" -dest "$(VER)" "uniata_ver.h"
+!ENDIF 
 	cd ..\build_inf
 	nmake /A CFG="build_inf - Win32 Release"
 	cd ..\driver
 	copy ..\build_inf\Release\build_inf.exe .\build_inf.exe
 	copy ..\build_inf\Release\build_inf.exe .\Dist\tools\build_inf.exe
-#	.\build_inf.exe --ver_h > uniata_ver.h
+!IF "$(VER)" != ""
+	.\build_inf.exe --ver_h > uniata_ver.h
+!ENDIF 
 !ENDIF
 
 
@@ -137,12 +142,14 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 	copy ..\atactl\Release\atactl.exe .\Dist\atactl.exe
 !ENDIF 
 
+PKG : "build_inf.exe" "BusMaster_v$(VER).rar"
+!IF "$(VER)" == ""
+!ERROR  "ERROR: Version not specified !!!"
+!ENDIF 
+
 #ALL :
 #	nmake CFG="UniATA - Win32 Release"
 #	nmake CFG="UniATA - Win32 Debug"
-
-PKG : "BusMaster_v$(VER).rar"
-
 
 "Release\idedma.sys" : "uniata_ver.h"
 	nmake /A CFG="UniATA - Win32 Release"
@@ -329,7 +336,7 @@ SRC=idedma
     del "uniata_ver.h_.lk"
 
 
-"uniata_ver.h" : "uniata_ver.h_" "build_inf.exe"
+".\uniata_ver.h" : "uniata_ver.h_" "build_inf.exe"
 !IF "$(VER)" != ""
     copy "uniata_ver.h_" "uniata_ver.h"
     .\Dist\tools\srchrep.exe -src "**VER**" -dest "$(VER)" "uniata_ver.h"

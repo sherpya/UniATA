@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2008-2012 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2008-2014 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     id_probe.cpp
@@ -977,18 +977,22 @@ UniataAhciDetect(
         max((CAP & AHCI_CAP_NOP_MASK)+1, n);
 
     KdPrint2((PRINT_PREFIX "  CommandSlots %d\n", (CAP & AHCI_CAP_NCS_MASK)>>8 ));
-    KdPrint2((PRINT_PREFIX "  Channels %d\n", n));
+    KdPrint2((PRINT_PREFIX "  Detected Channels %d / %d\n", NumberChannels, n));
 
     switch(deviceExtension->DevID) {
-    case ATA_M88SX6111:
+    case ATA_M88SE6111:
+        KdPrint2((PRINT_PREFIX "  Marvell M88SE6111 -> 1\n"));
         NumberChannels = 1;
         break;
-    case ATA_M88SX6121:
-        NumberChannels = 2;
+    case ATA_M88SE6121:
+        KdPrint2((PRINT_PREFIX "  Marvell M88SE6121 -> 2\n"));
+        NumberChannels = min(NumberChannels, 2);
         break;
-    case ATA_M88SX6141:
-    case ATA_M88SX6145:
-        NumberChannels = 4;
+    case ATA_M88SE6141:
+    case ATA_M88SE6145:
+    case ATA_M88SE9123:
+        KdPrint2((PRINT_PREFIX "  Marvell M88SE614x/9123 -> 4\n"));
+        NumberChannels = min(NumberChannels, 4);
         break;
     } // switch()
 
@@ -997,6 +1001,7 @@ UniataAhciDetect(
         found = FALSE;
         goto exit_detect;
     }
+    KdPrint2((PRINT_PREFIX "  Adjusted Channels %d\n", NumberChannels));
 
 #ifdef DBG
     v_Mj = ((version >> 20) & 0xf0) + ((version >> 16) & 0x0f);
@@ -1101,6 +1106,7 @@ UniataAhciStatus(
     }
     chan->AhciCompleteCI = (chan->AhciPrevCI ^ CI) & chan->AhciPrevCI; // only 1->0 states
     chan->AhciPrevCI = CI;
+    chan->AhciLastSError = SError.Reg;
     KdPrint((" AHCI: complete mask %#x\n", chan->AhciCompleteCI));
     chan->AhciLastIS = IS.Reg;
     if(CI & (1 << tag)) {

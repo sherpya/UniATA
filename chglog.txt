@@ -606,3 +606,72 @@ in UniataChipDetect() for SIS 961
 
 *) warning fixes in atactl, PHAR -> PCCH
 +) added experimental BIOS handoff (BOH) support
+
+--
+2014.03.02 - v0.45
+
+*) added DevIDs for newer ATI IPX700/800, Hudson-2 controllers, default 
+them to SATA (non-AHCI) mode
++) added (experimental) PATA/SATA and AHCI detection code for newer ATI 
+IPX700/800,
++) added nVidia AHCI controllers, default them to SATA (non-AHCI) mode
+*) added more PATA Marvell chips
+
+--
+2014.03.08 - v0.45a
+
+*) added "SIS 0183" controller
+!) fixed handler for SIS 018x SATA controllers without BAR4
+
+--
+2014.03.08 - v0.45a1
+
+*) added "SIS 1182" and "SIS 1183" controllers
+
+--
+2014.03.09 - v0.45a2
+
+!) removed duplicates and wrong values from device list
+*) unified OS-specific INFs
+e) AHCI support is enabled in INFs by default
+*) SIS ATA controllers are listed in bm_list.h in order to be listed in INF
+*) listed VIA AHCI as supported
+!) fixed DevID for RZ 100x
+!) added handler for uninitialized BAR4 for all SATA chips
++) added new Promise chips
++) added channel number adjustment for Promise PATA
+e) partially added Promise SATA support
+*) added handler for 0 dma_count
+e) improved AHCI error handler. Do not retry after interface errors
+
+--
+2014.03.11 - v0.45a3
+
+!) fixed bug with not updated uniata_ver.h when VER is specified
+*) added more logs in and around AtapiVirtToPhysAddr_()
+
+--
+2014.05.21 - v0.45a4
+
+!) fixed bug with PCI device revision for UDMA-5 "SiS 630S" (improper detection)
+
+--
+2014.05.21 - v0.45a5
+
+*) added "SiS 962" and "SiS 963" to list of known devices,
+   programming specific flags are properly set for them.
+*) added more logs for flags and word-count in ISR
+
+--
+2014.08.05 - v0.45a6
+
+e) ATAPI commands READ_CD and READ_CD_MFS are marked as DMA-capable.
+   Managed by registry option AtapiDmaRawRead.
+
+--
+2014.08.11 - v0.45a7
+
+*) Added workaround for "Marvell 9123" detection of AHCI channels.
+   Chip reports 8 while it actually has 4.
+*) added more logs for SSD and AHCI channel detection.
+
