@@ -675,3 +675,41 @@ e) ATAPI commands READ_CD and READ_CD_MFS are marked as DMA-capable.
    Chip reports 8 while it actually has 4.
 *) added more logs for SSD and AHCI channel detection.
 
+--
+2014.08.13 - v0.45a8
+
+!) do not touch unimplemented AHCI channels in AtapiResetController()
+*) added logging to UniataAhciChanImplemented()
+
+--
+2014.09.06 - v0.45b
+
+!) fixed bug with missed AtaReq->WordsTransfered adjustment in IDE PIO Write branch in IdeReadWrite()
+!e) added handler for raised DRQ immediately after PIO read, seems we should try to read rest of data.
+see ReactOS BUG-8280
+
+--
+2014.09.16 - v0.45b1
+
+!e) changed Promise UDMA2+ programming sequence according to Linux sources.
+Should fix problem with high transfer rates.
+see ReactOS BUG-8280
+
+--
+2014.10.17 - v0.45c
+
+!) Added check for valid BM status register on Intel chips in VBOX environment those report
+'compatible' mode via 0x90 PCI reg. This is needed to workaround problem with
+AHCI-enabled controller without properly set 0x90.
+see ReactOS BUG-7020
+
+!) Added LUN 1->2 reallocation in case of fall-back to 'compatible' mode on Intel chips
+acording to 0x90 PCI reg.
+see ReactOS BUG-7020
+
+--
+2014.10.20 - v0.45c1
+
+!) fixed bug with ATA-style code without AHCI branch in AtapiEnableInterrupts() when we are in
+recursive disable state.
+see ReactOS BUG-7020

@@ -645,9 +645,7 @@ UniataAhciInit(
     PHW_CHANNEL chan;
     ULONG offs;
     ULONG BaseMemAddress;
-#ifdef DBG
     ULONG PI;
-#endif //DBG
     ULONG CAP;
     ULONG CAP2;
     ULONG BOHC;
@@ -757,11 +755,12 @@ UniataAhciInit(
     if(CAP & AHCI_CAP_SAM) {
         KdPrint2((PRINT_PREFIX "  AHCI legasy SATA\n"));
     }
-#ifdef DBG
+
     /* get the number of HW channels */
     PI = UniataAhciReadHostPort4(deviceExtension, IDX_AHCI_PI);
+    deviceExtension->AHCI_PI = PI;
     KdPrint2((PRINT_PREFIX "  AHCI PI %#x\n", PI));
-#endif //DBG
+
     CAP2 = UniataAhciReadHostPort4(deviceExtension, IDX_AHCI_CAP2);
     if(CAP2 & AHCI_CAP2_BOH) {
         KdPrint2((PRINT_PREFIX "  retry BOHC\n"));
@@ -969,6 +968,12 @@ UniataAhciDetect(
     KdPrint2((PRINT_PREFIX "\n"));
 
     /* get the number of HW channels */
+    
+    /* CAP.NOP sometimes indicate the index of the last enabled
+     * port, at other times, that of the last possible port, so
+     * determining the maximum port number requires looking at
+     * both CAP.NOP and PI.
+     */
     PI = UniataAhciReadHostPort4(deviceExtension, IDX_AHCI_PI);
     deviceExtension->AHCI_PI = PI;
     KdPrint2((PRINT_PREFIX "  AHCI PI %#x\n", PI));
