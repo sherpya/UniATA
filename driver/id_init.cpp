@@ -1542,7 +1542,18 @@ hpt_cable80(
     UCHAR reg, val, res;
     PCI_SLOT_NUMBER slotData;
 
+    PHW_CHANNEL chan;
+    ULONG  c; // logical channel (for Compatible Mode controllers)
+
+    c = channel - deviceExtension->Channel; // logical channel (for Compatible Mode controllers)
+    chan = &deviceExtension->chan[c];
+
     slotData.u.AsULONG = deviceExtension->slotNumber;
+
+    if(deviceExtension->HwFlags & UNIATA_NO80CHK) {
+        KdPrint2((PRINT_PREFIX "UNIATA_NO80CHK\n"));
+        return TRUE;
+    }
 
     if(ChipType == HPT374 && slotData.u.bits.FunctionNumber == 1)  {
         reg = channel ? 0x57 : 0x53;
@@ -1557,6 +1568,10 @@ hpt_cable80(
     GetPciConfig1(0x5a, res);
     res = res & (channel ? 0x01 : 0x02);
     SetPciConfig1(reg, val);
+    if(chan->Force80pin) {
+        KdPrint2((PRINT_PREFIX "Force80pin\n"));
+        res = 0;
+    }
     KdPrint2((PRINT_PREFIX "hpt_cable80(%d) = %d\n", channel, !res));
     return !res;
 } // end hpt_cable80()
@@ -1637,6 +1652,11 @@ generic_cable80(
 
     c = channel - deviceExtension->Channel; // logical channel (for Compatible Mode controllers)
     chan = &deviceExtension->chan[c];
+
+    if(chan->Force80pin) {
+        KdPrint2((PRINT_PREFIX "Force80pin\n"));
+        return TRUE;
+    }
 
     GetPciConfig1(pci_reg, tmp8);
     if(!(tmp8 & (1 << (channel << bit_offs)))) {
@@ -1793,6 +1813,13 @@ AtapiReadChipConfig(
                 KdPrint2((PRINT_PREFIX "MaxTransferMode (overriden): %#x\n", chan->MaxTransferMode));
                 chan->MaxTransferMode = tmp32;
             }
+            tmp32 = AtapiRegCheckDevValue(deviceExtension, c, DEVNUM_NOT_SPECIFIED, L"Force80pin", FALSE);
+            chan->Force80pin = tmp32 ? TRUE : FALSE;
+            if(chan->Force80pin) {
+                KdPrint2((PRINT_PREFIX "Force80pin on chip\n"));
+                deviceExtension->HwFlags |= UNIATA_NO80CHK;
+            }
+
             //UniAtaReadLunConfig(deviceExtension, c, 0);
             //UniAtaReadLunConfig(deviceExtension, c, 1);
         }
@@ -1823,6 +1850,12 @@ AtapiReadChipConfig(
         }
         tmp32 = AtapiRegCheckDevValue(deviceExtension, c, DEVNUM_NOT_SPECIFIED, L"ReorderEnable", TRUE);
         chan->UseReorder = tmp32 ? TRUE : FALSE;
+
+        tmp32 = AtapiRegCheckDevValue(deviceExtension, c, DEVNUM_NOT_SPECIFIED, L"Force80pin", FALSE);
+        chan->Force80pin = tmp32 ? TRUE : FALSE;
+        if(chan->Force80pin) {
+            KdPrint2((PRINT_PREFIX "Force80pin on channel\n"));
+        }
 
         for(i=0; i<deviceExtension->NumberLuns; i++) {
             UniAtaReadLunConfig(deviceExtension, channel, i);

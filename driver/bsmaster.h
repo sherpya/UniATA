@@ -1026,8 +1026,9 @@ typedef struct _HW_CHANNEL {
     BOOLEAN             CopyDmaBuffer;
     //BOOLEAN             MemIo;
     BOOLEAN             AltRegMap;
+    BOOLEAN             Force80pin;
 
-    UCHAR               Reserved[3];
+    UCHAR               Reserved[2];
 
     MECHANICAL_STATUS_INFORMATION_HEADER MechStatusData;
     SENSE_DATA          MechStatusSense;
