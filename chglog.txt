@@ -713,3 +713,26 @@ see ReactOS BUG-7020
 !) fixed bug with ATA-style code without AHCI branch in AtapiEnableInterrupts() when we are in
 recursive disable state.
 see ReactOS BUG-7020
+
+--
+2014.10.23 - v0.45d
+
+e) added experimental registry option Force80Pin to workaround controllers with broken 80-pin detection
+
+--
+2014.10.29 - v0.45d1
+
+!) Fixed bug in option Force80Pin handling for Intel chips
+!) Fixed bug in DMA timing for ICH4 chips. Due to wrong programming we got assymetric transfer r/w rate
+in UDMA 5 - 80/16 Mb/s
+
+--
+2014.10.30 - v0.45e
+
+e) Added handling of "Exclude" option for separate channels for Compatible controllers
+e) Added handling of "Exclude" option for AHCI channels
+e) Partially added handling of "Exclude" option for ATA/SATA controllers (affects only total number
+of channels according to resulting port bitmap).
+e) Added "PortMask" option for AHCI channels and partially for SATA (like "Exclude").
+This option can reduce available cannels.
+e) Added "NumberChannels" option for SATA, this option can only reduce available cannels.

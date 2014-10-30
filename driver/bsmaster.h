@@ -1304,6 +1304,7 @@ typedef struct _HW_DEVICE_EXTENSION {
     //PIDE_AHCI_PORT_REGISTERS  BaseIoAHCIPort[AHCI_MAX_PORT];
     ULONG          AHCI_CAP;
     ULONG          AHCI_PI;
+    ULONG          AHCI_PI_mask; // for port exclusion, usually = AHCI_PI
     PATA_REQ       AhciInternalAtaReq0;
     PSCSI_REQUEST_BLOCK AhciInternalSrb0;
 
