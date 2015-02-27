@@ -736,3 +736,132 @@ of channels according to resulting port bitmap).
 e) Added "PortMask" option for AHCI channels and partially for SATA (like "Exclude").
 This option can reduce available cannels.
 e) Added "NumberChannels" option for SATA, this option can only reduce available cannels.
+
+--
+2015.02.08 - v0.45f, v0.45f1
+
+*) Added logging of IR status for ATAPI
+
+--
+2015.02.08 - v0.45f2
+
+*) Added logging of WordCount status and interrupt processing points for ATAPI
+e) Added AtapiSoftReset() on ATAPI errors if device reports wrong/unexpected 
+state
+
+--
+2015.02.08 - v0.45f3
+
+e) Added UniataSataClearErr() on ATAPI errors and controller reset
+e) Added extra wait for ready delay for SATA ATAPI reporting wrond device 
+state after reset
+!) perform generic device reset for nVidia SATA controllers if device 
+reports valid state. Previously, reset was never performed for SATA nVidia.
+
+--
+2015.02.09 - v0.45f4
+
+e) Added UniataSataPhyEnable() with reset option for NVIDIA SATA controller reset
+!) fixed logical bug in nVidia device reset branch (still was never called)
+
+--
+2015.02.10 - v0.45f5
+
+e) Added experimental Phy interrupt masking code for NVIDIA SATA during controller reset
+
+--
+2015.02.17 - v0.45f6
+
+!) another experimental Phy interrupt masking code for NVIDIA SATA
+e) added experimental workaround for the case when the controller is fast enough to
+assert IRQ between sending PACKET command and GetBaseStatus().
+We catch ATAPI interrupt with specific status (DRQ+IDLE, 0 WordCount, Write 
+interrupt reason when Read is expected) and just continue execution.
+In general, we should mask interrupts around PACKET command and  
+sending the packet itself, but on virtal machines it definitly cause loss of
+Data interrupt. Also, there is no problem on old uni- and dual-core systems.
+I don't know if this problem is related to number of CPU cores or to overal 
+system performance. 
+Interrupt masking behavior is managed by AtapiSendDisableIntr registry 
+option and is defaulted to FALSE
+
+--
+2015.02.18 - v0.45f7
+
+e) removed ATAPI state workaround from v0.45f6 (doesn't help, no interrupt appeared)
+e) try to force read data from ATAPI device on 'strange' condition
+
+--
+2015.02.18 - v0.45f8
+
+e) try to wait for WordCount in DPC
+
+--
+2015.02.18 - v0.45f9
+
+e) force SATA ATAPI to send Packet in ISR
+
+--
+2015.02.18 - v0.45f10
+
+e) roll-back to v0.45f7
+e) do not use AtaSetTransferMode() for SATA ATAPI devices
+according to Linux ata drivers
+e) try blind reading data for ATAPI if no WordCount reported
+
+--
+2015.02.19 - v0.45f11
+
+e) revert usage of AtaSetTransferMode() for SATA ATAPI devices.
+Problem with zero wordCount persists, but we get PIO timing problem.
+!) force read data from ATAPI device on 'strange' (zero wordCount, but raised DRQ)
+condition seems to work properly
+
+--
+2015.02.19 - v0.45g
+
+!) added check for ATAPI if IDE identify fails
+
+--
+2015.02.22 - v0.45g1
+
+!) added check for Legacy ISA I/O ranges on non-MasterDev PCI controllers
+to avoid further conflict with ISA detection code (such condition was detected on QEmu)
+e) added check for valid value of DriveSelect register on SATA controllers 
+w/o SATA regs. QEmu ignores DriveSelect and reports clone of Master on 
+Slave.
+!) added delay between read cycles in AtapiSuckPort2() and 
+AtapiSuckPortBuffer2() to avoid condition when DRQ is not raised again immediately 
+after read.
+
+--
+2015.02.22 - v0.45g2
+
+!) AtapiSuckPort2() is not called automatically if AtapiSuckDataPort2() get 
+less data than expected. Rest of data may come later.
+
+--
+2015.02.22 - v0.45g3
+
+!) added workaround for lost value of ConfigInfo->AtdiskSecondaryClaimed
+under ReactOS and not detected resource conflict in ScsiPortGetDeviceBase()
+QEmu expose disk controller as both PCI SATA and ISA IDE.
+We should not try ISA detect if PCI succeed with same I/O range
+!) fix for AtapiSuckPort2() in AtapiSuckPortBuffer(). Rest of data may come later.
+
+--
+2015.02.23 - v0.45g4
+
+e) added setting of IDX_AHCI_P_CMD in UniataAhciBeginTransaction() along 
+with CI, probably we need this for VBox only
++) added read from AHCI registers after write to initiate flush (from Linux)
+
+--
+2015.02.23 - v0.45g5
+
+*) undone setting of IDX_AHCI_P_CMD in UniataAhciBeginTransaction() along 
+with CI. It doesn't help, interrupt is lost due to some other reason.
+e) used long wait for Drq in AtapiSuckPortBuffer(), short is not enough.
+We can't defer reading because no more interrupts will be generated and 
+because BUSY is not set while some data is still expected.
+
