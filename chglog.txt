@@ -820,7 +820,8 @@ condition seems to work properly
 --
 2015.02.19 - v0.45g
 
-!) added check for ATAPI if IDE identify fails
+!) added check for ATAPI if IDE identify fails (some devices doesn't report
+ATAPI signature in wrong internal states)
 
 --
 2015.02.22 - v0.45g1
@@ -864,4 +865,122 @@ with CI. It doesn't help, interrupt is lost due to some other reason.
 e) used long wait for Drq in AtapiSuckPortBuffer(), short is not enough.
 We can't defer reading because no more interrupts will be generated and 
 because BUSY is not set while some data is still expected.
+
+--
+2015.02.24 - v0.45h
+
++) added Cyrix 5510/5520 support from Linux code
+
+--
+2015.02.24 - v0.45h1
+
++) added Cyrix 5530 and 5535 support from Linux code
++) added handler for BusReset condition after SCSIOP_MECHANISM_STATUS
+Now driver sets DFLAGS_CHANGER_INITED in this case to prevent automatic use
+of unsupported command.
+
+--
+2015.04.06 - v0.45h2
+
+!) setting of IDX_AHCI_P_CMD in UniataAhciBeginTransaction() along 
+with CI is removed again. According to specs both these actions will
+start command. According to VBox logs command is executed twice.
+Interrupt loss is really caused by some other reason, but this but should be 
+fixed anyway.
+
+--
+2015.04.06 - v0.45h3
+
+!) added AtapiWaitForDrq() in ATAPI interrupt handler.
+Looks like it may be raised with delay (e.g. in QEmu)
+
+--
+2015.04.06 - v0.45h4
+
+!) fixed bug with missing REQ_FLAG_DMA_OPERATION on succefull 
+reinit in AtapiDmaSetup(). This prevented fallback to UDMA2 when higher 
+modes doesn't work fine.
+
+--
+2015.04.07 - v0.45h5
+
+*) minor log updates
+
+--
+2015.09.22 - v0.45h6
+
++) added BOCHS detection
+o) implemented quick device absence detection for BOCHS (0x00 status)
+!) unified IORES structure init via UniataInitIoRes() and UniataInitIoResEx()
+this affects problem with ReactOS boot under BOCHS (BUG 10176)
+e!) IORES->Proc check in IO routines replaced with ASSERT()
+also affets ReactOS BUG 10176
+!) fixed bug with missing reinit dma after device reset and initial 
+detection.
+!) added IO size alignment check before 32-bit PIO operations
+!) fixed bug with Intel timings (secondary channel)
+
+--
+2015.09.23 - v0.45h7
+
+e) added optimization to avoid unnecessary IO with unsupported/missing
+PCI devices on 2nd and 3rd scan passes.
+
+--
+2015.09.23 - v0.45h8
+
++) sync with ReactOS repository
+eo) handle PRD and IO-buff double-buffering before sending CMD to device.
+Copying is moved from AtapiDmaStar() to AtapiDmaDBPreSync()
+e) #pragma pack(1) is used for BusMaster structures in 'bsmaster.h'
+
+--
+2015.09.23 - v0.45h9
+
+!) #pragma pack() is used in all uniata headers to avoid cross-environemnt 
+ambiguities (this was the root of the problem)
+
+--
+2015.09.23 - v0.45h10
+
+*) merged IORES-related logging from parallel branch (39k forked from 39j)
+e!) fixed PCI bus scanning algorithm (it could stop after 1st pass even if 
+some devices are detected)
+
+--
+2015.09.24 - v0.45i
+
+o) implemented quick device absence detection for all types of VM (0x00 status)
+o) stop detection process in IssueIdentify if after IDENTIFY command still reports 0x00 
+status.
+
+--
+2015.09.25 - v0.45i1
+
+*) added more logs to IssueIdentify
+!) removed unhandled ATA_DMA attempt from Promice init code.
+e) temporary (for test only) removed HDD cache/acoustic/etc tuning (ROS 
+BUG-8280)
++) HDD tuning checks Capability flags
+
+--
+2015.09.27 - v0.45i2
+
+*) added more logs to IssueIdentify (Security status)
+e) reverted HDD cache/acoustic/etc tuning (see 0.45i1)
+e) error/retry context is preserved after bus-reset and new attempts
+should be performed with lower transfer rate like after regular error 
+condition. This affects IDE Read/Write operations only.
+
+--
+2015.09.29 - v0.45i3
+
+*) added more logs to IssueIdentify capabilities (IORDY, SoftReset)
+e) used Linux code for Promise DMA init instead of FreeBSD
+!) fixed bug with unnecessaru ExcludeFromSelect option in NT4 .INF
+
+--
+2015.10.06 - v0.45j
+
+!) Fall back to BM mode for Intel AHCI-capable chips w/o AccessRanges[5]
 

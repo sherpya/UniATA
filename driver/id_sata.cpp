@@ -2206,12 +2206,16 @@ UniataAhciBeginTransaction(
     UniataAhciWriteChannelPort4(chan, IDX_AHCI_P_CI, 0x01 << tag);
     chan->AhciPrevCI |= 0x01 << tag;
 
-    KdPrint2(("  Send CMD START\n"));
-    UniataAhciWriteChannelPort4(chan, IDX_AHCI_P_CMD,
-        CMD |
-        ATA_AHCI_P_CMD_ST |
-        ((chan->ChannelCtrlFlags & CTRFLAGS_AHCI_PM) ? ATA_AHCI_P_CMD_PMA : 0));
-    UniataAhciReadChannelPort4(chan, IDX_AHCI_P_CMD); /* flush */
+    CMD0 = CMD;
+    CMD |= ATA_AHCI_P_CMD_ST |
+          ((chan->ChannelCtrlFlags & CTRFLAGS_AHCI_PM) ? ATA_AHCI_P_CMD_PMA : 0);
+    if(CMD != CMD0) {
+      KdPrint2(("  Send CMD START\n"));
+      UniataAhciWriteChannelPort4(chan, IDX_AHCI_P_CMD, CMD);
+      UniataAhciReadChannelPort4(chan, IDX_AHCI_P_CMD); /* flush */
+    } else {
+      KdPrint2(("  No CMD START, already active\n"));
+    }
 
     if(!ATAPI_DEVICE(chan, DeviceNumber)) {
         // TODO: check if we send ATAPI_RESET and wait for ready of so.
@@ -2313,13 +2317,13 @@ UniataAhciEndTransaction(
         KdPrint2(("  Incomplete command, CI %#x, ACT %#x\n", CI, ACT));
         KdPrint2(("  FIS status %#x, error %#x\n", RCV_FIS[2], RCV_FIS[3]));
 
-#if DBG
+#ifdef _DEBUG
         UniataDumpAhciPortRegs(chan);
 #endif
         if(!UniataAhciAbortOperation(chan)) {
             KdPrint2(("  Abort failed, need RESET\n"));
         }
-#if DBG
+#ifdef _DEBUG
         UniataDumpAhciPortRegs(chan);
 #endif
         chan->AhciPrevCI = CI & ~((ULONG)1 << tag);
