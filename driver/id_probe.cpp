@@ -330,6 +330,7 @@ UniataEnumBusMasterController__(
     BOOLEAN found;
     BOOLEAN known;
     BOOLEAN NeedPciAltInit;
+    BOOLEAN NonZeroSubId = 0;
 
     UCHAR IrqForCompat = 10;
 
@@ -405,6 +406,10 @@ UniataEnumBusMasterController__(
                 SubVendorID = pciData.u.type0.SubVendorID;
                 SubSystemID = pciData.u.type0.SubSystemID;
 
+                if(SubVendorID && SubSystemID) {
+                  NonZeroSubId = 1;
+                }
+
                 //KdPrint2((PRINT_PREFIX "DevId = %8.8X Class = %4.4X/%4.4X\n", dev_id, BaseClass, SubClass ));
 
                 // check for (g_opt_VirtualMachine == VM_AUTO) is performed inside each
@@ -431,6 +436,15 @@ UniataEnumBusMasterController__(
                 } else
                 if(VendorID == 0x1234 && DeviceID == 0x1111) {
                     KdPrint2((PRINT_PREFIX "-- BusID: %#x:%#x:%#x - Bochs\n",busNumber,slotNumber,funcNumber));
+                    if(g_opt_VirtualMachine == VM_AUTO) {
+                        g_opt_VirtualMachine = VM_BOCHS;
+                    }
+                } else
+                if(pass>0 && !NonZeroSubId &&
+                   VendorID == 0x8086 &&
+                     (DeviceID == 0x7010 ||
+                      DeviceID == 0x1230)) {
+                    KdPrint2((PRINT_PREFIX "-- BusID: %#x:%#x:%#x - Bochs PIIX emulation\n",busNumber,slotNumber,funcNumber));
                     if(g_opt_VirtualMachine == VM_AUTO) {
                         g_opt_VirtualMachine = VM_BOCHS;
                     }
@@ -3072,49 +3086,35 @@ FindDevices(
             // garbage geometry in the IDENTIFY data.
             // This is ONLY for the crashdump environment as
             // these are ESDI devices.
-            if (LunExt->IdentifyData.SectorsPerTrack ==
-                    0x35 &&
-                LunExt->IdentifyData.NumberOfHeads ==
-                    0x07) {
+            if (LunExt->IdentifyData.SectorsPerTrack == 0x35 &&
+                LunExt->IdentifyData.NumberOfHeads == 0x07) {
 
-                KdPrint2((PRINT_PREFIX 
-                           "FindDevices: Found nasty Compaq ESDI!\n"));
+                KdPrint2((PRINT_PREFIX "FindDevices: Found nasty Compaq ESDI!\n"));
 
                 // Change these values to something reasonable.
-                LunExt->IdentifyData.SectorsPerTrack =
-                    0x34;
-                LunExt->IdentifyData.NumberOfHeads =
-                    0x0E;
+                LunExt->IdentifyData.SectorsPerTrack = 0x34;
+                LunExt->IdentifyData.NumberOfHeads = 0x0E;
             }
 
-            if (LunExt->IdentifyData.SectorsPerTrack ==
-                    0x35 &&
-                LunExt->IdentifyData.NumberOfHeads ==
-                    0x0F) {
+            if (LunExt->IdentifyData.SectorsPerTrack == 0x35 &&
+                LunExt->IdentifyData.NumberOfHeads == 0x0F) {
 
-                KdPrint2((PRINT_PREFIX 
-                           "FindDevices: Found nasty Compaq ESDI!\n"));
+                KdPrint2((PRINT_PREFIX "FindDevices: Found nasty Compaq ESDI!\n"));
 
                 // Change these values to something reasonable.
-                LunExt->IdentifyData.SectorsPerTrack =
-                    0x34;
-                LunExt->IdentifyData.NumberOfHeads =
-                    0x0F;
+                LunExt->IdentifyData.SectorsPerTrack = 0x34;
+                LunExt->IdentifyData.NumberOfHeads = 0x0F;
             }
 
 
-            if (LunExt->IdentifyData.SectorsPerTrack ==
-                    0x36 &&
-                LunExt->IdentifyData.NumberOfHeads ==
-                    0x07) {
+            if (LunExt->IdentifyData.SectorsPerTrack == 0x36 &&
+                LunExt->IdentifyData.NumberOfHeads == 0x07) {
 
                 KdPrint2((PRINT_PREFIX "FindDevices: Found nasty UltraStor ESDI!\n"));
 
                 // Change these values to something reasonable.
-                LunExt->IdentifyData.SectorsPerTrack =
-                    0x3F;
-                LunExt->IdentifyData.NumberOfHeads =
-                    0x10;
+                LunExt->IdentifyData.SectorsPerTrack = 0x3F;
+                LunExt->IdentifyData.NumberOfHeads = 0x10;
                 skipSetParameters = TRUE;
             }
 

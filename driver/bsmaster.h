@@ -1008,6 +1008,7 @@ typedef struct _HW_CHANNEL {
 
     PATA_REQ            cur_req;
     ULONG               cur_cdev;
+    ULONG               last_cdev; /* device for which we have configured timings last time */
 /*    PATA_REQ            first_req;
     PATA_REQ            last_req;*/
     ULONG               queue_depth;
@@ -1123,6 +1124,7 @@ typedef struct _HW_CHANNEL {
 #define CTRFLAGS_LBA48                  0x0040
 #define CTRFLAGS_DSC_BSY                0x0080
 #define CTRFLAGS_NO_SLAVE               0x0100
+//#define CTRFLAGS_DMA_BEFORE_R           0x0200
 //#define CTRFLAGS_PATA                   0x0200
 //#define CTRFLAGS_NOT_PRESENT            0x0200
 #define CTRFLAGS_AHCI_PM                0x0400
@@ -1885,7 +1887,7 @@ extern ULONG   g_opt_VirtualMachine;
 #define VM_QEMU      0x04
 #define VM_BOCHS     0x05
 
-#define VM_MAX_KNOWN VM_QEMU
+#define VM_MAX_KNOWN VM_BOCHS
 
 extern BOOLEAN WinVer_WDM_Model;
 

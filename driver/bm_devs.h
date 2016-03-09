@@ -609,13 +609,15 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define CHIPFLAG_MASK   0xffffff00
 
 #define UNIATA_RAID_CONTROLLER  0x80000000
-#define UNIATA_SIMPLEX_ONLY     0x40000000
+#define UNIATA_SIMPLEX_ONLY     0x40000000 /* contoller cannot perform operations
+                                              on both channels on the same time */
 #define UNIATA_NO_SLAVE         0x20000000
 #define UNIATA_SATA             0x10000000
 #define UNIATA_NO_DPC           0x08000000
 #define UNIATA_NO_DPC_ATAPI     0x04000000
 #define UNIATA_AHCI             0x02000000
 #define UNIATA_NO80CHK          0x01000000
+#define UNIATA_CHAN_TIMINGS     0x00800000 /* controller has common timing settings for master/slave */
 
 #define ATPOLD		0x0100
 
@@ -777,7 +779,7 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
     PCI_DEV_HW_SPEC_BM( 0007, 1103, 0x01, ATA_UDMA6, "HighPoint HPT371" , HPT372 | 0x00   | UNIATA_RAID_CONTROLLER),
     PCI_DEV_HW_SPEC_BM( 0008, 1103, 0x07, ATA_UDMA6, "HighPoint HPT374" , HPT374 | 0x00   | UNIATA_RAID_CONTROLLER),
 
-    PCI_DEV_HW_SPEC_BM( 1230, 8086, 0x00, ATA_WDMA2, "Intel PIIX"       , 0                                       ),
+    PCI_DEV_HW_SPEC_BM( 1230, 8086, 0x00, ATA_WDMA2, "Intel PIIX"       , UNIATA_CHAN_TIMINGS                     ),
     PCI_DEV_HW_SPEC_BM( 7010, 8086, 0x00, ATA_WDMA2, "Intel PIIX3"      , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 7111, 8086, 0x00, ATA_UDMA2, "Intel PIIX3"      , 0                                       ),
     PCI_DEV_HW_SPEC_BM( 7199, 8086, 0x00, ATA_UDMA2, "Intel PIIX4"      , 0                                       ),

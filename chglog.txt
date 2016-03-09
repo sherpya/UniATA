@@ -977,10 +977,94 @@ condition. This affects IDE Read/Write operations only.
 
 *) added more logs to IssueIdentify capabilities (IORDY, SoftReset)
 e) used Linux code for Promise DMA init instead of FreeBSD
-!) fixed bug with unnecessaru ExcludeFromSelect option in NT4 .INF
+!) fixed bug with unnecessary ExcludeFromSelect option in NT4 .INF
 
 --
 2015.10.06 - v0.45j
 
 !) Fall back to BM mode for Intel AHCI-capable chips w/o AccessRanges[5]
+
+--
+2015.10.06 - v0.45j1
+
+!) Fall back to BM mode for all AHCI-capable chips w/o AccessRanges[5]
+
+--
+2016.01.18 - v0.45j2
+
+e) detect wrong Bochs ATA DMA behavior. Versions prior to 2.6.8 expect 
+ATA_DMA_READ *after* DMA start, however BM DMA specs declare opposite order.
+CTRFLAGS_DMA_BEFORE_R flag is introduced in order to manage this.
+(ROS BUG-6774)
+
+--
+2016.01.24 - v0.45j3
+
+e) more logs for detect wrong Bochs ATA DMA behavior. (ROS BUG-6774)
+
+--
+2016.01.24 - v0.45j4
+
+e) use CTRFLAGS_DMA_OPERATION instead of CTRFLAGS_DMA_ACTIVE in workaround condition
+(ROS BUG-6774)
+
+--
+2016.01.24 - v0.45j5
+
+!) fixed bug with missing AtapiDmaStart() on HDD Read in IdeReadWrite()
+
+--
+2016.03.05 - v0.45j6
+
+e) try use CTRFLAGS_DMA_BEFORE_R for ATAPI too
+!) move CTRFLAGS_DMA_BEFORE_R to global g_opt_BochDmaReadWorkaround
+e) do not use DMA on ATAPI under Bochs
+(ROS BUG-6774)
+!) fixed bug with completly cleared ChannelCtrlFlags on bus reset. Permanent 
+bits are masked with CTRFLAGS_PERMANENT
+
+--
+2016.03.06 - v0.45j7
+
+!) use g_opt_AtapiNoDma = TRUE for Bochs by default (ROS BUG-6774)
+e) try use g_opt_BochDmaReadWorkaround for both Read and Write operations
+(ROS BUG-6774)
+
+--
+2016.03.07 - v0.45j8
+
+e) do not use g_opt_BochDmaReadWorkaround for Write operations
+since DMA Start before ATA WRITE cause Boch DMA command abort immediately 
+after DMA Start w/o any error reports after ATA WRITE.
+!) Fixed bug in DMA Start / ATA WRITE sequence (missing DMA Start) for Bochs 
+in workaround mode
+
+See ROS BUG-6774
+
+--
+2016.03.07 - v0.45j9
+
+e) try use DWORD-IO for ATAPI
+
+--
+2016.03.07 - v0.45j10
+
+*) added extra Bochs detection via ATA device S/N and FW (it is possible
+to meet no Boch VendorId on PCI bus)
+and absence of non-zero SubDevice/SubVendor on Intel chipsets
++) Added old PIIX DMA support
+
+--
+2016.03.07 - v0.46
+
+!) Fixed bug with PIO multiblock transfer (wordCount was not updated on each 
+iteration), which may cause buffer overflow
+!) Fixed bug with uninitialized max_bcount on PIO transfers on LBA-enabled devices,
+which could cause unnecessary request fragmentation in PIO mode.
+e) do not try automatically initialize CD-changers, since it may cause
+ATAPI CD-ROM freeze. Let CD-ROM driver do it itself for its own risk (and 
+knowledge). We shall jusy parse output on success.
+Original changer behavior can be reverted by UNIATA_INIT_CHANGERS define.
+(ROS BUG-9119)
+*) removed unnecessary calls of AtapiHwInitializeChanger()
 

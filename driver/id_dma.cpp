@@ -378,7 +378,7 @@ retry_DB_IO:
             AtaReq->ahci.ahci_base64 = NULL;
             return FALSE;
         }
-        KdPrint2((PRINT_PREFIX "  get Phys(data[n=%d]=%x)\n", i, data ));
+        KdPrint2((PRINT_PREFIX "  get Phys(data[n=%d+%x]=%x)\n", i, dma_count0, data ));
         dma_base = AtapiVirtToPhysAddr(HwDeviceExtension, Srb, data, &dma_count, &dma_baseu);
         if(dma_baseu && dma_count) {
             KdPrint2((PRINT_PREFIX "AtapiDmaSetup: block of buffer above 4Gb: %8.8x%8.8x, cnt=%x\n", dma_baseu, dma_base, dma_count));
@@ -601,6 +601,7 @@ AtapiDmaStart(
         KdPrint2((PRINT_PREFIX "AtapiDmaStart: *** !AtaReq->ata.dma_base\n"));
         return;
     }
+    KdPrint2((PRINT_PREFIX "AtapiDmaStart: lchan=%d\n", lChannel));
 
 /*
 //    GetStatus(chan, statusByte2);
@@ -827,14 +828,15 @@ limit_pio:
     if(/*!(LunExt->DeviceFlags & DFLAGS_FORCE_DOWNRATE) &&*/
         (LunExt->LimitedTransferMode >
          LunExt->TransferMode) ||
-         (LunExt->DeviceFlags & DFLAGS_REINIT_DMA)) {
+         (LunExt->DeviceFlags & DFLAGS_REINIT_DMA) ||
+         ((deviceExtension->HwFlags & UNIATA_CHAN_TIMINGS) && ((ULONG)LunExt->Lun != LunExt->chan->last_cdev))) {
         // restore IO mode
         KdPrint2((PRINT_PREFIX
-                    "AtapiDmaReinit: restore IO mode on Device %d\n", LunExt->Lun));
+                    "AtapiDmaReinit: restore IO mode on Device %d, last dev %d\n", LunExt->Lun, LunExt->chan->last_cdev));
         AtapiDmaInit__(deviceExtension, LunExt);
     } else {
         KdPrint2((PRINT_PREFIX
-                    "AtapiDmaReinit: LimitedTransferMode == TransferMode = %x (%x)\n", LunExt->TransferMode, LunExt->DeviceFlags));
+                    "AtapiDmaReinit: LimitedTransferMode == TransferMode = %x (%x), Device %d, last dev %d\n", LunExt->TransferMode, LunExt->DeviceFlags, LunExt->Lun, LunExt->chan->last_cdev));
     }
 
 exit:
@@ -1048,6 +1050,7 @@ AtapiDmaInit(
         }
     //}
 
+    chan->last_cdev = DeviceNumber;
     if(UniataIsSATARangeAvailable(deviceExtension, lChannel) ||
         (ChipFlags & UNIATA_AHCI) || (chan->MaxTransferMode >= ATA_SA150)
        ) {
@@ -1494,27 +1497,50 @@ dma_cs55xx:
         UCHAR  intel_timings[] = { 0x00, 0x00, 0x10, 0x21, 0x23, 0x10, 0x21, 0x23,
     		                   0x23, 0x23, 0x23, 0x23, 0x23, 0x23 };
         UCHAR  intel_utimings[] = { 0x00, 0x01, 0x02, 0x01, 0x02, 0x01, 0x02 };
+	const UCHAR needed_pio[3] = {
+		ATA_PIO0, ATA_PIO3, ATA_PIO4
+	};
 
         if(deviceExtension->DevID == ATA_I82371FB) {
             KdPrint2((PRINT_PREFIX "  I82371FB\n"));
-            if (wdmamode >= 2 && apiomode >= 4) {
-                ULONG word40;
-
-                GetPciConfig4(0x40, word40);
-                word40 >>= Channel * 16;
-
-                /* Check for timing config usable for DMA on controller */
-                if (!((word40 & 0x3300) == 0x2300 &&
-                      ((word40 >> ((!(DeviceNumber & 1)) ? 0 : 4)) & 1) == 1)) {
-                    udmamode = wdmamode = -1;
+            USHORT reg4x;
+            USHORT control;
+            for(i=wdmamode; i>=0; i--) {
+                idx = 5+i;
+                if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_WDMA0 + i)) {
+                    udma_ok = TRUE;
                     break;
                 }
-
-                if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_WDMA2)) {
-                    return;
+            }
+            if(!udma_ok) {
+                AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_PIO0 + apiomode);
+                idx = apiomode;
+            } else {
+                /* If the drive MWDMA is faster than it can do PIO then
+                   we must force PIO into PIO0 */
+                if (apiomode < needed_pio[wdmamode]) {
+                    /* Enable DMA timing only */
+                    control |= 8;	/* PIO cycles in PIO0 */
                 }
             }
-            break;
+            GetPciConfig2(0x40+Channel*2, reg4x);
+            if(apiomode > ATA_PIO0) {
+                control = 0x03;	/* IORDY|TIME0 */
+            } else {
+                control = 0x02;	/* IORDY */
+            }
+	    // if (ata_pio_need_iordy(adev))
+		//control |= 2;	/* IE */
+            if (!isAtapi) {
+                control |= 4;	/* PPE enable */
+            }
+            /* Mask out the relevant control and timing bits we will load. Also
+               clear the other drive TIME register as a precaution */
+            reg4x &= 0xCC00 | (0x0E << (DeviceNumber*4));
+            reg4x |= control << (DeviceNumber*4);
+            reg4x |= intel_timings[idx] << 8;
+            SetPciConfig2(0x40+Channel*2, reg4x);
+            return;
         }
 
         if(deviceExtension->DevID == ATA_ISCH) {
@@ -1557,7 +1583,7 @@ dma_cs55xx:
             tim |= (apiomode & 0x7);
             SetPciConfig4(0x80 + dev*4, tim);
 
-            break;
+            return;
         }
 
         GetPciConfig2(0x48, reg48);
