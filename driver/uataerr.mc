@@ -56,52 +56,52 @@ Bus Parity Error.
 
 MessageId=0x0002 SymbolicName=SP_UNEXPECTED_DISCONNECT
 Language=English
-Bus Parity Error.
+Unexpected disconnect.
 .
 
 MessageId=0x0003 SymbolicName=SP_INVALID_RESELECTION
 Language=English
-Bus Parity Error.
+Invalid reselection.
 .
 
 MessageId=0x0004 SymbolicName=SP_BUS_TIME_OUT
 Language=English
-Bus Parity Error.
+Bus timeout.
 .
 
 MessageId=0x0005 SymbolicName=SP_PROTOCOL_ERROR
 Language=English
-Bus Parity Error.
+Protocol Error.
 .
 
 MessageId=0x0006 SymbolicName=SP_INTERNAL_ADAPTER_ERROR
 Language=English
-Bus Parity Error.
+Internal adapter Error.
 .
 
 MessageId=0x0007 SymbolicName=SP_REQUEST_TIMEOUT
 Language=English
-Bus Parity Error.
+Request timeout.
 .
 
 MessageId=0x0008 SymbolicName=SP_IRQ_NOT_RESPONDING
 Language=English
-Bus Parity Error.
+IRQ not responding.
 .
 
 MessageId=0x0009 SymbolicName=SP_BAD_FW_WARNING
 Language=English
-Bus Parity Error.
+Firmware warning.
 .
 
 MessageId=0x000a SymbolicName=SP_BAD_FW_ERROR
 Language=English
-Bus Parity Error.
+Firmware error.
 .
 
 MessageId=0x000b SymbolicName=SP_LOST_WMI_MINIPORT_REQUEST
 Language=English
-Bus Parity Error.
+Lost WMI request.
 .
 
 

@@ -549,7 +549,7 @@ because on some systems (e.g. some ICH7) may produce interrupt storm.
 --
 2012.09.24 - v0.44b2
 
-*) experimental fix for SATA ATAPI, check for DRQ (appeared, it is not not asserted on error)
+*) experimental fix for SATA ATAPI, check for DRQ (appeared, it is not asserted on error)
 
 --
 2012.09.25 - v0.44b3
@@ -704,7 +704,7 @@ AHCI-enabled controller without properly set 0x90.
 see ReactOS BUG-7020
 
 !) Added LUN 1->2 reallocation in case of fall-back to 'compatible' mode on Intel chips
-acording to 0x90 PCI reg.
+according to 0x90 PCI reg.
 see ReactOS BUG-7020
 
 --
@@ -736,6 +736,7 @@ of channels according to resulting port bitmap).
 e) Added "PortMask" option for AHCI channels and partially for SATA (like "Exclude").
 This option can reduce available cannels.
 e) Added "NumberChannels" option for SATA, this option can only reduce available cannels.
+i) works on nVidia SATA MCP51 PATA/SATA
 
 --
 2015.02.08 - v0.45f, v0.45f1
@@ -753,7 +754,7 @@ state
 2015.02.08 - v0.45f3
 
 e) Added UniataSataClearErr() on ATAPI errors and controller reset
-e) Added extra wait for ready delay for SATA ATAPI reporting wrond device 
+e) Added extra wait for ready delay for SATA ATAPI reporting wrong device 
 state after reset
 !) perform generic device reset for nVidia SATA controllers if device 
 reports valid state. Previously, reset was never performed for SATA nVidia.
@@ -784,6 +785,7 @@ I don't know if this problem is related to number of CPU cores or to overal
 system performance. 
 Interrupt masking behavior is managed by AtapiSendDisableIntr registry 
 option and is defaulted to FALSE
+ROS BUG-9119
 
 --
 2015.02.18 - v0.45f7
@@ -794,19 +796,19 @@ e) try to force read data from ATAPI device on 'strange' condition
 --
 2015.02.18 - v0.45f8
 
-e) try to wait for WordCount in DPC
+e) try to wait for WordCount in DPC (ROS BUG-9119)
 
 --
 2015.02.18 - v0.45f9
 
-e) force SATA ATAPI to send Packet in ISR
+e) force SATA ATAPI to send Packet in ISR (ROS BUG-9119)
 
 --
 2015.02.18 - v0.45f10
 
 e) roll-back to v0.45f7
 e) do not use AtaSetTransferMode() for SATA ATAPI devices
-according to Linux ata drivers
+according to Linux ata drivers (ROS BUG-9119)
 e) try blind reading data for ATAPI if no WordCount reported
 
 --
@@ -816,12 +818,14 @@ e) revert usage of AtaSetTransferMode() for SATA ATAPI devices.
 Problem with zero wordCount persists, but we get PIO timing problem.
 !) force read data from ATAPI device on 'strange' (zero wordCount, but raised DRQ)
 condition seems to work properly
+ROS BUG-9119
 
 --
 2015.02.19 - v0.45g
 
 !) added check for ATAPI if IDE identify fails (some devices doesn't report
 ATAPI signature in wrong internal states)
+ROS BUG-9119
 
 --
 2015.02.22 - v0.45g1
@@ -840,6 +844,7 @@ after read.
 
 !) AtapiSuckPort2() is not called automatically if AtapiSuckDataPort2() get 
 less data than expected. Rest of data may come later.
+ROS BUG-9119
 
 --
 2015.02.22 - v0.45g3
@@ -1012,6 +1017,7 @@ e) use CTRFLAGS_DMA_OPERATION instead of CTRFLAGS_DMA_ACTIVE in workaround condi
 2016.01.24 - v0.45j5
 
 !) fixed bug with missing AtapiDmaStart() on HDD Read in IdeReadWrite()
+i) hangs on nVidia MCP51 (not sure that since this version)
 
 --
 2016.03.05 - v0.45j6
@@ -1044,7 +1050,7 @@ See ROS BUG-6774
 --
 2016.03.07 - v0.45j9
 
-e) try use DWORD-IO for ATAPI
+eo) try use DWORD-IO for ATAPI
 
 --
 2016.03.07 - v0.45j10
@@ -1055,7 +1061,7 @@ and absence of non-zero SubDevice/SubVendor on Intel chipsets
 +) Added old PIIX DMA support
 
 --
-2016.03.07 - v0.46
+2016.03.08 - v0.46
 
 !) Fixed bug with PIO multiblock transfer (wordCount was not updated on each 
 iteration), which may cause buffer overflow
@@ -1066,5 +1072,286 @@ ATAPI CD-ROM freeze. Let CD-ROM driver do it itself for its own risk (and
 knowledge). We shall jusy parse output on success.
 Original changer behavior can be reverted by UNIATA_INIT_CHANGERS define.
 (ROS BUG-9119)
-*) removed unnecessary calls of AtapiHwInitializeChanger()
+-) removed unnecessary calls of AtapiHwInitializeChanger()
++) track last used Lun on the channel chan->last_cdev
 
+--
+2016.03.09 - v0.46a
+
+*) fixed KeNumberProcessors ROS/NT DDK incompatibility issue
+*) fixed g_opt_BochDmaReadWorkaround variable name (use 'Bochs')
+*) fixed DBG vs _DEBUG ROS compilation issue
+!) check for DRQ is taken back. However, it is not always asserted on 
+error (v0.44b2), problem reported by RayeR
+
+--
+2016.03.09 - v0.46a1
+
+e) force PIO on SATA ATAPI (experiment for Pioneer, ROS BUG-9119)
+
+--
+2016.03.12 - v0.46a2
+
+e!) check ATAPI status (iReason) for CoD bit set before sending packet 
+command and wait for it (experiment for Pioneer, ROS BUG-9119)
+*) added logging of DMADirRequired bit from ATAPI Identify
+
+--
+2016.03.12 - v0.46a3
+
+!) IDE_STATUS_INDEX is excluded from Status vs AltStatus verification on 
+ISA, extra log added
+
+--
+2016.03.13 - v0.46a4
+
+!) IDE_STATUS_INDEX is excluded from StatusByte DRQ/Ready condition checks
+o) rewritten DRQ+CoD wait for ATAPI after ATA_PACKET command (ROS BUG-9119)
+
+--
+2016.03.14 - v0.46a5
+
+e) change ATAPI regs setting order
+e) add DriveSelect + IDE_USE_LBA for ATAPI
+e) set ByteCount regs to 0 for ATAPI DMA
+
+--
+2016.03.14 - v0.46a6
+
+e) allow DMA for short/unaligned data blocks for SATA ATAPI (ROS BUG-9119)
+
+--
+2016.03.14 - v0.46a7
+
+*) reverted to normal values of ByteCount regs on ATAPI DMA (ROS BUG-9119)
+*) updated IDENTIFY structure according to ATA8-d2015r2-ATAATAPI
+o) unified ATAPI regs setting code
+*) added Error reg logging if DRQ+CoD never comes (ROS BUG-9119)
+
+--
+2016.03.14 - v0.46a8
+
+e) added 16-byte alignment check for ATAPI DMA transfers
+e) added zero-filling of 'unused' ATAPI regs
+e) DRQ+CoD timeout is set to 1 sec
+e) defer ATAPI command packet sending to ISR for SATA ATAPI
+e) log port claiming operations on ISA init (we have problem with floppy.sys 
+on ISA, reported by KtP)
++) added IoRange cleanup on ISA init
+
+--
+2016.03.17 - v0.46b
+
+-) removed experimental changes for ROS BUG-9119:
+long DRQ+CoD delay, omited PIO/DMA setup for SATA ATAPI, forced DMA mode
+i) all actual improvements and bugfixes from v0.46ax are preserved
+-) removed extra AtaSetTransferMode() call in AMD/NVidia/VIA PIO setup
+!) VIA-specific PIO setup is now conditional in AMD/NVidia/VIA code
+!) fixed IO-range cleanup on unsuccessfull ISA detection attempt
+!) fixed out-or-range cleanup attempt on ISA detect (buffer overflow with 
+possible crash later)
+
+--
+2016.03.19 - v0.46b1
+
++) wait 1us for BUSY raise after write command registers on "old" ISA 
+systems. Original ATAPI.SYS does this.
++) use long timeout 2s on hard reset after unsuccessfull soft reset on 
+detect phase on "old" ISA systems. Original ATAPI.SYS does this.
+*) do not enumerate PCI bus if both IgnoreIsaCompatiblePci and 
+IgnoreNativePci options are set.
+*) fixed several 'prefast' warnings
+
+--
+2016.03.19 - v0.46b2
+
+!!) use ATA_IOSIZE and ATA_ALTIOSIZE for I/O range length in ISA detect part.
+Note, that historically used value of 2 for AltStatus range is definitly 
+wrong. There must be 1. The ambiguity comes from rudimentary definition of
+IDE_REGISTERS_2 with unused DriveAddress member
+e) do not report 0x3f6 register usage on old ISA hardware to avoid 
+interference with Floppy. However, it should use only 0x3f0-3f5,3f7
++) track last selected device via chan->last_devsel to avoid unnecessary
+I/O and possible wait for ready delay.
+Move SelectDrive() from macro to function.
+Create AtapiHardReset() for channel hard reset and related operations
+
+--
+2016.03.20 - v0.46b3
+
+-) removed extra delays, appeared in 0.46b1, 0.46b2
++) added tunable delay in SelectDrive() after write to register
+e) try report 0x3f6 register usage even on old ISA
+!) fix bug with blocked UniataEnumBusMasterController() call
+!) declare IDE_REGISTERS_2 as union and use DriveAddress
+(which is now aliased with AltStatus) as Control register
+i) UniataClaimLegacyPCIIDE() doesn't work on NT4 SMP (by KtP)
+CSB5 device has ISA ports exposed via PCI BARs 0-3
+
+--
+2016.03.20 - v0.46b4
+
+!) fixed bug with sending packet command in ISR. This didn't happen on SATA
+because of error in code unification in v0.46a8
+!) clarified AtaSetTransferMode() behavior for SATA devices. When device is
+switched from PIO to SATA_xxx mode, use highest UDMA mode from Identify 
+data.
+e) use PIO0_TIMING delay between comamnd packet bytes when deal to ATAPI
+(ROS BUG-9119)
+
+--
+2016.03.20 - v0.46b5
+
+!-) removed unnecessary ExFreePool() from UniataClaimLegacyPCIIDE() because 
+buffer is deallocated inside HalAssignSlotResources()
+!) do not report 0x3f6 register usage on old ISA, even with correct 1-byte 
+range length
+e) do not call UniataClaimLegacyPCIIDE() if ISA ranges are exposed via PCI 
+BARs 0-3
+
+--
+2016.03.21 - v0.46b6
+
+!) according to newer FBSD/Linux code SiS chipset programming is not the 
+same as nVidia
+e) try to disable NVQ option use (code seems to be much more different for NCQ mode)
+and clear NVQ flag in HwFlags in oder to operate in old-style mode.
+This option affects interrupt management registers layout.
+i) according to Linux sources, NVQ mode should be specially enabled. 
+Otherwise use old-style mechanism.
+
+--
+2016.03.22 - v0.46b7
+
+e) try to continue init if UniataClaimLegacyPCIIDE() fails on SMP HAL under 
+NT3/4.
+i) Some NT3/4 SMP HALs cannot reallocate IO resources of BusMaster PCI controller
+Since nobody claimed PrimarySecondary yet, try init and claim them
+However it is not 100% safe way.
+!) fixed bug with DeviceID/VendorID in atactl output
+*) align DeviceID/VendorID length in atactl output
+!) fixed bug with ISA-on-PCI detect (used BMList[i] instead of newBMListPtr
+i) doesn't work (hangs) on MCP51 SATA/PATA
+
+--
+2016.03.22 - v0.46b8
+
+-) removed old nVidia updates related to ROS BUG-9119
+i) doesn't work (hangs) on MCP51 SATA/PATA
+
+--
+2016.03.22 - v0.46c
+
+i) roll-back to 45e
++) commit general updates and optimizations from 0.46b8
+expect nVidia-related, DriveSelect optimization, DWORD_IO,
+MECHANISM_STATUS, ATAPI iReason, error recovery context,
+ISA-related changes
+
+--
+2016.03.22 - v0.46c1
+
++) commit DriveSelect optimization
++) commit fix for set (U)DMA mode on SATA
+i) MCP51 SATA/PATA ok (UDMA2 ATAPI + SATA150 HDD)
+
+--
+2016.03.23 - v0.46c2
+
++) commit DWORD_IO
++) commit DMADir
++) commit new VIA timings
++) commit ISA-related changes (w/o PCI detect)
+
+--
+2016.03.23 - v0.46c3
+
++) commit MECHANISM_STATUS fix
+
+--
+2016.03.23 - v0.46c4
+
++) commit ISA-only fixes
+
+--
+2016.03.23 - v0.46c5
+
+!) fixed check for conflicting IO resources (ISA vs PCI).
+Also, the check is unified and performed in AtapiCheckIOInterference()
+In some cases we could touch PCI-allocated ISA (BusMaster) IO resources
+on pure ISA detect.
+*) AtapiFindController() is renamed to AtapiFindIsaController()
+
+--
+2016.03.25 - v0.46c6-8
+
+!) fixes in AtapiFindIsaController() scan algorithm
+
+--
+2016.03.25 - v0.46c9
+
++) commit SATA ATAPI-specific changes (ROS BUG-9119)
+
+--
+2016.03.25 - v0.46c10
+
++) commit new nVidia chipset setup
+i) we get back to 0.46b8 with Isa detect fixes and without very specific 
+ATAPI continue-PIO-read code
+i) MCP51 SATA/PATA ok (UDMA2 ATAPI + SATA150 HDD), Bochs ok
+
+--
+2016.03.25 - v0.46d
+
+e) prefer AltInit if UniataClaimLegacyPCIIDE() fails
+for CSB5 (see above, 0.46b3) and similar cases
+*) fixed dev/vendor logs
+--
+2016.03.25 - v0.46d1
+
+!) commited temporary commented resourceList allocation for 
+HalAssignSlotResources(). e.g. ICH4 fails PCI init on UP system.
+i) in general, resource use claiming should be completly rewritten.
+
+--
+2016.03.26 - v0.46d2
+
+!) always attempt to init Compatible controller if HalAssignSlotResources() fails
+and Primary/Secondary not claimed yet.
+This fixes problem with HALs other than default UP (hal.dll)
+
+--
+2016.03.27 - v0.46d3
+
+*) Use compact data structure BUSMASTER_CONTROLLER_INFORMATION_BASE for known 
+device list (just dev/vendor ID + flags). In user-mode and debug the structure 
+is extnded with device name pointer.
+Original BUSMASTER_CONTROLLER_INFORMATION is now used for list of detected 
+controllers only.
+This should reduce binary size and memory waste.
++) added build_atacmd.exe utility for prebuilding AtaCommandFlags[] and 
+AtaCommands48[] arrays. Now these tables are located in atacmd_map.h
+-) UniataInitAtaCommands() is removed
+
+--
+2016.03.29 - v0.46d4
+
+!) fixed bug with improper mode value in setting (U)DMA mode on SATA
+e-) try do not touch chipset/SATA registers on nVidia MCP51 (10de:0266)
+ROS BUG-9119
+e) try enable/disable interrupts in AtaSetTransferMode() for SMP systems.
+e) set g_opt_AtapiSendDisableIntr to TRUE on SMP systems.
+
+--
+2016.03.31 - v0.46d5
+
++) if we not touch chipset/SATA registers on nVidia MCP51 (10de:0266)
+my notebook freezes on init (both UP/SMP modes)
+i) SMP still gets frozen in GUI
+
+--
+2016.04.02 - v0.46d6
+
++) implement special case for ATAPI 64k PIO read. We may have 0xffff byte 
+count for 0x10000 bytes in single interrupt. Read entire block intead of 
+wait for last word. This makes sense for DWORD_IO.

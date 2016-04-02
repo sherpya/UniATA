@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2014 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2016 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     bm_devs.h
@@ -12,7 +12,7 @@ Author:
     Alexander A. Telyatnikov (Alter)
 
 Environment:
-    kernel mode only
+    kernel and user mode
 
 Notes:
 
@@ -28,6 +28,9 @@ Notes:
     THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Revision History:
+
+Licence:
+    GPLv2
 
 --*/
 
@@ -58,6 +61,15 @@ Revision History:
 #define PVEN_STR    PCHAR
 #endif // USER_MODE*/
 #define PVEN_STR    PCSTR
+
+typedef struct _BUSMASTER_CONTROLLER_INFORMATION_BASE {
+    ULONG   nVendorId;
+    ULONG   nDeviceId;
+    ULONG   nRevId;
+    ULONG   MaxTransferMode;
+    ULONG   RaidFlags;
+    PVEN_STR FullDevName;
+} BUSMASTER_CONTROLLER_INFORMATION_BASE, *PBUSMASTER_CONTROLLER_INFORMATION_BASE;
 
 typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
     PVEN_STR VendorId;
@@ -91,9 +103,9 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
     PKINTERRUPT Isr2InterruptObject;
     CHAR    AltInitMasterDev;       // 0xff - uninitialized,  0x00 - normal,  0x01 - change ISA to PCI
     CHAR    NeedAltInit;            // 0x01 - try change ISA to PCI
-#endif
+#endif // USER_MODE
 
-}BUSMASTER_CONTROLLER_INFORMATION, *PBUSMASTER_CONTROLLER_INFORMATION;
+} BUSMASTER_CONTROLLER_INFORMATION, *PBUSMASTER_CONTROLLER_INFORMATION;
 
 /* defines for known chipset PCI id's */
 #define ATA_ACARD_ID		0x1191
@@ -685,6 +697,7 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define NV4OFF          0x0100
 #define NVQ             0x0200
 
+#define VIANEW		5
 #define VIA33		4
 #define VIA66		1
 #define VIA100		2
@@ -710,16 +723,20 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
 #define ITE_133_NEW     2
 
 #ifdef USER_MODE
+/*  #define PCI_DEV_HW_SPEC_BM(idhi, idlo, rev, mode, name, flags) \
+    { (PVEN_STR) #idlo, 4, 0x##idlo, (PVEN_STR) #idhi, 4, 0x##idhi, rev, mode, (PVEN_STR)name, flags}*/
   #define PCI_DEV_HW_SPEC_BM(idhi, idlo, rev, mode, name, flags) \
-    { (PVEN_STR) #idlo, 4, 0x##idlo, (PVEN_STR) #idhi, 4, 0x##idhi, rev, mode, (PVEN_STR)name, flags}
+    { 0x##idlo, 0x##idhi, rev, mode, flags, name}
 #else
+/*  #define PCI_DEV_HW_SPEC_BM(idhi, idlo, rev, mode, name, flags) \
+    { (PVEN_STR) #idlo, 4, 0x##idlo, (PVEN_STR) #idhi, 4, 0x##idhi, rev, mode, NULL, flags}*/
   #define PCI_DEV_HW_SPEC_BM(idhi, idlo, rev, mode, name, flags) \
-    { (PVEN_STR) #idlo, 4, 0x##idlo, (PVEN_STR) #idhi, 4, 0x##idhi, rev, mode, NULL, flags}
+    { 0x##idlo, 0x##idhi, rev, mode, flags, name}
 #endif
 
 #define BMLIST_TERMINATOR   (0xffffffffL)
 
-BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
+BUSMASTER_CONTROLLER_INFORMATION_BASE const BusMasterAdapters[] = {
 
     PCI_DEV_HW_SPEC_BM( 0005, 1191, 0x00, ATA_UDMA2, "Acard ATP850"     , ATPOLD | UNIATA_SIMPLEX_ONLY            ),
     PCI_DEV_HW_SPEC_BM( 0006, 1191, 0x00, ATA_UDMA4, "Acard ATP860A"    , UNIATA_NO80CHK                          ),
@@ -1235,7 +1252,7 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
     PCI_DEV_HW_SPEC_BM( ffff, ffff, 0xff, BMLIST_TERMINATOR, NULL       , BMLIST_TERMINATOR )
 };
 
-#define NUM_BUSMASTER_ADAPTERS (sizeof(BusMasterAdapters) / sizeof(BUSMASTER_CONTROLLER_INFORMATION))
+#define NUM_BUSMASTER_ADAPTERS (sizeof(BusMasterAdapters) / sizeof(BUSMASTER_CONTROLLER_INFORMATION_BASE))
 
 /*
     Looks for device with specified Device/Vendor and Revision
@@ -1245,7 +1262,7 @@ BUSMASTER_CONTROLLER_INFORMATION const BusMasterAdapters[] = {
 __inline
 ULONG
 Ata_is_dev_listed(
-    PBUSMASTER_CONTROLLER_INFORMATION BusMasterAdapters,
+    IN PBUSMASTER_CONTROLLER_INFORMATION_BASE BusMasterAdapters,
     ULONG VendorId,
     ULONG DeviceId,
     ULONG RevId, // min suitable revision

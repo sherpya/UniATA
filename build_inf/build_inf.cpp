@@ -49,7 +49,7 @@ BOOLEAN g_html=FALSE;
 
 #define MAX_NEW_NUM_BUSMASTER_ADAPTERS  64
 ULONG NewBusmasterCount=0;
-BUSMASTER_CONTROLLER_INFORMATION NewBusMasterAdapters[MAX_NEW_NUM_BUSMASTER_ADAPTERS];
+BUSMASTER_CONTROLLER_INFORMATION_BASE NewBusMasterAdapters[MAX_NEW_NUM_BUSMASTER_ADAPTERS];
 
 #define UNKNOWN_DEVNAME_TEMPLATE  "Compatible ATA controller (Vendor/Device %4.4x/%4.4x)"
 CHAR UnknownDevName[] = "Compatible ATA controller (Vendor/Device ffff/ffff)";
@@ -161,7 +161,7 @@ BuildDevList()
                 if(buf_out.status == 2)
                     break;
 
-                if(Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION)&BusMasterAdapters[0],
+                if(Ata_is_dev_listed((PBUSMASTER_CONTROLLER_INFORMATION_BASE)&BusMasterAdapters[0],
                                      buf_out.pciData.VendorID,
                                      buf_out.pciData.DeviceID,
                                      0,
@@ -392,7 +392,7 @@ void main (int argc, char* argv[]) {
     if(set_file_pointer(h, 0) < 0) {
         exit(-3);
     }
-    buff = (PUCHAR)GlobalAlloc(GMEM_DISCARDABLE, l+1);
+    buff = (PUCHAR)GlobalAlloc(GMEM_FIXED, l+1);
     if(!ReadFile(h, buff, l, (PULONG)&tmp, NULL) ||
         tmp != l) {
         tmp = GetLastError();

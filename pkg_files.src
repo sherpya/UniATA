@@ -8,6 +8,7 @@
 ..\driver\Lib\Debug
 ..\driver\Lib\Release
 ..\driver\Inc
+..\driver\atacmd_map.h
 ..\driver\atapi.h
 ..\driver\bm_devs.h
 ..\driver\bsmaster.h
@@ -52,6 +53,12 @@
 ..\build_inf\SvcManLib.cpp
 ..\build_inf\SvcManLib.h  
 ..\build_inf\Makefile
+..\build_atacmd\build_atacmd.cpp
+..\build_atacmd\build_atacmd.dep
+..\build_atacmd\build_atacmd.dsp
+..\build_atacmd\build_atacmd.dsw
+..\build_atacmd\build_atacmd.mak
+..\build_atacmd\Makefile
 ..\atactl\atactl.cpp
 ..\atactl\atactl.dsp
 ..\atactl\atactl.dsw

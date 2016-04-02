@@ -1022,9 +1022,9 @@ ata_adapter_info(
                 printf("  PCI Bus/Dev/Func:   %lu/%lu/%lu%s\n",
                     AdapterInfo->SystemIoBusNumber, slotData.u.bits.DeviceNumber, slotData.u.bits.FunctionNumber,
                     AdapterInfo->AdapterInterfaceType == AdapterInfo->OrigAdapterInterfaceType ? "" : " (ISA-Bridged)");
-                printf("  VendorId/DevId/Rev: %#04x/%#04x/%#02x\n",
-                    (USHORT)(AdapterInfo->DevID >> 16),
+                printf("  VendorId/DevId/Rev: %#04.4x/%#04.4x/%#02.2x\n",
                     (USHORT)(AdapterInfo->DevID & 0xffff),
+                    (USHORT)(AdapterInfo->DevID >> 16),
                     (UCHAR)(AdapterInfo->RevID));
                 if(AdapterInfo->DeviceName[0]) {
                     printf("  Name:               %s\n", AdapterInfo->DeviceName);

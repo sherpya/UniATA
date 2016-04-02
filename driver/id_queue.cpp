@@ -29,6 +29,9 @@ Notes:
 
 Revision History:
 
+Licence:
+    GPLv2
+
 --*/
 
 #include "stdafx.h"

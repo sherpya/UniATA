@@ -15,6 +15,7 @@ extern "C" {
 #include "ntddscsi.h"
 #include "bsmaster.h"
 #include "uniata_ver.h"
+#include "atacmd_map.h"
 #include "id_sata.h"
 
 #ifndef UNIATA_CORE

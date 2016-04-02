@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2015 Alexander A. Telyatnikov (Alter)
+Copyright (c) 2002-2016 Alexander A. Telyatnikov (Alter)
 
 Module Name:
     id_dma.cpp
@@ -39,6 +39,9 @@ Revision History:
     Optimized Promise TX2 init part
     Optimized Intel init part
          by Alex A. Telyatnikov (Alter) (c) 2002-2007
+
+Licence:
+    GPLv2
 
 
 --*/
@@ -892,17 +895,32 @@ AtaSetTransferMode(
                 "AtaSetTransferMode: Set %#x on Device %d/%d\n", mode, lChannel, DeviceNumber));
     LONG statusByte = 0;
     CHAR apiomode;
-
+    BOOLEAN disable_intr = (deviceExtension->HwFlags & UNIATA_AHCI) || (CPU_num>1);
+/*
+    if(deviceExtension->HwFlags & UNIATA_SATA) {
+        // experimental do nothing, see ROS BUG-9119, v0.46a1
+        statusByte = IDE_STATUS_IDLE;
+    } else */
     if(LunExt->DeviceFlags & DFLAGS_MANUAL_CHS) {
         statusByte = mode <= ATA_PIO2 ? IDE_STATUS_IDLE : IDE_STATUS_ERROR;
     } else {
-        if(deviceExtension->HwFlags & UNIATA_AHCI) {
+        UCHAR umode;
+        if(disable_intr) {
             AtapiDisableInterrupts(deviceExtension, lChannel);
+        }
+        if(mode > ATA_UDMA6) {
+            // for SATA, it doesn't have option to set transfer rate
+            // We need this just to switch between PIO and DMA modes
+            // Devices may support only some lower transfer rates (e.g. UDMA0-4)
+            umode = min((UCHAR)AtaUmode(&(LunExt->IdentifyData)), 6);
+            umode += ATA_UDMA0;
+        } else {
+            umode = (UCHAR)mode;
         }
         statusByte = AtaCommand(deviceExtension, DeviceNumber, lChannel,
                             IDE_COMMAND_SET_FEATURES, 0, 0, 0,
-                            (UCHAR)((mode > ATA_UDMA6) ? ATA_UDMA6 : mode), ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
-        if(deviceExtension->HwFlags & UNIATA_AHCI) {
+                            (UCHAR)umode, ATA_C_F_SETXFER, ATA_WAIT_BASE_READY);
+        if(disable_intr) {
             AtapiEnableInterrupts(deviceExtension, lChannel);
         }
     }
@@ -1228,33 +1246,48 @@ set_new_acard:
         /********************/
         /* AMD, nVidia, VIA */
         /********************/
-        if((VendorID == ATA_VIA_ID) &&
-           (ChipFlags & VIASATA) &&
-           (Channel == 0)) {
-            AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_SA150);
-            return;
+        if(VendorID == ATA_VIA_ID) {
+            if((ChipFlags & VIASATA) &&
+               (Channel == 0)) {
+                AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_SA150);
+                return;
+            }
+            if((ChipFlags & VIABAR) &&
+               (Channel < 2)) {
+                AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_SA150);
+                return;
+            }
         }
 
-        static const UCHAR via_modes[5][7] = {
+        static const UCHAR via_modes[6][7] = {
             { 0xc2, 0xc1, 0xc0, 0x00, 0x00, 0x00, 0x00 },        /* ATA33 and New Chips */
             { 0xee, 0xec, 0xea, 0xe9, 0xe8, 0x00, 0x00 },        /* ATA66 */
             { 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0, 0x00 },        /* ATA100 */
             { 0xf7, 0xf7, 0xf6, 0xf4, 0xf2, 0xf1, 0xf0 },        /* VIA ATA133 */
-            { 0xc2, 0xc1, 0xc0, 0xc4, 0xc5, 0xc6, 0xc7 }};       /* AMD/nVIDIA */
+            { 0xc2, 0xc1, 0xc0, 0xc4, 0xc5, 0xc6, 0xc7 },        /* AMD/nVIDIA */
+            { 0xee, 0xe8, 0xe6, 0xe4, 0xe2, 0xe1, 0xe0 }};       /* VIA new */
 	static const UCHAR via_pio[] =
             { 0xa8, 0x65, 0x42, 0x22, 0x20, 0x42, 0x22, 0x20,
               0x20, 0x20, 0x20, 0x20, 0x20, 0x20 };
         const UCHAR *reg_val = NULL;
         UCHAR reg = 0x53-(UCHAR)dev;
+        UCHAR reg2 = reg-0x08;
+
+        if(ChipFlags & VIABAR) {
+            reg = 0xb3;
+            reg2 = 0xab;
+        }
 
         reg_val = &via_modes[ChipType][0];
 
-        if(VendorID == ATA_NVIDIA_ID)
+        if(VendorID == ATA_NVIDIA_ID) {
             reg += 0x10;
+            reg2 += 0x10;
+        }
 
         for(i = udmamode; i>=0; i--) {
-            SetPciConfig1(reg-0x08, via_pio[8+i]);
             if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_UDMA0 + i)) {
+                SetPciConfig1(reg2, via_pio[8+i]);
                 SetPciConfig1(reg, (UCHAR)reg_val[i]);
                 return;
             }
@@ -1262,19 +1295,20 @@ set_new_acard:
         if(!(ChipFlags & VIABAR)) {
 	    /* This chip can't do WDMA. */
             for(i = wdmamode; i>=0; i--) {
-                SetPciConfig1(reg-0x08, via_pio[5+i]);
                 if(AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_WDMA0 + i)) {
+                    SetPciConfig1(reg2, via_pio[5+i]);
                     SetPciConfig1(reg, 0x8b);
                     return;
                 }
             }
         }
         /* set PIO mode timings */
-        AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_PIO0 + apiomode);
         if((apiomode >= 0) && (ChipType != VIA133)) {
-            SetPciConfig1(reg-0x08, via_pio[apiomode]);
+            SetPciConfig1(reg2, via_pio[apiomode]);
         }
-        via82c_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
+        if(VendorID == ATA_VIA_ID /*&& (ChipType == VIA33 || ChipType == VIA66)*/) {
+            via82c_timing(deviceExtension, dev, ATA_PIO0 + apiomode);
+        }
         AtaSetTransferMode(deviceExtension, DeviceNumber, lChannel, LunExt, ATA_PIO0 + apiomode);
         return;
 
@@ -2620,6 +2654,12 @@ via82c_timing(
     ULONG slotNumber = deviceExtension->slotNumber;
     ULONG SystemIoBusNumber = deviceExtension->SystemIoBusNumber;
 
+    // Newer chips dislike this:
+    if(/*!(deviceExtension->HwFlags & VIAAST)*/
+        deviceExtension->MaxTransferMode < ATA_UDMA6) {
+        return;
+    }
+
     USHORT T = 1000 / /* PciBusClockMHz()*/ 33;
 
     USHORT setup   = 0;
@@ -2649,14 +2689,10 @@ via82c_timing(
         recover = cycle - active;
     }
 
-    // Newer chips dislike this:
-    if(/*!(deviceExtension->HwFlags & VIAAST)*/
-        deviceExtension->MaxTransferMode < ATA_UDMA6) {
-        /* PIO address setup */
-        GetPciConfig1(0x4c, t);
-        t = (t & ~(3 << ((3 - dev) << 1))) | (FIT(setup - 1, 0, 3) << ((3 - dev) << 1));
-        SetPciConfig1(0x4c, t);
-    }
+    /* PIO address setup */
+    GetPciConfig1(0x4c, t);
+    t = (t & ~(3 << ((3 - dev) << 1))) | (FIT(setup - 1, 0, 3) << ((3 - dev) << 1));
+    SetPciConfig1(0x4c, t);
 
     /* PIO active & recover */
     SetPciConfig1(0x4b-dev, (FIT(active - 1, 0, 0xf) << 4) | FIT(recover - 1, 0, 0xf) );

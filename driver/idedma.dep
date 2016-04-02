@@ -14,6 +14,7 @@ id_ata.cpp : \
 	".\id_queue.h"\
 	".\uniata_ver.h"\
 	".\id_sata.h"\
+	".\atacmd_map.h"\
 	
 id_dma.cpp : \
 	".\stdafx.h"\
@@ -84,6 +85,7 @@ id_sata.cpp : \
 	".\bsmaster.h"\
 	".\id_queue.h"\
 	".\id_sata.h"\
+	".\atacmd_map.h"\
 	
 stdafx.cpp : \
 	".\stdafx.h"\

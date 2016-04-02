@@ -1,5 +1,5 @@
 #////////////////////////////////////////////////////////////////////
-#// Alexander A. Telyatnikov (Alter) 2002-2012. Kiev, Ukraine
+#// Alexander A. Telyatnikov (Alter) 2002-2016. Kiev, Ukraine
 #// All rights reserved
 #////////////////////////////////////////////////////////////////////
 
@@ -133,6 +133,15 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 !ENDIF
 
 
+"build_atacmd.exe" : "atapi.h"
+!IF "$(NO_BUILD_CMD)" == ""
+	cd ..\build_atacmd
+	nmake /A CFG="build_atacmd - Win32 Release"
+	cd ..\driver
+	copy ..\build_atacmd\Release\build_atacmd.exe .\build_atacmd.exe
+!ENDIF
+
+
 "atactl.exe" : "uata_ctl.h"
 !IF "$(NO_BUILD_INF)" == ""
 	cd ..\atactl
@@ -142,7 +151,7 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 	copy ..\atactl\Release\atactl.exe .\Dist\atactl.exe
 !ENDIF 
 
-PKG : "build_inf.exe" "BusMaster_v$(VER).rar"
+PKG : "build_inf.exe" "build_atacmd.exe" "BusMaster_v$(VER).rar"
 !IF "$(VER)" == ""
 !ERROR  "ERROR: Version not specified !!!"
 !ENDIF 
@@ -152,10 +161,10 @@ PKG : "build_inf.exe" "BusMaster_v$(VER).rar"
 #	nmake CFG="UniATA - Win32 Debug"
 
 "Release\idedma.sys" : "uniata_ver.h"
-	nmake /A CFG="UniATA - Win32 Release"
+	nmake CFG="UniATA - Win32 Release"
 
 "Debug\idedma.sys" : "uniata_ver.h"
-	nmake /A CFG="UniATA - Win32 Debug"
+	nmake CFG="UniATA - Win32 Debug"
 
 "BusMaster_v$(VER).rar" : ".\Debug\idedma.res" "uniata_ver.h" "..\pkg_files.dist" "..\pkg_files.src" "Release\idedma.sys" "Debug\idedma.sys"
 	cd ..
@@ -335,6 +344,9 @@ SRC=idedma
 "uniata_ver.h_" : "uniata_ver.h_.lk"
     del "uniata_ver.h_.lk"
 
+".\atacmd_map.h" : "build_atacmd.exe"
+    echo "Build ATA command map"
+    .\build_atacmd.exe > atacmd_map.h
 
 ".\uniata_ver.h" : "uniata_ver.h_" "build_inf.exe"
 !IF "$(VER)" != ""

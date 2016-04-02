@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=SCSIAdapter
 CatalogFile=uniata.cat
-DriverVer=03/08/2016,0.46.0.0
+DriverVer=04/02/2016,0.46.4.6
 
 ;
 ; Source file information
