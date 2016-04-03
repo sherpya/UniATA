@@ -5,7 +5,22 @@ id_ata.cpp : \
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
-	".\bm_devs.h"\
+	".\bm_devs_decl.h"\
+	".\ntddscsi.h"\
+	".\scsi.h"\
+	".\srb.h"\
+	".\uata_ctl.h"\
+	".\bsmaster.h"\
+	".\id_queue.h"\
+	".\uniata_ver.h"\
+	".\id_sata.h"\
+	
+atacmd_map.cpp : \
+	".\stdafx.h"\
+	".\config.h"\
+	".\tools.h"\
+	".\atapi.h"\
+	".\bm_devs_decl.h"\
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\
@@ -21,7 +36,7 @@ id_dma.cpp : \
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
-	".\bm_devs.h"\
+	".\bm_devs_decl.h"\
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\
@@ -35,7 +50,7 @@ id_init.cpp : \
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
-	".\bm_devs.h"\
+	".\bm_devs_decl.h"\
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\
@@ -49,7 +64,7 @@ id_probe.cpp : \
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
-	".\bm_devs.h"\
+	".\bm_devs_decl.h"\
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\
@@ -63,7 +78,7 @@ id_queue.cpp : \
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
-	".\bm_devs.h"\
+	".\bm_devs_decl.h"\
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\
@@ -77,7 +92,7 @@ id_sata.cpp : \
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
-	".\bm_devs.h"\
+	".\bm_devs_decl.h"\
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\
@@ -85,14 +100,29 @@ id_sata.cpp : \
 	".\bsmaster.h"\
 	".\id_queue.h"\
 	".\id_sata.h"\
-	".\atacmd_map.h"\
+	
+bm_devs.cpp : \
+	".\stdafx.h"\
+	".\config.h"\
+	".\tools.h"\
+	".\atapi.h"\
+	".\bm_devs_decl.h"\
+	".\ntddscsi.h"\
+	".\scsi.h"\
+	".\srb.h"\
+	".\uata_ctl.h"\
+	".\bsmaster.h"\
+	".\id_queue.h"\
+	".\uniata_ver.h"\
+	".\id_sata.h"\
+	".\bm_devs.h"\
 	
 stdafx.cpp : \
 	".\stdafx.h"\
 	".\config.h"\
 	".\tools.h"\
 	".\atapi.h"\
-	".\bm_devs.h"\
+	".\bm_devs_decl.h"\
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\

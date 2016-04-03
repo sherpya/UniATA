@@ -1605,10 +1605,10 @@ UniataAnybodyHome(
 {  \
         RtlZeroMemory((PCHAR)(AtaReq), FIELD_OFFSET(ATA_REQ, ata)); \
 }
-/*
+
 extern UCHAR const AtaCommands48[256];
 extern UCHAR const AtaCommandFlags[256];
-*/
+
 //#define ATAPI_DEVICE(de, ldev)    (de->lun[ldev].DeviceFlags & DFLAGS_ATAPI_DEVICE)
 #define ATAPI_DEVICE(chan, dev)    ((chan->lun[dev]->DeviceFlags & DFLAGS_ATAPI_DEVICE) ? TRUE : FALSE)
 

@@ -4,13 +4,17 @@
 ..\driver\Dist\NT4  
 ..\driver\Dist\tools
 ..\driver\Dist\XP   
+..\driver\Dist\2k3
 ..\driver\Lib
 ..\driver\Lib\Debug
 ..\driver\Lib\Release
 ..\driver\Inc
+..\driver\atacmd_map.cpp
 ..\driver\atacmd_map.h
 ..\driver\atapi.h
+..\driver\bm_devs.cpp
 ..\driver\bm_devs.h
+..\driver\bm_devs_decl.h
 ..\driver\bsmaster.h
 ..\driver\build.mak
 ..\driver\config.h

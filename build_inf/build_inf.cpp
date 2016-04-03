@@ -30,6 +30,9 @@ Notes:
 
 Revision History:
 
+Licence:
+    GPLv2
+
 --*/
 
 #include <windows.h>

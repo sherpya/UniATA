@@ -213,7 +213,7 @@ void main (int argc, char* argv[]) {
     UniataInitAtaCommands();
 
     printf("\n// Build Version 0." UNIATA_VER_STR "\n\n");
-    printf("\nUCHAR const AtaCommands48[256] = {\n");
+    printf("\nstatic UCHAR const AtaCommands48[256] = {\n");
     for(i=0; i<256; i++) {
         if(i) {
             printf(", ");
@@ -225,7 +225,7 @@ void main (int argc, char* argv[]) {
     }
     printf("};\n\n");
 
-    printf("\nUCHAR const AtaCommandFlags[256] = {\n");
+    printf("\nstatic UCHAR const AtaCommandFlags[256] = {\n");
     for(i=0; i<256; i++) {
         if(i) {
             printf(", ");

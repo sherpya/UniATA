@@ -100,6 +100,8 @@ SOURCE="$(InputPath)"
 DEF_FILE= \
 	".\IdeDma.def"
 LINK32_OBJS= \
+	"$(INTDIR)\bm_devs.obj" \
+	"$(INTDIR)\atacmd_map.obj" \
 	"$(INTDIR)\id_probe.obj" \
 	"$(INTDIR)\id_ata.obj" \
 	"$(INTDIR)\id_dma.obj" \
@@ -323,6 +325,12 @@ SRC=id_sata
 !INCLUDE build.mak
 
 SRC=id_badblock
+!INCLUDE build.mak
+
+SRC=atacmd_map
+!INCLUDE build.mak
+
+SRC=bm_devs
 !INCLUDE build.mak
 
 SRC=stdafx

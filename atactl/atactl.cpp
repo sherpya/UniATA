@@ -1,3 +1,21 @@
+/* 
+
+Copyright (c) 2002-2016 Alexandr A. Telyatnikov (Alter)
+
+Module Name:
+    atactl.cpp
+
+Abstract:
+    This is user-mode management utility for ATA/ATAPI IDE/SATA/AHCI controllers.
+    Designed for use with UniATA.
+
+Author:
+    Alexander A. Telyatnikov (Alter)
+
+Licence:
+    GPLv2
+
+*/
 #include <windows.h>
 #include <WinIoCtl.h>
 #include <stdio.h>
@@ -1699,7 +1717,7 @@ main (
     int power_mode=StartStop_Power_NoChg;
 
     printf("Console ATA control utility for Windows NT3.51/NT4/2000/XP/2003\n"
-           "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2012\n"
+           "Version 0." UNIATA_VER_STR ", Copyright (c) Alexander A. Telyatnikov, 2003-2016\n"
            "Home site: http://alter.org.ua\n");
 
     for(i=1; i<argc; i++) {

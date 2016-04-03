@@ -1352,6 +1352,18 @@ i) SMP still gets frozen in GUI
 --
 2016.04.02 - v0.46d6
 
-+) implement special case for ATAPI 64k PIO read. We may have 0xffff byte 
-count for 0x10000 bytes in single interrupt. Read entire block intead of 
-wait for last word. This makes sense for DWORD_IO.
++) read DWORD-aligned part of data using DwordIo and unaligned in regular 
+way.
+i) When ATAPI 64k PIO read is requested we may have 0xfffe byte 
+count reported for 0x10000 bytes in single interrupt.
+It is not allowed to read entire block with DwordIo intead of 
+wait for last word.
+
+--
+2016.04.03 - v0.46d7
+
+!) device list BusMasterAdapters[] and comamnd map AtaCommandFlags[],
+AtaCommands48[] are compiled in special stubs bm_devs.cpp and atacmd_map.cpp
+in order to avoid data duplicates in final binary.
+Also, this prevent ReactOS build errors.
+e+) added Windows 7 inf build

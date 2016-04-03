@@ -63,7 +63,7 @@ Licence:
 #define         ATA_WAIT_IDLE           0x9
 
 
-#include "bm_devs.h"
+#include "bm_devs_decl.h"
 
 #include "uata_ctl.h"
 
