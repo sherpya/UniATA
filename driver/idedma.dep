@@ -137,3 +137,10 @@ BusMaster_v$(VER).rar : \
 	"..\pkg_files.dist"\
 	"..\pkg_files.src"\
 	"Release\idedma.sys"\
+
+#;"Dist\tools\rebuild_inf.bat" : \
+#;	"Dist\tools\uata_2k.in_"\
+#;	"Dist\tools\uata_2k3.in_"\
+#;	"Dist\tools\uata_xp.in_"\
+#;	"Dist\tools\uniata_2k.re_"\
+

@@ -78,8 +78,8 @@ del /q ..\2k3\uata_2k3*.inf
 rem del /q ..\W7\uata_w7*.inf
 
 move uata_nt4.inf   ..\NT4
+move uata_2k3*.inf  ..\2k3
 move uata_2k*.inf   ..\2K
 move uniata_w2k.reg ..\2K
 move uata_xp*.inf   ..\XP
-move uata_2k3*.inf  ..\2k3
 rem move uata_w7*.inf   ..\W7

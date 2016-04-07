@@ -213,21 +213,6 @@ CLEAN :
 CPP_PROJ_BASE=/nologo /Gz /MT /W3 /GX /O2 /Oy- $(DDKINC) /DNDEBUG /DWIN32 /D_WINDOWS /D_MBCS /D_USRDLL /DIdeDma_EXPORTS /D_X86_ /D_WIN32_WINNT=0x0400 /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
 CPP_PROJ=$(CPP_PROJ_BASE) /Yu"stdafx.h"
 
-.c{$(INTDIR)}.obj::
-   $(CPP) @<<
-   $(CPP_PROJ) $< 
-<<
-
-.cpp{$(INTDIR)}.obj::
-   $(CPP) @<<
-   $(CPP_PROJ) $< 
-<<
-
-.cxx{$(INTDIR)}.obj::
-   $(CPP) @<<
-   $(CPP_PROJ) $< 
-<<
-
 MTL_PROJ=/nologo /D "NDEBUG" /mktyplib203 /win32 
 	
 LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\Lib\Release\CrossNtK.lib /nologo /entry:"DriverEntry" /incremental:no /debug /pdb:"$(OUTDIR)\IdeDma.pdb" /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /driver /pdbtype:sept /subsystem:native /opt:ref /opt:icf
@@ -238,6 +223,12 @@ LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\L
 CPP_PROJ_BASE=/nologo /Gz /MTd /W3 /GX /Z7 /Od /Oy- $(DDKINC) /D_DEBUG /DDBG /DWIN32 /D_WINDOWS /D_MBCS /D_USRDLL /DIdeDma_EXPORTS /D_X86_ /D_WIN32_WINNT=0x0400 /Fp"$(INTDIR)\idedma.pch" /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
 CPP_PROJ=$(CPP_PROJ_BASE) /Yu"stdafx.h"
 
+MTL_PROJ=/nologo /D "_DEBUG" /mktyplib203 /win32 
+
+LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\Lib\Debug\PostDbgMesgK.lib .\Lib\Debug\CrossNtK.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /map:"$(INTDIR)\IdeDma.map" /debug /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /pdbtype:sept /driver /subsystem:native,4.00 
+
+!ENDIF 
+
 .c{$(INTDIR)}.obj::
    $(CPP) @<<
    $(CPP_PROJ) $< 
@@ -252,12 +243,6 @@ CPP_PROJ=$(CPP_PROJ_BASE) /Yu"stdafx.h"
    $(CPP) @<<
    $(CPP_PROJ) $< 
 <<
-
-MTL_PROJ=/nologo /D "_DEBUG" /mktyplib203 /win32 
-
-LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\Lib\Debug\PostDbgMesgK.lib .\Lib\Debug\CrossNtK.lib /nologo /entry:"DriverEntry" /incremental:no /pdb:"$(OUTDIR)\IdeDma.pdb" /map:"$(INTDIR)\IdeDma.map" /debug /machine:I386 /nodefaultlib /def:".\IdeDma.def" /out:"$(OUTDIR)\IdeDma.sys" /pdbtype:sept /driver /subsystem:native,4.00 
-
-!ENDIF 
 
 !IF "$(NO_EXTERNAL_DEPS)" != "1"
 !IF EXISTS("idedma.dep")
@@ -272,7 +257,7 @@ LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\L
   $(LINK32_FLAGS) $(LINK32_OBJS)
 <<
 
-".\copy.msg" : "$(INTDIR)\idedma.res" $(SOURCE) "$(INTDIR)" "$(OUTDIR)" "$(DistDir)" "$(SymDir)"
+".\copy.msg" : "$(INTDIR)\idedma.res" $(SOURCE) "$(INTDIR)" "$(OUTDIR)" "$(DistDir)" "$(SymDir)" "Dist\tools\rebuild_inf.bat"
 	<<tempfile.bat 
 	@echo off 
 	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDma.sys 

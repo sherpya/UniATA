@@ -1352,7 +1352,7 @@ i) SMP still gets frozen in GUI
 --
 2016.04.02 - v0.46d6
 
-+) read DWORD-aligned part of data using DwordIo and unaligned in regular 
++) read DWORD-aligned part of data using DwordIo and then unaligned part in regular 
 way.
 i) When ATAPI 64k PIO read is requested we may have 0xfffe byte 
 count reported for 0x10000 bytes in single interrupt.
@@ -1362,8 +1362,24 @@ wait for last word.
 --
 2016.04.03 - v0.46d7
 
-!) device list BusMasterAdapters[] and comamnd map AtaCommandFlags[],
+!) device list BusMasterAdapters[] and command map AtaCommandFlags[],
 AtaCommands48[] are compiled in special stubs bm_devs.cpp and atacmd_map.cpp
 in order to avoid data duplicates in final binary.
 Also, this prevent ReactOS build errors.
 e+) added Windows 7 inf build
+
+--
+2016.04.05 - v0.46d8
+
+!) fixed .inf build process (2k/2k3 order of copying)
+-) removed w7 .inf build, 2k3 if fixed instestead
++) added build dependency for .inf
+i) in general, .inf and xxx_ver.h build process and dependencies must be 
+rewritten
+!) fixed bug with not reinitialized portBase and Irq on ISA bus scan.
+Only first value was used for all probes
++) added protection from invalid ISA registry setting. Both portBase and Irq 
+must be spefified for ISA channels. Otherwise registry settings are treated 
+as invalid and hard-coded defaults are used.
+i) SMP boot problem was caused by BIOS legacy USB keyboard emulation. This 
+option must be disabled for NT4/NT3.51

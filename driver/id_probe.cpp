@@ -2340,14 +2340,23 @@ AtapiFindIsaController(
         // if not, we go and find ourselves
         if (preConfig == FALSE) {
 
+            ULONG portBase_reg = 0;
+            ULONG irq_reg = 0;
+
             if (!portBase) {
                 portBase = AdapterAddresses[*adapterCount];
                 KdPrint2((PRINT_PREFIX "portBase[%d]=%x\n", *adapterCount, portBase));
             } else {
                 KdPrint2((PRINT_PREFIX "portBase=%x\n", portBase));
             }
-            portBase = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"PortBase", portBase);
-            irq      = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"Irq", irq);
+
+            portBase_reg = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"PortBase", 0);
+            irq_reg      = AtapiRegCheckDevValue(deviceExtension, CHAN_NOT_SPECIFIED, DEVNUM_NOT_SPECIFIED, L"Irq", 0);
+            if(portBase_reg && irq_reg) {
+                KdPrint2((PRINT_PREFIX "use registry settings portBase=%x, irq=%d\n", portBase_reg, irq_reg));
+                portBase = portBase_reg;
+                irq = irq_reg;
+            }
             // check if Primary/Secondary Master IDE claimed
             if(AtapiCheckIOInterference(ConfigInfo, portBase)) {
                 goto next_adapter;
@@ -2690,6 +2699,8 @@ not_found:
                 (*ConfigInfo->AccessRanges)[i].RangeLength = 0;
                 (*ConfigInfo->AccessRanges)[i].RangeInMemory = FALSE;
             }
+            irq = 0;
+            portBase = 0;
         }
 #ifndef UNIATA_CORE
     }

@@ -37,7 +37,7 @@ Licence:
 
 #include "bm_devs_decl.h"
 
-static BUSMASTER_CONTROLLER_INFORMATION_BASE const BusMasterAdapters[] = {
+BUSMASTER_CONTROLLER_INFORMATION_BASE const BusMasterAdapters[] = {
 
     PCI_DEV_HW_SPEC_BM( 0005, 1191, 0x00, ATA_UDMA2, "Acard ATP850"     , ATPOLD | UNIATA_SIMPLEX_ONLY            ),
     PCI_DEV_HW_SPEC_BM( 0006, 1191, 0x00, ATA_UDMA4, "Acard ATP860A"    , UNIATA_NO80CHK                          ),
