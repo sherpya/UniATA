@@ -1401,4 +1401,8 @@ interrupts and we have wordCount truncated to 0, but
 non-zero actual transfer length (previously read block) inside last ISR call.
 AtaReq->WordsTransfered must be used instead. See ROS-11296
 
+--
+2016.08.28 - v0.46e1
 
+!) fixed bug with wrong CrashDump mode condition check, whuch prevented 
+ATAPI detecton on regular init.

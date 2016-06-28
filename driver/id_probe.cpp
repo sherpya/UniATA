@@ -3058,7 +3058,7 @@ CheckDevice(
         // Issue the ATAPI identify command if this
         // is not for the crash dump utility.
 try_atapi:
-        if (g_Dump) {
+        if (!g_Dump) {
 
             // Issue ATAPI packet identify command.
             if (IssueIdentify(HwDeviceExtension,
