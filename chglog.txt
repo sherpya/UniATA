@@ -1345,7 +1345,7 @@ e) set g_opt_AtapiSendDisableIntr to TRUE on SMP systems.
 --
 2016.03.31 - v0.46d5
 
-+) if we not touch chipset/SATA registers on nVidia MCP51 (10de:0266)
++) if we do not touch chipset/SATA registers on nVidia MCP51 (10de:0266)
 my notebook freezes on init (both UP/SMP modes)
 i) SMP still gets frozen in GUI
 
@@ -1357,7 +1357,7 @@ way.
 i) When ATAPI 64k PIO read is requested we may have 0xfffe byte 
 count reported for 0x10000 bytes in single interrupt.
 It is not allowed to read entire block with DwordIo intead of 
-wait for last word.
+wait for the last word.
 
 --
 2016.04.03 - v0.46d7
@@ -1365,7 +1365,7 @@ wait for last word.
 !) device list BusMasterAdapters[] and command map AtaCommandFlags[],
 AtaCommands48[] are compiled in special stubs bm_devs.cpp and atacmd_map.cpp
 in order to avoid data duplicates in final binary.
-Also, this prevent ReactOS build errors.
+Also, this prevents ReactOS build errors.
 e+) added Windows 7 inf build
 
 --
@@ -1383,3 +1383,22 @@ must be spefified for ISA channels. Otherwise registry settings are treated
 as invalid and hard-coded defaults are used.
 i) SMP boot problem was caused by BIOS legacy USB keyboard emulation. This 
 option must be disabled for NT4/NT3.51
+
+--
+2016.06.28 - v0.46e
+
+i) We MUST register 2nd ISR for UP systems. This is needed for cases when 
+multichannel controller generate interrupt while we are still in its ISR for 
+other channle's interrupt. New interrupt must be detected and queued for 
+further processing. If we do not do this, system will not route this 
+interrupt to main ISR (since it is busy) and we shall get to infinite loop 
+looking for interrupt handler.
++) try to identify CrashDump case and tune init process according to this 
+environment.
+!) fixed 'control' register uninitialized case for I82371FB, ROS-11157
+!) fixed bug with buffer overflow when SCSIOP_READ_CAPACITY produce multiple 
+interrupts and we have wordCount truncated to 0, but 
+non-zero actual transfer length (previously read block) inside last ISR call.
+AtaReq->WordsTransfered must be used instead. See ROS-11296
+
+

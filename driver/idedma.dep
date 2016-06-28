@@ -18,17 +18,8 @@ id_ata.cpp : \
 atacmd_map.cpp : \
 	".\stdafx.h"\
 	".\config.h"\
-	".\tools.h"\
 	".\atapi.h"\
-	".\bm_devs_decl.h"\
-	".\ntddscsi.h"\
-	".\scsi.h"\
-	".\srb.h"\
-	".\uata_ctl.h"\
 	".\bsmaster.h"\
-	".\id_queue.h"\
-	".\uniata_ver.h"\
-	".\id_sata.h"\
 	".\atacmd_map.h"\
 	
 id_dma.cpp : \
@@ -105,16 +96,7 @@ bm_devs.cpp : \
 	".\stdafx.h"\
 	".\config.h"\
 	".\tools.h"\
-	".\atapi.h"\
 	".\bm_devs_decl.h"\
-	".\ntddscsi.h"\
-	".\scsi.h"\
-	".\srb.h"\
-	".\uata_ctl.h"\
-	".\bsmaster.h"\
-	".\id_queue.h"\
-	".\uniata_ver.h"\
-	".\id_sata.h"\
 	".\bm_devs.h"\
 	
 stdafx.cpp : \
@@ -123,6 +105,7 @@ stdafx.cpp : \
 	".\tools.h"\
 	".\atapi.h"\
 	".\bm_devs_decl.h"\
+	".\bm_devs.h"\
 	".\ntddscsi.h"\
 	".\scsi.h"\
 	".\srb.h"\
@@ -131,13 +114,13 @@ stdafx.cpp : \
 	".\id_queue.h"\
 	".\uniata_ver.h"\
 	".\id_sata.h"\
+	".\atacmd_map.h"\
 	
 BusMaster_v$(VER).rar : \
 	"Debug\idedma.sys"\
 	"..\pkg_files.dist"\
 	"..\pkg_files.src"\
 	"Release\idedma.sys"\
-
 #;"Dist\tools\rebuild_inf.bat" : \
 #;	"Dist\tools\uata_2k.in_"\
 #;	"Dist\tools\uata_2k3.in_"\

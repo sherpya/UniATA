@@ -1256,6 +1256,14 @@ UniataFindBusMasterController(
     /***********************************************************/
 
     deviceExtension->UseDpc = TRUE;
+#ifndef UNIATA_CORE
+    if (g_Dump) {
+        deviceExtension->DriverMustPoll = TRUE;
+        deviceExtension->UseDpc = FALSE;
+        deviceExtension->simplexOnly = TRUE;
+        deviceExtension->HwFlags |= UNIATA_NO_DPC;
+    }
+#endif //UNIATA_CORE
     KdPrint2((PRINT_PREFIX "HwFlags = %x\n (3)", deviceExtension->HwFlags));
     if(deviceExtension->HwFlags & UNIATA_NO_DPC) {
         /* CMD 649, ROSB SWK33, ICH4 */
@@ -2036,10 +2044,21 @@ UniataConnectIntr2(
 
     KdPrint2((PRINT_PREFIX "Init ISR:\n"));
 
+    /*
+      We MUST register 2nd ISR for multichannel controllers even for UP systems.
+      This is needed for cases when 
+      multichannel controller generate interrupt while we are still in its ISR for 
+      other channle's interrupt. New interrupt must be detected and queued for 
+      further processing. If we do not do this, system will not route this 
+      interrupt to main ISR (since it is busy) and we shall get to infinite loop 
+      looking for interrupt handler.
+    */
+
     if(!deviceExtension->MasterDev && (deviceExtension->NumberChannels > 1) &&   // do not touch MasterDev
        !deviceExtension->simplexOnly && /*                        // this is unnecessary on simplex controllers
        !BMList[i].Isr2DevObj*/                                    // handle re-init under w2k+
        /*!ForceSimplex*/
+       /*(CPU_num > 1) &&  // unnecessary for UP systems*/
        TRUE) {
         // Ok, continue...
         KdPrint2((PRINT_PREFIX "Multichannel native mode, go...\n"));
@@ -2596,26 +2615,11 @@ retryIdentifier:
 
                 // Determine whether this driver is being initialized by the
                 // system or as a crash dump driver.
-                if (ArgumentString) {
-
+                if (g_Dump) {
 #ifndef UNIATA_CORE
-                    if (AtapiParseArgumentString(ArgumentString, "dump") == 1) {
-                        KdPrint2((PRINT_PREFIX
-                                   "AtapiFindIsaController: Crash dump\n"));
-                        //atapiOnly = FALSE;
-                        deviceExtension->DriverMustPoll = TRUE;
-                    } else {
-                        KdPrint2((PRINT_PREFIX
-                                   "AtapiFindIsaController: Atapi Only\n"));
-                        //atapiOnly = TRUE;
-                        deviceExtension->DriverMustPoll = FALSE;
-                    }
+                    deviceExtension->DriverMustPoll = TRUE;
 #endif //UNIATA_CORE
                 } else {
-
-                    KdPrint2((PRINT_PREFIX
-                               "AtapiFindIsaController: Atapi Only (2)\n"));
-                    //atapiOnly = TRUE;
                     deviceExtension->DriverMustPoll = FALSE;
                 }
 
@@ -2724,6 +2728,32 @@ exit_error:
     return SP_RETURN_ERROR;
     
 } // end AtapiFindIsaController()
+
+/*
+    Do nothing, but parse ScsiPort ArgumentString and setup global variables.
+*/
+
+ULONG
+NTAPI
+AtapiReadArgumentString(
+    IN PVOID HwDeviceExtension,
+    IN PVOID Context,
+    IN PVOID BusInformation,
+    IN PCHAR ArgumentString,
+    IN OUT PPORT_CONFIGURATION_INFORMATION ConfigInfo,
+    OUT PBOOLEAN Again
+    )
+{
+    PHW_DEVICE_EXTENSION deviceExtension = (PHW_DEVICE_EXTENSION)HwDeviceExtension;
+
+    if (AtapiParseArgumentString(ArgumentString, "dump") == 1) {
+        KdPrint2((PRINT_PREFIX
+                   "AtapiReadArgumentString: Crash dump\n"));
+        //atapiOnly = FALSE;
+        g_Dump = TRUE;
+    }
+    return(SP_RETURN_NOT_FOUND);
+} // end AtapiReadArgumentString()
 
 ULONG
 NTAPI
@@ -3028,7 +3058,7 @@ CheckDevice(
         // Issue the ATAPI identify command if this
         // is not for the crash dump utility.
 try_atapi:
-        if (!deviceExtension->DriverMustPoll) {
+        if (g_Dump) {
 
             // Issue ATAPI packet identify command.
             if (IssueIdentify(HwDeviceExtension,
