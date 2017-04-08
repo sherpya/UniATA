@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=hdc
 CatalogFile=uniata.cat
-DriverVer=01/06/2017,0.46.5.2
+DriverVer=04/07/2017,0.46.5.2
 
 ;
 ; Source file information

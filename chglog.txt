@@ -1404,11 +1404,18 @@ AtaReq->WordsTransfered must be used instead. See ROS-11296
 --
 2016.08.28 - v0.46e1
 
-!) fixed bug with wrong CrashDump mode condition check, whuch prevented 
+!) fixed bug with wrong CrashDump mode condition check, which prevented 
 ATAPI detecton on regular init.
 
 --
-2017.12.06 - v0.46e2
+2017.01.06 - v0.46e2
 
 !) fixed bug with unitialized page table for valid memory addresses. We should 
 touch user buffer in AtapiVirtToPhysAddr_(). See ROS-11894
+
+--
+2017.04.07 - v0.46e3
+
+!) fixed bug with not handled 0-value of
+CurrentSectorsPerTrack/NumberOfCurrentHeads under PCem VM
+*)  added check for 0-value of SectorsPerTrack/NumberOfHeads
