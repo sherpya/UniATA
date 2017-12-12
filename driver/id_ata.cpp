@@ -4616,7 +4616,7 @@ AtapiCheckInterrupt__(
         }
         break; }
     case ATA_NVIDIA_ID: {
-        if(!(ChipFlags & UNIATA_SATA))
+        if(!(ChipFlags & UNIATA_SATA) || (ChipFlags & NVGEN))
             break;
 
         KdPrint2((PRINT_PREFIX "NVIDIA\n"));
@@ -7985,6 +7985,7 @@ make_reset:
 
     // must be already selected, experimental for ROS BUG-9119
     //AtapiWritePort1(chan, IDX_IO1_o_DriveSelect, IDE_USE_LBA | (DeviceNumber ? IDE_DRIVE_2 : IDE_DRIVE_1) );
+    AtapiWritePort1(chan, IDX_IO2_o_Control , 0);
     AtapiWritePort1(chan, IDX_ATAPI_IO1_o_Feature /*IDX_IO1_o_Feature*/, FeatureReg);
     //AtapiWritePort1(chan, IDX_ATAPI_IO1_o_Unused0, 0);  // experimental for ROS BUG-9119
     //AtapiWritePort1(chan, IDX_ATAPI_IO1_o_Unused1, 0);  // experimental for ROS BUG-9119

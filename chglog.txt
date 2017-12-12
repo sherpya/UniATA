@@ -1419,3 +1419,11 @@ touch user buffer in AtapiVirtToPhysAddr_(). See ROS-11894
 !) fixed bug with not handled 0-value of
 CurrentSectorsPerTrack/NumberOfCurrentHeads under PCem VM
 *)  added check for 0-value of SectorsPerTrack/NumberOfHeads
+
+--
+2017.12.11 - v0.46e4
+
+!) fixed bug with not "nVidia nForce MCP61 S2" (use generic interrupt check) 
+See ROS-11773
+*) write zero to IDX_IO2_o_Control before sending ATAPI command. See 
+ROS-11773
