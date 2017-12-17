@@ -118,7 +118,15 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 !ENDIF 
 
-"build_inf.exe" : "bm_devs.h"
+"uniata_ver.h" : "uniata_ver.h_"
+!IF "$(VER)" != ""
+	copy "uniata_ver.h_" "uniata_ver.h"
+	.\Dist\tools\srchrep.exe -src "**VER**" -dest "$(VER)" "uniata_ver.h"
+	.\Dist\tools\srchrep.exe -src "**VER_DOT**" -dest "$(VER)" "uniata_ver.h"
+	.\build_inf.exe --ver_h > uniata_ver.h
+!ENDIF 
+
+"build_inf.exe" : "bm_devs.h" "uniata_ver.h_"
 !IF "$(NO_BUILD_INF)" == ""
 !IF "$(VER)" != ""
 	copy "uniata_ver.h_" "uniata_ver.h"
