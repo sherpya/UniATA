@@ -1,6 +1,6 @@
 /*++
 
-Copyright (c) 2002-2016 Alexandr A. Telyatnikov (Alter)
+Copyright (c) 2002-2018 Alexandr A. Telyatnikov (Alter)
 
 Module Name:
     id_ata.cpp
@@ -282,10 +282,10 @@ AtapiWritePort##sz( \
         ASSERT(FALSE); /* We should never get here */ \
     } \
     if(!res->MemIo) {             \
-        ScsiPortWritePort##_Type((_type*)(res->Addr), data); \
+        ScsiPortWritePort##_Type((_type*)(ULONGIO_PTR)(res->Addr), data); \
     } else {                                      \
         /*KdPrint(("r_mem @ (%x) %x\n", _port, port));*/ \
-        ScsiPortWriteRegister##_Type((_type*)(res->Addr), data); \
+        ScsiPortWriteRegister##_Type((_type*)(ULONG_PTR)(res->Addr), data); \
     }                                                        \
     return;                                                  \
 }
@@ -319,10 +319,10 @@ AtapiWritePortEx##sz( \
         ASSERT(FALSE); /* We should never get here */ \
     } \
     if(!res->MemIo) {             \
-        ScsiPortWritePort##_Type((_type*)(res->Addr+offs), data); \
+        ScsiPortWritePort##_Type((_type*)(ULONGIO_PTR)(res->Addr+offs), data); \
     } else {                                      \
         /*KdPrint(("r_mem @ (%x) %x\n", _port, port));*/ \
-        ScsiPortWriteRegister##_Type((_type*)(res->Addr+offs), data); \
+        ScsiPortWriteRegister##_Type((_type*)(ULONG_PTR)(res->Addr+offs), data); \
     }                                                        \
     return;                                                  \
 }
@@ -355,10 +355,10 @@ AtapiReadPort##sz( \
     } \
     if(!res->MemIo) {             \
         /*KdPrint(("r_io @ (%x) %x\n", _port, res->Addr));*/ \
-        return ScsiPortReadPort##_Type((_type*)(res->Addr)); \
+        return ScsiPortReadPort##_Type((_type*)(ULONGIO_PTR)(res->Addr)); \
     } else {                                      \
         /*KdPrint(("r_mem @ (%x) %x\n", _port, res->Addr));*/ \
-        return ScsiPortReadRegister##_Type((_type*)(res->Addr)); \
+        return ScsiPortReadRegister##_Type((_type*)(ULONG_PTR)(res->Addr)); \
     }                                                        \
 }
 
@@ -390,10 +390,10 @@ AtapiReadPortEx##sz( \
         ASSERT(FALSE); /* We should never get here */ \
     } \
     if(!res->MemIo) {             \
-        return ScsiPortReadPort##_Type((_type*)(res->Addr+offs)); \
+        return ScsiPortReadPort##_Type((_type*)(ULONGIO_PTR)(res->Addr+offs)); \
     } else {                                      \
         /*KdPrint(("r_mem @ (%x) %x\n", _port, port));*/ \
-        return ScsiPortReadRegister##_Type((_type*)(res->Addr+offs)); \
+        return ScsiPortReadRegister##_Type((_type*)(ULONG_PTR)(res->Addr+offs)); \
     }                                                        \
 }
 
@@ -435,11 +435,11 @@ AtapiReadBuffer##sz( \
     } \
     if(!res->MemIo) {             \
         /*KdPrint(("r_io @ (%x) %x\n", _port, res->Addr));*/ \
-        ScsiPortReadPortBuffer##_Type((_type*)(res->Addr), (_type*)Buffer, Count); \
+        ScsiPortReadPortBuffer##_Type((_type*)(ULONGIO_PTR)(res->Addr), (_type*)Buffer, Count); \
         return; \
     }                                                        \
     while(Count) { \
-        (*((_type*)Buffer)) = ScsiPortReadRegister##_Type((_type*)(res->Addr)); \
+        (*((_type*)Buffer)) = ScsiPortReadRegister##_Type((_type*)(ULONG_PTR)(res->Addr)); \
         Count--; \
         Buffer = ((_type*)Buffer)+1; \
     } \
@@ -480,11 +480,11 @@ AtapiWriteBuffer##sz( \
     } \
     if(!res->MemIo) {             \
         /*KdPrint(("r_io @ (%x) %x\n", _port, res->Addr));*/ \
-        ScsiPortWritePortBuffer##_Type((_type*)(res->Addr), (_type*)Buffer, Count); \
+        ScsiPortWritePortBuffer##_Type((_type*)(ULONGIO_PTR)(res->Addr), (_type*)Buffer, Count); \
         return; \
     }                                                        \
     while(Count) { \
-        ScsiPortWriteRegister##_Type((_type*)(res->Addr), *((_type*)Buffer)); \
+        ScsiPortWriteRegister##_Type((_type*)(ULONG_PTR)(res->Addr), *((_type*)Buffer)); \
         Count--; \
         Buffer = ((_type*)Buffer)+1; \
     } \
@@ -2093,6 +2093,10 @@ IssueIdentify(
                 }
             }
 
+            if(NumOfSectors > ATA_MAX_IOLBA28) {
+              KdPrint2((PRINT_PREFIX "2TB threshold, force LBA64 WRITE requirement\n"));
+              LunExt->DeviceFlags |= DFLAGS_LBA32plus;
+            }
         } // if(LunExt->DeviceFlags & DFLAGS_LBA_ENABLED)
 
         // fill IdentifyData with bogus geometry
@@ -5183,14 +5187,25 @@ ServiceInterrupt:
                 chan->AhciLastIS & ~(ATA_AHCI_P_IX_DHR | ATA_AHCI_P_IX_PS | ATA_AHCI_P_IX_DS | ATA_AHCI_P_IX_SDB),
                 chan->AhciLastSError));
             if(chan->AhciLastIS & ~ATA_AHCI_P_IX_OF) {
-                //KdPrint3((PRINT_PREFIX "Err mask (%#x)\n", chan->AhciLastIS & ~ATA_AHCI_P_IX_OF));
-                // We have some other error except Overflow
-                // Just signal ERROR, operation will be aborted in ERROR branch.
-                statusByte |= IDE_STATUS_ERROR;
-                AtaReq->ahci.in_serror = chan->AhciLastSError;
-                if(chan->AhciLastSError & (ATA_SE_HANDSHAKE_ERR | ATA_SE_LINKSEQ_ERR | ATA_SE_TRANSPORT_ERR | ATA_SE_UNKNOWN_FIS)) {
-                    KdPrint2((PRINT_PREFIX "Unrecoverable\n"));
-                    NoRetry = TRUE;
+
+                if((chan->AhciLastIS == ATA_AHCI_P_IX_INF) &&
+                   !(statusByte & IDE_STATUS_ERROR) &&
+                   !chan->AhciLastSError &&
+                   srb && (srb->SrbFlags & SRB_FLAGS_DATA_IN)
+                   ) {
+                  KdPrint3((PRINT_PREFIX "ATA_AHCI_P_IX_INF on READ, assume underflow\n"));
+                  // continue processing in regular way
+                } else {
+
+                  //KdPrint3((PRINT_PREFIX "Err mask (%#x)\n", chan->AhciLastIS & ~ATA_AHCI_P_IX_OF));
+                  // We have some other error except Overflow
+                  // Just signal ERROR, operation will be aborted in ERROR branch.
+                  statusByte |= IDE_STATUS_ERROR;
+                  AtaReq->ahci.in_serror = chan->AhciLastSError;
+                  if(chan->AhciLastSError & (ATA_SE_HANDSHAKE_ERR | ATA_SE_LINKSEQ_ERR | ATA_SE_TRANSPORT_ERR | ATA_SE_UNKNOWN_FIS)) {
+                      KdPrint2((PRINT_PREFIX "Unrecoverable\n"));
+                      NoRetry = TRUE;
+                  }
                 }
             } else {
                 // We have only Overflow. Abort operation and continue
@@ -6894,13 +6909,23 @@ IdeReadWrite(
             AtaReq->TransferLength = Srb->DataTransferLength;
             // Set up 1st block.
             switch(Srb->Cdb[0]) {
-            case SCSIOP_READ:
             case SCSIOP_WRITE:
+                if(LunExt->DeviceFlags & DFLAGS_LBA32plus) {
+                  KdPrint2((PRINT_PREFIX "Attention: SCSIOP_WRITE on 2TB\n"));
+                  //return SRB_STATUS_ERROR;
+                }
+                // FALLTHROUGH
+            case SCSIOP_READ:
                 MOV_DD_SWP(startingSector, ((PCDB)Srb->Cdb)->CDB10.LBA);
                 MOV_SWP_DW2DD(AtaReq->bcount, ((PCDB)Srb->Cdb)->CDB10.TransferBlocks);
                 break;
-            case SCSIOP_READ12:
             case SCSIOP_WRITE12:
+                if(LunExt->DeviceFlags & DFLAGS_LBA32plus) {
+                  KdPrint2((PRINT_PREFIX "Attention: SCSIOP_WRITE12 on 2TB\n"));
+                  //return SRB_STATUS_ERROR;
+                }
+                // FALLTHROUGH
+            case SCSIOP_READ12:
                 MOV_DD_SWP(startingSector, ((PCDB)Srb->Cdb)->CDB12READWRITE.LBA);
                 MOV_DD_SWP(AtaReq->bcount, ((PCDB)Srb->Cdb)->CDB12READWRITE.NumOfBlocks);
                 break;
@@ -10372,7 +10397,7 @@ UniataInitAtaCommands()
         case IDE_COMMAND_WRITE_LOG_DMA48:
         case IDE_COMMAND_TRUSTED_RCV_DMA:
         case IDE_COMMAND_TRUSTED_SEND_DMA:
-        case IDE_COMMAND_DATA_SET_MGMT:
+        case IDE_COMMAND_DATA_SET_MGMT: // TRIM
             //KdPrint2((PRINT_PREFIX "DMA "));
             flags |= ATA_CMD_FLAG_DMA;
         }
@@ -10848,7 +10873,7 @@ DriverEntry(
                 newStatus = ScsiPortInitialize(DriverObject,
                                                Argument2,
                                                &hwInitializationData.comm,
-                                               (PVOID)(i | ((alt ^ pref_alt) ? 0x80000000 : 0)));
+                                               UlongToPtr(i | ((alt ^ pref_alt) ? 0x80000000 : 0)));
                 KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x\n", newStatus));
                 if (newStatus < statusToReturn) {
                     statusToReturn = newStatus;
@@ -10943,7 +10968,7 @@ DriverEntry(
         newStatus = ScsiPortInitialize(DriverObject,
                                        Argument2,
                                        &hwInitializationData.comm,
-                                       (PVOID)i);
+                                       UlongToPtr(i));
         KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x\n", newStatus));
         if(newStatus == (ULONG)STATUS_DEVICE_DOES_NOT_EXIST && BMList[i].NeedAltInit) {
             // Note: this is actually a BUG in scsiport.sys
@@ -10956,7 +10981,7 @@ DriverEntry(
             newStatus = ScsiPortInitialize(DriverObject,
                                            Argument2,
                                            &hwInitializationData.comm,
-                                           (PVOID)(i | 0x80000000));
+                                           UlongToPtr(i | 0x80000000));
             KdPrint2((PRINT_PREFIX "ScsiPortInitialize Status %#x (2)\n", newStatus));
         }
         if (newStatus < statusToReturn)

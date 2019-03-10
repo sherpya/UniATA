@@ -1427,3 +1427,45 @@ CurrentSectorsPerTrack/NumberOfCurrentHeads under PCem VM
 See ROS-11773
 *) write zero to IDX_IO2_o_Control before sending ATAPI command. See 
 ROS-11773
+
+--
+2017.12.17 - v0.46e5
+
+!) fixed bug with double memory allocation for under-4G buffer in 
+AtapiDmaAllocate() in AHCI mode
+See ROS-13988
+
+--
+2018.03.18 - v0.46e6
+
+e!) treat AHCI non-fatal condition on READ operations without error bits set
+as buffer underrun (INFS, ATA_AHCI_P_IX_INF)
+e) check for LBA32 writes on 2TB+ HDDs (cause data corruption), just write 
+to log now
+!) fix for Intel ICH9 (2921, 2926) compability flags (should be non-AHCI dual channel). 
+See ROS-13310
++) added JMicron dual-port support + SATA/PATA detect
+e) 80-pin detection is always issued at the end of AtapiChipInit() 
+regardless of controller SATA support flag since we may have mixed SATA/PATA 
+ports on the same controller
+
+--
+2018.03.22 - v0.46e7
+
+!) fix in JMicron dual-port support, do not try to update LUNs since they 
+are not initialized yet
+o) use pre-cached values of 0x40 and 0x80 regs on JMicron before general vs 
+channel-specific mode checks (thanks to Torsten Kìhn for debug)
+
+--
+2018.07.26 - v0.46e7x
+
++) adopted 
+https://github.com/reactos/reactos/pull/673/commits/4da824887556fa374a5b77cb3fdddc28d2e07f23
+64-bit patch (use ULONGIO_PTR, ULONG_PTR)
+
+
+2019.01.21 - v0.46e8
+
+e) AHCI v.1.3, v.1.3.1 are experimentally listed as supported (success)
++) merged v0.46e7 and v0.46e7x

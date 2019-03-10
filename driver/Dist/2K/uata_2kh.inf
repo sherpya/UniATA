@@ -6,7 +6,7 @@ Provider=%ALTERWARE%
 ClassGUID={4D36E97B-E325-11CE-BFC1-08002BE10318}
 Class=hdc
 CatalogFile=uniata.cat
-DriverVer=12/17/2017,0.46.5.5
+DriverVer=03/10/2019,0.46.5.8
 
 ;
 ; Source file information
@@ -661,12 +661,12 @@ PCI\VEN_8086&DEV_23a3.DeviceDesc="COLETOCRK SATA2 controller"
 PCI\VEN_8086&DEV_23a1.DeviceDesc="COLETOCRK SATA2 controller"
 PCI\VEN_8086&DEV_23a6.DeviceDesc="COLETOCRK SATA2 controller"
 PCI\VEN_197b&DEV_2360.DeviceDesc="JMB360 SATA2 controller"
-PCI\VEN_197b&DEV_2361.DeviceDesc="JMB361 ATA-133 controller"
+PCI\VEN_197b&DEV_2361.DeviceDesc="JMB361 SATA2 controller"
 PCI\VEN_197b&DEV_2362.DeviceDesc="JMB362 SATA2 controller"
-PCI\VEN_197b&DEV_2363.DeviceDesc="JMB363 ATA-133 controller"
-PCI\VEN_197b&DEV_2365.DeviceDesc="JMB365 ATA-133 controller"
-PCI\VEN_197b&DEV_2366.DeviceDesc="JMB366 ATA-133 controller"
-PCI\VEN_197b&DEV_2368.DeviceDesc="JMB368 ATA-133 controller"
+PCI\VEN_197b&DEV_2363.DeviceDesc="JMB363 SATA2 controller"
+PCI\VEN_197b&DEV_2365.DeviceDesc="JMB365 SATA2 controller"
+PCI\VEN_197b&DEV_2366.DeviceDesc="JMB366 SATA2 controller"
+PCI\VEN_197b&DEV_2368.DeviceDesc="JMB368 SATA2 controller"
 PCI\VEN_11ab&DEV_6101.DeviceDesc="Marvell 88SX6101 ATA-133 controller"
 PCI\VEN_11ab&DEV_6102.DeviceDesc="Marvell 88SX6102 ATA-133 controller"
 PCI\VEN_11ab&DEV_6111.DeviceDesc="Marvell 88SX6111 ATA-133 controller"
