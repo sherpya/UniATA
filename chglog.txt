@@ -1460,12 +1460,36 @@ channel-specific mode checks (thanks to Torsten Kìhn for debug)
 --
 2018.07.26 - v0.46e7x
 
-+) adopted 
++) adapted 
 https://github.com/reactos/reactos/pull/673/commits/4da824887556fa374a5b77cb3fdddc28d2e07f23
 64-bit patch (use ULONGIO_PTR, ULONG_PTR)
 
-
-2019.01.21 - v0.46e8
+--
+2019.01.21 - v0.46e8x
 
 e) AHCI v.1.3, v.1.3.1 are experimentally listed as supported (success)
-+) merged v0.46e7 and v0.46e7x
+
+--
+2019.03.10 - v0.46e8
+
++) merged v0.46e7, v0.46e7x and v0.46e8x
+
+--
+2019.03.11 - v0.47
+
+!) fix for .mak files under Wine build enfironment 
+   if not exist "$(SomeDIR)/$(NULL)" 
+     must be changed to 
+    ....  "$(SomeDIR)" 
++) added Intel and Marvell AHCI chipsets
+e) added UNIATA_AHCI_ALT_SIG flag. Some AHCI returns signature in PSIG 
+   rather than FIS on soft reset
+!) call UniataExpectChannelInterrupt() in IdeVerify()
++) added ThunderX and Annapurna AHCI chips
+e) added workaround for AHCI chips those do not setup port mask. So enable 
+ports manually according to port count register
+!) fixed Win/Wine .mak compatibility issues
+e) added UNIATA_RAID_CONTROLLER flag to RAID controllers. Note, UniATA 
+doesn't attach to RAIDs since SkipRaid option is set to 1 by default
++) added interface-type specific registry settings under PATA, SATA and AHCI 
+sub-hives of Parameters.

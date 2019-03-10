@@ -4,6 +4,7 @@
 #////////////////////////////////////////////////////////////////////
 
 SOURCE="$(REL_PATH)\$(SRC).$(SRC_EXT)"
+!MESSAGE BUILD "$(REL_PATH)\$(SRC).$(SRC_EXT)"
 !IF  "$(CFG)" == "IdeDma - Win32 Release"
 "$(INTDIR)\$(SRC).obj" : $(SOURCE) "$(INTDIR)" "$(INTDIR)\idedma.pch"
 !ELSEIF  "$(CFG)" == "IdeDma - Win32 Debug"

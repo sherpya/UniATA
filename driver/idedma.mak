@@ -29,6 +29,10 @@ NULL=
 NULL=nul
 !ENDIF 
 
+!IF "$(DST_WINDIR)" == ""
+DST_WINDIR=C:\WINNT\System32\Drivers
+!ENDIF
+
 !IF "$(BaseDir)" == ""
 BaseDir=$(BASEDIR)
 !ENDIF 
@@ -187,8 +191,8 @@ PKG : "build_inf.exe" "build_atacmd.exe" "BusMaster_v$(VER).rar"
 #	nmake /A CFG="UniATA - Win32 Release"
 #	nmake /A CFG="UniATA - Win32 Debug"
 #!ENDIF 
-	copy $(ALTDIR)\IdeDma.sys C:\WINNT\System32\Drivers\IdeDma.sys 
-	copy $(ALTDIR)\IdeDma.sys C:\WINNT\System32\Drivers\IdeDmb.sys 
+	if exist DST_WINDIR copy $(ALTDIR)\IdeDma.sys $(DST_WINDIR)\IdeDma.sys 
+	if exist DST_WINDIR copy $(ALTDIR)\IdeDma.sys $(DST_WINDIR)\IdeDmb.sys 
 
 	rar a    -s -mdD -m5 BusMaster_v$(VER).rar     @..\pkg_files.dist
 	rar a -r -s -mdD -m5 BusMaster_v$(VER)_Dbg.rar Debug_Dist
@@ -208,13 +212,13 @@ CLEAN :
 !ENDIF 
 
 "$(OUTDIR)" :
-    if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
+    if not exist "$(OUTDIR)" mkdir "$(OUTDIR)"
 
 "$(DistDir)" :
-    if not exist "$(DistDir)/$(NULL)" mkdir "$(DistDir)"
+    if not exist "$(DistDir)" mkdir "$(DistDir)"
 
 "$(SymDir)" :
-    if not exist "$(SymDir)/$(NULL)" mkdir "$(SymDir)"
+    if not exist "$(SymDir)" mkdir "$(SymDir)"
 
 !IF  "$(CFG)" == "UniATA - Win32 Release"
 
@@ -268,8 +272,8 @@ LINK32_FLAGS=/LIBPATH:$(LibPath) ntoskrnl.lib int64.lib Hal.lib ScsiPort.lib .\L
 ".\copy.msg" : "$(INTDIR)\idedma.res" $(SOURCE) "$(INTDIR)" "$(OUTDIR)" "$(DistDir)" "$(SymDir)" "Dist\tools\rebuild_inf.bat"
 	<<tempfile.bat 
 	@echo off 
-	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDma.sys 
-	copy $(TargetPath) C:\WINNT\System32\Drivers\IdeDmb.sys 
+	if exist DST_WINDIR copy $(TargetPath) $(DST_WINDIR)\IdeDma.sys 
+	if exist DST_WINDIR copy $(TargetPath) $(DST_WINDIR)\IdeDmb.sys 
 !IF "$(NO_BUILD_INF)" == ""
 	del /Q /S $(DistDir)\*
 	copy $(TargetPath) $(DistDir)\uniata.sys

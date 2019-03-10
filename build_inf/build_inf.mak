@@ -44,7 +44,7 @@ CLEAN :
 	-@erase "$(OUTDIR)\build_inf.map"
 
 "$(OUTDIR)" :
-    if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
+    if not exist "$(OUTDIR)" mkdir "$(OUTDIR)"
 
 CPP=cl.exe
 CPP_PROJ=/nologo /ML /W3 /GX /O1 /D "NDEBUG" /D "WIN32" /D "_CONSOLE" /D "_MBCS" /D "USER_MODE" /Fp"$(INTDIR)\build_inf.pch" /YX /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /c 
@@ -129,7 +129,7 @@ CLEAN :
 	-@erase "$(OUTDIR)\build_inf.pdb"
 
 "$(OUTDIR)" :
-    if not exist "$(OUTDIR)/$(NULL)" mkdir "$(OUTDIR)"
+    if not exist "$(OUTDIR)" mkdir "$(OUTDIR)"
 
 CPP=cl.exe
 CPP_PROJ=/nologo /MTd /W3 /Gm /GX /ZI /Od /D "_DEBUG" /D "WIN32" /D "_CONSOLE" /D "_MBCS" /D "USER_MODE" /Fp"$(INTDIR)\build_inf.pch" /YX /Fo"$(INTDIR)\\" /Fd"$(INTDIR)\\" /FD /GZ /c 
