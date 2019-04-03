@@ -11279,7 +11279,7 @@ AtapiRegCheckDevValue(
             val = AtapiRegCheckDevLunValue(
                 HwDeviceExtension, namex, chan, dev, Name, val);
         }
-        if(!(HwFlags & (UNIATA_AHCI | UNIATA_AHCI))) {
+        if(!(HwFlags & (UNIATA_SATA | UNIATA_AHCI))) {
             swprintf(namev, L"\\PATA");
             swprintf(namex, L"Parameters%s", namev);
             val = AtapiRegCheckDevLunValue(

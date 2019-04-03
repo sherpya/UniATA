@@ -41,7 +41,7 @@ Licence:
 #include "..\driver\atapi.h"
 #include "..\driver\bm_devs.h"
 #include "..\driver\uniata_ver.h"
-#include "..\..\..\PCIDump\Head\Driver\PCIDump.h"
+#include "PCIDump.h"
 #include "SvcManLib.h"
 
 #define DEVLIST_NAME     ";DEVLIST"

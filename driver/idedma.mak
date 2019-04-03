@@ -128,14 +128,23 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 	.\Dist\tools\srchrep.exe -src "**VER**" -dest "$(VER)" "uniata_ver.h"
 	.\Dist\tools\srchrep.exe -src "**VER_DOT**" -dest "$(VER)" "uniata_ver.h"
 	.\build_inf.exe --ver_h > uniata_ver.h
+        .\Dist\tools\srchrep.exe -e -src "\r\n" -dest "\n" "uniata_ver.h"
 !ENDIF 
 
-"build_inf.exe" : "bm_devs.h" "uniata_ver.h_"
+"..\build_inf\pcidump.h" :
+!IF EXISTS("..\..\..\pcidump\head\driver\pcidump.h")
+ 	copy ..\..\..\pcidump\head\driver\pcidump.h ..\build_inf
+!ENDIF
+
+"build_inf.exe" : "bm_devs.h" "uniata_ver.h_" "..\build_inf\pcidump.h"
 !IF "$(NO_BUILD_INF)" == ""
 !IF "$(VER)" != ""
 	copy "uniata_ver.h_" "uniata_ver.h"
 	.\Dist\tools\srchrep.exe -src "**VER**" -dest "$(VER)" "uniata_ver.h"
 !ENDIF 
+!IF EXISTS("..\..\..\pcidump\head\driver\pcidump.h")
+	copy ..\..\..\pcidump\head\driver\pcidump.h ..\build_inf
+!ENDIF
 	cd ..\build_inf
 	nmake /A CFG="build_inf - Win32 Release"
 	cd ..\driver
@@ -143,6 +152,7 @@ ALL : "$(OUTDIR)\IdeDma.sys" ".\copy.msg"
 	copy ..\build_inf\Release\build_inf.exe .\Dist\tools\build_inf.exe
 !IF "$(VER)" != ""
 	.\build_inf.exe --ver_h > uniata_ver.h
+        .\Dist\tools\srchrep.exe -e -src "\r\n" -dest "\n" "uniata_ver.h"
 !ENDIF 
 !ENDIF
 
@@ -352,6 +362,7 @@ SRC=idedma
 ".\atacmd_map.h" : "build_atacmd.exe"
     echo "Build ATA command map"
     .\build_atacmd.exe > atacmd_map.h
+    .\Dist\tools\srchrep.exe -e -src "\r\n" -dest "\n" "atacmd_map.h"
 
 ".\uniata_ver.h" : "uniata_ver.h_" "build_inf.exe"
 !IF "$(VER)" != ""
@@ -363,6 +374,7 @@ SRC=idedma
 #    copy ..\build_inf\Release\build_inf.exe .\build_inf.exe
 #    copy ..\build_inf\Release\build_inf.exe .\Dist\tools\build_inf.exe
     .\build_inf.exe --ver_h > uniata_ver.h
+    .\Dist\tools\srchrep.exe -e -src "\r\n" -dest "\n" "uniata_ver.h"
 #!MESSAGE  "$(INTDIR)\IdeDma.sys"  "$(ALTDIR)\IdeDma.sys"
 !ENDIF 
 

@@ -1455,7 +1455,7 @@ ports on the same controller
 !) fix in JMicron dual-port support, do not try to update LUNs since they 
 are not initialized yet
 o) use pre-cached values of 0x40 and 0x80 regs on JMicron before general vs 
-channel-specific mode checks (thanks to Torsten Kìhn for debug)
+channel-specific mode checks (thanks to Torsten K
 
 --
 2018.07.26 - v0.46e7x
@@ -1475,21 +1475,28 @@ e) AHCI v.1.3, v.1.3.1 are experimentally listed as supported (success)
 +) merged v0.46e7, v0.46e7x and v0.46e8x
 
 --
-2019.03.11 - v0.47
+2019.03.19 - v0.47
 
 !) fix for .mak files under Wine build enfironment 
    if not exist "$(SomeDIR)/$(NULL)" 
      must be changed to 
     ....  "$(SomeDIR)" 
-+) added Intel and Marvell AHCI chipsets
++) added a lot of AMD, Intel and Marvell AHCI chipsets, 
 e) added UNIATA_AHCI_ALT_SIG flag. Some AHCI returns signature in PSIG 
    rather than FIS on soft reset
 !) call UniataExpectChannelInterrupt() in IdeVerify()
-+) added ThunderX and Annapurna AHCI chips
++) added ASMedia, ThunderX and Annapurna AHCI chips
 e) added workaround for AHCI chips those do not setup port mask. So enable 
 ports manually according to port count register
-!) fixed Win/Wine .mak compatibility issues
+!) fixed Win/Wine .mak path/dependence compatibility issues
 e) added UNIATA_RAID_CONTROLLER flag to RAID controllers. Note, UniATA 
-doesn't attach to RAIDs since SkipRaid option is set to 1 by default
+doesn't attach to RAIDs since SkipRaids option is set to 1 by default
 +) added interface-type specific registry settings under PATA, SATA and AHCI 
 sub-hives of Parameters.
+
+2019.03.26 - v0.47a
+!) AtapiSetupLunPtrs() was not called after UniataAllocateLunExt() in Intel SATA/AHCI detect code, CORE-15886
+*) CR/LF -> CR in driver sources
+!) fix for (UNIATA_AHCI | UNIATA_AHCI) instead of (UNIATA_SATA | UNIATA_AHCI) in AtapiRegCheckDevValue()
+*) remove 0x prefix when printing AHCI version
+*) pcidump\head\driver\pcidump.h dependency is conditional. Local copy of pcidump.h is used by default
