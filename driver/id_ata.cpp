@@ -11271,23 +11271,28 @@ AtapiRegCheckDevValue(
             swprintf(namev, L"\\SATA");
             swprintf(namex, L"Parameters%s", namev);
             val = AtapiRegCheckDevLunValue(
-                HwDeviceExtension, namex, chan, dev, Name, val);
+                HwDeviceExtension, namex, CHAN_NOT_SPECIFIED, dev, Name, val);
         }
         if(HwFlags & UNIATA_AHCI) {
             swprintf(namev, L"\\AHCI");
             swprintf(namex, L"Parameters%s", namev);
             val = AtapiRegCheckDevLunValue(
-                HwDeviceExtension, namex, chan, dev, Name, val);
+                HwDeviceExtension, namex, CHAN_NOT_SPECIFIED, dev, Name, val);
         }
         if(!(HwFlags & (UNIATA_SATA | UNIATA_AHCI))) {
             swprintf(namev, L"\\PATA");
             swprintf(namex, L"Parameters%s", namev);
             val = AtapiRegCheckDevLunValue(
-                HwDeviceExtension, namex, chan, dev, Name, val);
+                HwDeviceExtension, namex, CHAN_NOT_SPECIFIED, dev, Name, val);
         }
 
         if(deviceExtension->AdapterInterfaceType == PCIBus) {
             // PCI
+            swprintf(namev, L"\\PCIIDE");
+            swprintf(namex, L"Parameters%s", namev);
+            val = AtapiRegCheckDevLunValue(
+                HwDeviceExtension, namex, CHAN_NOT_SPECIFIED, dev, Name, val);
+
             swprintf(namev, L"\\IDE_%d", deviceExtension->DevIndex);
             swprintf(namex, L"Parameters%s", namev);
             val = AtapiRegCheckDevLunValue(
@@ -11312,6 +11317,11 @@ AtapiRegCheckDevValue(
         } else
         if(deviceExtension->AdapterInterfaceType == Isa) {
             // Isa
+            swprintf(namev, L"\\ISAIDE");
+            swprintf(namex, L"Parameters%s", namev);
+            val = AtapiRegCheckDevLunValue(
+                HwDeviceExtension, namex, CHAN_NOT_SPECIFIED, dev, Name, val);
+
             swprintf(namev, L"\\IDE_%d", deviceExtension->DevIndex+BMListLen);
             swprintf(namex, L"Parameters%s", namev);
             val = AtapiRegCheckDevLunValue(
@@ -11325,6 +11335,11 @@ AtapiRegCheckDevValue(
         } else
         if(deviceExtension->AdapterInterfaceType == MicroChannel) {
             // MicroChannel
+            swprintf(namev, L"\\MCA");
+            swprintf(namex, L"Parameters%s", namev);
+            val = AtapiRegCheckDevLunValue(
+                HwDeviceExtension, namex, CHAN_NOT_SPECIFIED, dev, Name, val);
+
             swprintf(namev, L"\\IDE_%d", deviceExtension->DevIndex+BMListLen+IsaCount);
             swprintf(namex, L"Parameters%s", namev);
             val = AtapiRegCheckDevLunValue(
