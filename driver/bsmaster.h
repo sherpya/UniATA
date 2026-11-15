@@ -858,8 +858,10 @@ typedef struct _IDE_AHCI_CHANNEL_CTL_BLOCK {
 #define PCI_IDE_PROGIF_NATIVE_2         0x04
 #define PCI_IDE_PROGIF_NATIVE_ALL       0x05
 
+BOOLEAN UniataHasLegacyBusMaster(const PCI_COMMON_CONFIG* pci);
+
 #define IsMasterDev(pciData) \
-    ( ((pciData)->ProgIf & 0x80) && \
+    ( (((pciData)->ProgIf & 0x80) || UniataHasLegacyBusMaster(pciData)) && \
       ((pciData)->ProgIf & PCI_IDE_PROGIF_NATIVE_ALL) != PCI_IDE_PROGIF_NATIVE_ALL )
 
 //#define INT_Q_SIZE 32

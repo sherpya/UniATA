@@ -46,6 +46,7 @@ Licence:
 --*/
 
 #include "stdafx.h"
+#include "controller_quirks.h"
 
 static BUSMASTER_CONTROLLER_INFORMATION_BASE const AtiSouthAdapters[] = {
     PCI_DEV_HW_SPEC_BM( 4385, 1002, 0x00, ATA_MODE_NOT_SPEC, "ATI South", 0 ),
@@ -1966,6 +1967,9 @@ AtapiChipInit(
             KdPrint2((PRINT_PREFIX "  re-enable IO resources of MasterDev FAILED\n" ));
         }
     }
+
+    if(GlobalInit && !UniataInitControllerQuirks(deviceExtension))
+        return FALSE;
 
     switch(VendorID) {
 //  case ATA_ACARD_ID:

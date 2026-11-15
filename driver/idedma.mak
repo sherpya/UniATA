@@ -110,6 +110,8 @@ LINK32_OBJS= \
 	"$(INTDIR)\id_ata.obj" \
 	"$(INTDIR)\id_dma.obj" \
 	"$(INTDIR)\id_init.obj" \
+	"$(INTDIR)\controller_quirks.obj" \
+	"$(INTDIR)\cs5530.obj" \
 	"$(INTDIR)\id_queue.obj" \
 	"$(INTDIR)\id_sata.obj" \
 	"$(INTDIR)\id_badblock.obj" \
@@ -320,6 +322,12 @@ SRC=id_dma
 !INCLUDE build.mak
 
 SRC=id_init
+!INCLUDE build.mak
+
+SRC=controller_quirks
+!INCLUDE build.mak
+
+SRC=cs5530
 !INCLUDE build.mak
 
 SRC=id_probe

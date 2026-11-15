@@ -47,6 +47,7 @@ Licence:
 --*/
 
 #include "stdafx.h"
+#include "controller_quirks.h"
 
 static const ULONG valid_udma[7] = {0,0,2,0,4,5,6};
 
@@ -1143,6 +1144,10 @@ AtapiDmaInit(
         apiomode,
         wdmamode,
         udmamode));
+
+    if(UniataSetControllerTransferMode(deviceExtension, DeviceNumber, lChannel,
+                                       apiomode, wdmamode, udmamode))
+        return;
 
     switch(VendorID) {
     case ATA_ACARD_ID: {
