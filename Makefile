@@ -86,5 +86,6 @@ test:
 	$(PYTHON) cross/test_dma_payload.py
 	$(PYTHON) cross/test_debug_log.py
 	$(PYTHON) cross/test_capacity16.py
+	$(PYTHON) cross/test_pci_resources.py
 
 -include $(OBJECTS:.o=.d)

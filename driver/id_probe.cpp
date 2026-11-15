@@ -1942,6 +1942,7 @@ UniataClaimLegacyPCIIDE(
 {
     NTSTATUS status;
     PCM_RESOURCE_LIST resourceList = NULL;
+    PCM_RESOURCE_LIST originalResources = NULL;
     UNICODE_STRING devname;
 
     KdPrint2((PRINT_PREFIX "UniataClaimLegacyPCIIDE:\n"));
@@ -1961,13 +1962,15 @@ UniataClaimLegacyPCIIDE(
         return status;
     }
 
-    resourceList = (PCM_RESOURCE_LIST) ExAllocatePool(PagedPool,
+    originalResources = resourceList = (PCM_RESOURCE_LIST) ExAllocatePool(PagedPool,
                                 sizeof(CM_RESOURCE_LIST));
 
     if (!resourceList) {
         KdPrint2((PRINT_PREFIX "!resourceList\n"));
         status = STATUS_INSUFFICIENT_RESOURCES;
 del_do:
+        if(originalResources)
+            ExFreePool(originalResources);
         IoDeleteDevice(BMList[i].PciIdeDevObj);
         BMList[i].PciIdeDevObj          = NULL;
         return status;
@@ -2001,10 +2004,16 @@ del_do:
 
     if (!NT_SUCCESS(status)) {
         KdPrint2((PRINT_PREFIX "HalAssignSlotResources failed %#x\n", status));
-        // this is always deallocated inside HalAssignSlotResources() implementation
-        //ExFreePool(resourceList); 
+        // HAL cleans up failed output allocations; the input is ours.
         goto del_do;
     }
+
+    // The returned descriptor buffer is separate from the resource claim.
+    // Keep the original input for compatibility with legacy HALs, and free
+    // each caller-owned allocation once even if the HAL returns that input.
+    if(resourceList && resourceList != originalResources)
+        ExFreePool(resourceList);
+    ExFreePool(originalResources);
 
     KdPrint2((PRINT_PREFIX "ok %#x\n", status));
     BMList[i].ChanInitOk |= 0x80;
