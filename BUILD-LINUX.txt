@@ -2,7 +2,7 @@ UniATA: Linux cross build for Windows XP SP3 x86
 ================================================
 
 Requirements: GNU make, i686-w64-mingw32-g++/gcc, windres, windmc,
-binutils, Python 3. Static checks also require the Python pefile package.
+binutils, Python 3 and a host g++ for the regression tests. Static checks also require the Python pefile package.
 Tested toolchain: GCC 12.2, binutils 2.40, mingw-w64 headers 10.0.
 No Wine, Microsoft compiler or proprietary DDK is used by this build.
 
