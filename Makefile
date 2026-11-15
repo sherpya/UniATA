@@ -28,7 +28,7 @@ endif
 SOURCES = bm_devs atacmd_map id_probe id_ata id_dma id_init id_queue id_sata id_badblock stdafx
 OBJECTS = $(addprefix $(OUT)/,$(addsuffix .o,$(SOURCES))) $(OUT)/xp_compat.o
 
-.PHONY: all check clean FORCE
+.PHONY: all check test clean FORCE
 all: $(OUT)/uniata.sys
 
 $(OUT):
@@ -68,5 +68,9 @@ clean:
 
 check: all
 	$(PYTHON) cross/check_pe.py $(OUT)/uniata.sys --prefix $(CROSS) $(CHECK_ARGS)
+
+test:
+	$(PYTHON) cross/test_dma_chain.py
+	$(PYTHON) cross/test_dma_payload.py
 
 -include $(OBJECTS:.o=.d)

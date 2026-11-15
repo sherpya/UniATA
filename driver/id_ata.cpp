@@ -59,6 +59,8 @@ Licence:
 --*/
 
 #include "stdafx.h"
+#include "dma_account.h"
+#include "dma_chunk.h"
 
 #ifndef UNIATA_CORE
 
@@ -5745,8 +5747,7 @@ IntrPrepareResetController:
                 }
                 dma_status = AtapiDmaDone(HwDeviceExtension, DEVNUM_NOT_SPECIFIED, lChannel, NULL/*srb*/);
             }
-            AtaReq->WordsTransfered = AtaReq->WordsLeft;
-            AtaReq->WordsLeft = 0;
+            UniataAccountDmaTransfer(AtaReq, atapiDev);
             status = SRB_STATUS_SUCCESS;
             chan->ChannelCtrlFlags &= ~CTRFLAGS_DMA_OPERATION;
             goto CompleteRequest;
@@ -5868,8 +5869,7 @@ continue_read_drq:
                 dma_status = AtapiDmaDone(HwDeviceExtension, DEVNUM_NOT_SPECIFIED, lChannel, NULL/*srb*/);
             }
             //ASSERT(AtaReq->WordsLeft == wordCount);
-            AtaReq->WordsTransfered = AtaReq->WordsLeft;
-            AtaReq->WordsLeft = 0;
+            UniataAccountDmaTransfer(AtaReq, atapiDev);
             status = SRB_STATUS_SUCCESS;
             chan->ChannelCtrlFlags &= ~CTRFLAGS_DMA_OPERATION;
             goto CompleteRequest;
@@ -6896,6 +6896,7 @@ IdeReadWrite(
         AtaReq->Flags &= ~REQ_FLAG_DMA_OPERATION;
 
         if(AtaReq->WordsTransfered) {
+            UniataPrepareNextDmaChunk(AtaReq);
             AtaReq->DataBuffer = ((PUSHORT)(Srb->DataBuffer)) + AtaReq->WordsTransfered;
             startingSector = (UniAtaCalculateLBARegsBack(LunExt, AtaReq->lba)) /* latest lba */ + AtaReq->bcount /* previous bcount */;
             AtaReq->bcount = (AtaReq->TransferLength - AtaReq->WordsTransfered*2 + DEV_BSIZE-1) / DEV_BSIZE;
