@@ -2,3 +2,5 @@
 /dist/
 /.serena/
 __pycache__/
+/tools/IoIntegrityProbe/IoIntegrityProbe.exe
+/research/
