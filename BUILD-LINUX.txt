@@ -12,10 +12,10 @@ From the repository root:
     make check
     make DEBUG=1 check
 
-Outputs: build/release/uniata.sys and build/debug/uniata.sys, with map,
+Outputs: build/release/uniata.sys and build/debug-compact/uniata.sys, with map,
 dependency and per-function stack-usage files. Both use -O2 and target i586
 without SSE/MMX, exceptions or a user-mode runtime. Debug adds DWARF symbols
-and the existing DbgPrint diagnostics; there is no PDB generation. Release
+and DbgPrint diagnostics; there is no PDB generation. Release
 retains COFF symbols for entry-point validation and address lookup.
 
 CROSS defaults to i686-w64-mingw32-, DDK to
@@ -39,3 +39,15 @@ To check imports against your own XP SP3 files:
 These are static build checks, not a controller or disk-integrity test.
 Building never installs the driver or accesses a physical disk. For XP
 installation conventions see driver/Dist/readme_xp.txt.
+
+Debug logging
+-------------
+DEBUG=1 defaults to DEBUG_LOG=compact: full DriverEntry output, sampled runtime
+commands/completions, repeated-event throttling and periodic progress counters.
+Use DEBUG=1 DEBUG_LOG=full for all upstream diagnostics. Release links neither
+the compact logger nor DbgPrint calls from these diagnostics. Compact output
+is serialized with a non-blocking guard: nested/concurrent log calls may be
+lost, and counters are diagnostic rather than exact hardware accounting.
+Both modes use NT DbgPrint; neither initializes nor writes directly to a UART.
+The Windows kernel debugger owns the serial transport. Legacy COM1 loggers,
+revision banners and chipset-specific progress instrumentation are omitted.

@@ -6,7 +6,8 @@ RC = $(CROSS)windres
 MC = $(CROSS)windmc
 PYTHON ?= python3
 DEBUG ?= 0
-OUT ?= build/$(if $(filter 1,$(DEBUG)),debug,release)
+DEBUG_LOG ?= compact
+OUT ?= build/$(if $(filter 1,$(DEBUG)),debug-$(DEBUG_LOG),release)
 DDK ?= /usr/i686-w64-mingw32/include/ddk
 
 CPPFLAGS = -DUSE_REACTOS_DDK -DUNIATA_MINGW_XP -D_WIN32_WINNT=0x0501 \
@@ -21,12 +22,20 @@ CXXFLAGS = -std=gnu++98 -nostdinc++ -O2 -march=i586 -mno-sse -mno-sse2 -mno-mmx 
 ifeq ($(DEBUG),1)
 CPPFLAGS += -D_DEBUG -DDBG=1
 CXXFLAGS += -g
+ifeq ($(DEBUG_LOG),compact)
+CPPFLAGS += -DUNIATA_COMPACT_DEBUG
+else ifneq ($(DEBUG_LOG),full)
+$(error DEBUG_LOG must be compact or full)
+endif
 else
 CPPFLAGS += -DNDEBUG -DDBG=0
 endif
 
 SOURCES = bm_devs atacmd_map id_probe id_ata id_dma id_init id_queue id_sata id_badblock stdafx
 OBJECTS = $(addprefix $(OUT)/,$(addsuffix .o,$(SOURCES))) $(OUT)/xp_compat.o
+ifeq ($(DEBUG):$(DEBUG_LOG),1:compact)
+OBJECTS += $(OUT)/debug_log.o
+endif
 
 .PHONY: all check test clean FORCE
 all: $(OUT)/uniata.sys
@@ -46,6 +55,9 @@ $(OUT)/%.o: driver/%.cpp cross/compat.h Makefile $(OUT)/config.stamp | $(OUT)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 $(OUT)/xp_compat.o: cross/xp_compat.cpp cross/compat.h Makefile $(OUT)/config.stamp | $(OUT)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+$(OUT)/debug_log.o: cross/debug_log.cpp cross/debug_filter.h cross/compat.h Makefile $(OUT)/config.stamp | $(OUT)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 $(OUT)/messages.stamp: driver/uataerr.mc | $(OUT)
@@ -72,5 +84,6 @@ check: all
 test:
 	$(PYTHON) cross/test_dma_chain.py
 	$(PYTHON) cross/test_dma_payload.py
+	$(PYTHON) cross/test_debug_log.py
 
 -include $(OBJECTS:.o=.d)

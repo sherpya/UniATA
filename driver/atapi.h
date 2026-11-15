@@ -108,6 +108,12 @@ DbgPrint(
 
 #define PRINT_PREFIX
 
+#if defined(UNIATA_COMPACT_DEBUG)
+/* The kernel debugger owns its transport, including any serial port. */
+ULONG __cdecl UniataDebugPrint(const CHAR* format, ...);
+#define DbgPrint UniataDebugPrint
+#endif
+
 // Note, that using DbgPrint on raised IRQL will crash w2k
 // ttis will not happen immediately, so we shall see some logs
 //#define LOG_ON_RAISED_IRQL_W2K    TRUE
