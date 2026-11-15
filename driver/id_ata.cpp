@@ -10623,7 +10623,10 @@ DriverEntry(
 
     if(!SavedDriverObject) {
         SavedDriverObject = (PDRIVER_OBJECT)DriverObject;
-#ifdef USE_REACTOS_DDK
+#if defined(UNIATA_MINGW_XP)
+        PsGetVersion(&MajorVersion, &MinorVersion, &BuildNumber, NULL);
+        CPU_num = KeNumberProcessors;
+#elif defined(USE_REACTOS_DDK)
         KdPrint(("UniATA Init: OS should be ReactOS\n"));
         MajorVersion=0x04;
         MinorVersion=0x01;

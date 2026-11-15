@@ -1,0 +1,41 @@
+UniATA: Linux cross build for Windows XP SP3 x86
+================================================
+
+Requirements: GNU make, i686-w64-mingw32-g++/gcc, windres, windmc,
+binutils, Python 3. Static checks also require the Python pefile package.
+Tested toolchain: GCC 12.2, binutils 2.40, mingw-w64 headers 10.0.
+No Wine, Microsoft compiler or proprietary DDK is used by this build.
+
+From the repository root:
+    make -j4
+    make DEBUG=1 -j4
+    make check
+    make DEBUG=1 check
+
+Outputs: build/release/uniata.sys and build/debug/uniata.sys, with map,
+dependency and per-function stack-usage files. Both use -O2 and target i586
+without SSE/MMX, exceptions or a user-mode runtime. Debug adds DWARF symbols
+and the existing DbgPrint diagnostics; there is no PDB generation. Release
+retains COFF symbols for entry-point validation and address lookup.
+
+CROSS defaults to i686-w64-mingw32-, DDK to
+/usr/i686-w64-mingw32/include/ddk. Override these or OUT as needed. A config
+stamp forces recompilation when compiler/options change in a reused OUT.
+The original driver/Makefile and NMAKE build files remain unchanged.
+
+The MinGW path reuses USE_REACTOS_DDK for DDK types, but obtains the actual
+Windows version with PsGetVersion. cross/ supplies version globals formerly
+provided by CrossNtK.lib, byte-swap helpers and XP/DDK compatibility types.
+The bundled CrossNt/PostDbgMesg libraries are not linked. Only ntoskrnl.exe,
+HAL.dll and scsiport.sys are imported; integer helpers come from libgcc.
+The original NT 3.51/NT4 paths are not validated by this cross build.
+
+The check target verifies native PE32 x86, OS/subsystem version 5.1,
+DriverEntry@8, PE checksum, relocations, resources, allowed import DLLs,
+absence of TLS and x87/SIMD instructions. It writes a .validation.json file.
+To check imports against your own XP SP3 files:
+    make check CHECK_ARGS='--xp-system32 /path/to/XP/system32 --scsiport /path/to/scsiport.sys'
+
+These are static build checks, not a controller or disk-integrity test.
+Building never installs the driver or accesses a physical disk. For XP
+installation conventions see driver/Dist/readme_xp.txt.

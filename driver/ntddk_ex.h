@@ -188,7 +188,7 @@ typedef struct _SYSTEM_MODULE_INFORMATION
 } SYSTEM_MODULE_INFORMATION, *PSYSTEM_MODULE_INFORMATION;
 
 typedef unsigned short  WORD;
-#ifndef __REACTOS__
+#if !defined(__REACTOS__) && !defined(UNIATA_MINGW_XP)
 typedef unsigned int    BOOL;
 #endif //__REACTOS__
 typedef unsigned long   DWORD;

@@ -1,0 +1,4 @@
+/build/
+/dist/
+/.serena/
+__pycache__/
