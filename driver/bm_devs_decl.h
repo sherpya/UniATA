@@ -91,8 +91,9 @@ typedef struct _BUSMASTER_CONTROLLER_INFORMATION {
     CHAR    MasterDev;
     BOOLEAN Known;
 #ifndef USER_MODE
-    UCHAR   ChanInitOk;             // 0x01 - primary,  0x02 - secondary, 0x80 - PciIde claimed
+    UCHAR   ChanInitOk;             // 0x01 - primary,  0x02 - secondary, 0x80 - PCI resources claimed
     BOOLEAN Isr2Enable;
+    BOOLEAN ScsiPortPciClaim;       // separate ScsiPort adapter owns PCI BAR4
     union {
         PDEVICE_OBJECT Isr2DevObj;
         PDEVICE_OBJECT PciIdeDevObj;

@@ -49,6 +49,7 @@ Licence:
 --*/
 
 #include "stdafx.h"
+#include "controller_quirks.h"
 
 PBUSMASTER_CONTROLLER_INFORMATION BMList = NULL;
 ULONG         BMListLen = 0;
@@ -62,6 +63,25 @@ BOOLEAN AtdiskPrimaryClaimed = FALSE;
 BOOLEAN AtdiskSecondaryClaimed = FALSE;
 
 #ifndef UNIATA_CORE
+
+// ScsiPort on XP reports ConfigInfo's bus/slot through IoReportDetectedDevice.
+// Use a separate ScsiPort PCI owner; both ATA channels retain ISA resources.
+// Keep the old path for other controllers, PnP/dump loading and older NT ports.
+BOOLEAN
+UniataUseScsiPortPciClaim(
+    PBUSMASTER_CONTROLLER_INFORMATION controller,
+    BOOLEAN primaryClaimed,
+    BOOLEAN secondaryClaimed
+    )
+{
+    if(WinVer_Id() < WinVer_XP || WinVer_Id() >= 0x0600 ||
+       WinVer_WDM_Model || g_Dump || primaryClaimed || secondaryClaimed ||
+       !controller->MasterDev || controller->PciIdeDevObj)
+        return FALSE;
+    ULONG id = (controller->nDeviceId << 16) | controller->nVendorId;
+    const UNIATA_CONTROLLER_QUIRKS* quirks = UniataGetControllerQuirks(id);
+    return quirks && (quirks->Flags & UNIATA_QUIRK_SCSIPORT_PCI_CLAIM);
+} // end UniataUseScsiPortPciClaim()
 
 UCHAR         pciBuffer[256];
 ULONG         maxPciBus = 16;
@@ -1100,6 +1120,14 @@ UniataFindBusMasterController(
         BMList[i].channel = (UCHAR)channel;
     }
 
+#ifndef UNIATA_CORE
+    if(BMList[i].ScsiPortPciClaim) {
+        AltInit = FALSE;
+        if(channel > 1 || (BMList[i].ChanInitOk & (1 << channel)) ||
+           !(BMList[i].ChanInitOk & 0x80))
+            return SP_RETURN_NOT_FOUND;
+    }
+#endif
     bm_offset = channel ? ATA_BM_OFFSET1 : 0;
 
     KdPrint2((PRINT_PREFIX "bm_offset %x, channel %x \n", bm_offset, channel));

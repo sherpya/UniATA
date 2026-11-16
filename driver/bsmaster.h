@@ -1416,6 +1416,20 @@ UniataFindBusMasterController(
     OUT PBOOLEAN Again
     );
 
+extern BOOLEAN
+UniataUseScsiPortPciClaim(
+    PBUSMASTER_CONTROLLER_INFORMATION controller,
+    BOOLEAN primaryClaimed,
+    BOOLEAN secondaryClaimed
+    );
+
+extern NTSTATUS
+UniataClaimPciResourcesWithScsiPort(
+    PVOID DriverObject,
+    PVOID RegistryPath,
+    ULONG index
+    );
+
 extern NTSTATUS
 NTAPI
 UniataClaimLegacyPCIIDE(

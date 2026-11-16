@@ -10795,8 +10795,19 @@ DriverEntry(
         if(GlobalConfig->AtDiskSecondaryAddressClaimed)
             SecondaryClaimed = TRUE;
         pref_alt = 0;
+        BMList[i].ScsiPortPciClaim = UniataUseScsiPortPciClaim(
+            &BMList[i], PrimaryClaimed, SecondaryClaimed);
 
-        if(!WinVer_WDM_Model && !PrimaryClaimed && !SecondaryClaimed && !g_Dump &&
+        if(BMList[i].ScsiPortPciClaim) {
+            newStatus = (ULONG)UniataClaimPciResourcesWithScsiPort(DriverObject, Argument2, i);
+            if(newStatus != STATUS_SUCCESS) {
+                KdPrint2(("[UniATA] PCI resource owner failed; skip bus-master channels\n"));
+                break;
+            }
+        }
+
+        if(!BMList[i].ScsiPortPciClaim &&
+           !WinVer_WDM_Model && !PrimaryClaimed && !SecondaryClaimed && !g_Dump &&
             !(BMList[i].ChanInitOk & 0x80)) {
             
             // We just want to claim our PCI device in compatible mode, since we shall not
@@ -10831,7 +10842,7 @@ DriverEntry(
             _PrintNtConsole("Init standard Dual-channel PCI ATA controller:");
         }
 
-        for(alt = 0; alt < (ULONG)(WinVer_WDM_Model ? 1 : 2) ; alt++) {
+        for(alt = 0; alt < (ULONG)((WinVer_WDM_Model || BMList[i].ScsiPortPciClaim) ? 1 : 2) ; alt++) {
 
             for(c=0; c<2; c++) {
                 // check is channel is manually excluded

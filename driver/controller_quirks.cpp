@@ -6,7 +6,7 @@
 #include "cs5530.h"
 
 static const UNIATA_CONTROLLER_QUIRKS ControllerQuirks[] = {
-    { ATA_CYRIX_5530, UNIATA_QUIRK_LEGACY_BMDMA, 4, 2, 2,
+    { ATA_CYRIX_5530, UNIATA_QUIRK_LEGACY_BMDMA | UNIATA_QUIRK_SCSIPORT_PCI_CLAIM, 4, 2, 2,
       UniataCs5530Init, UniataCs5530Timing }
 };
 

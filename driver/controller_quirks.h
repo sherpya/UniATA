@@ -3,6 +3,8 @@
 #define UNIATA_CONTROLLER_QUIRKS_H
 
 #define UNIATA_QUIRK_LEGACY_BMDMA 0x00000001
+// Use a ScsiPort PCI owner separate from the two compatibility-mode channels.
+#define UNIATA_QUIRK_SCSIPORT_PCI_CLAIM 0x00000002
 
 struct UNIATA_CONTROLLER_QUIRKS {
     ULONG DeviceId;

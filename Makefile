@@ -31,7 +31,7 @@ else
 CPPFLAGS += -DNDEBUG -DDBG=0
 endif
 
-SOURCES = bm_devs atacmd_map id_probe id_ata id_dma id_init id_queue id_sata id_badblock stdafx controller_quirks cs5530
+SOURCES = bm_devs atacmd_map id_probe id_ata id_dma id_init id_queue id_sata id_badblock stdafx controller_quirks cs5530 pci_owner
 OBJECTS = $(addprefix $(OUT)/,$(addsuffix .o,$(SOURCES))) $(OUT)/xp_compat.o
 ifeq ($(DEBUG):$(DEBUG_LOG),1:compact)
 OBJECTS += $(OUT)/debug_log.o
@@ -87,6 +87,7 @@ test:
 	$(PYTHON) cross/test_debug_log.py
 	$(PYTHON) cross/test_capacity16.py
 	$(PYTHON) cross/test_pci_resources.py
+	$(PYTHON) cross/test_scsiport_pci_claim.py
 	$(PYTHON) cross/test_controller_quirks.py
 	$(PYTHON) cross/test_cs5530.py
 
