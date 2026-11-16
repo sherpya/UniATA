@@ -47,6 +47,7 @@ bundled proprietary-toolchain libraries or require Wine.
 | `build_atacmd/`, `build_inf/` | Upstream command-table and INF generators |
 | `cross/` | Linux build support, PE validation and host regression tests |
 | `tools/IoIntegrityProbe/` | XP-compatible I/O comparison and data-integrity probe |
+| `tools/PnpResourceProbe/` | Read-only XP resource and device-status diagnostic |
 
 ## Installation and validation
 
