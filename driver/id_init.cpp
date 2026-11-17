@@ -75,6 +75,7 @@ UniataChipDetectChannels(
 
     KdPrint2((PRINT_PREFIX "UniataChipDetectChannels:\n" ));
 
+    if(!UniataLimitControllerChannels(deviceExtension)) return FALSE;
     deviceExtension->AHCI_PI_mask = 0;
 
     if(ChipFlags & (UNIATA_SATA | UNIATA_AHCI)) {
@@ -1970,6 +1971,9 @@ AtapiChipInit(
 
     if(GlobalInit && !UniataInitControllerQuirks(deviceExtension))
         return FALSE;
+    const UNIATA_CONTROLLER_QUIRKS* initQuirks = UniataGetControllerQuirks(deviceExtension->DevID);
+    if(!deviceExtension->UnknownDev && initQuirks && (initQuirks->Flags & UNIATA_QUIRK_OWN_INIT))
+        return TRUE; // callback handles timing/cable setup; never run generic AMD byte writes
 
     switch(VendorID) {
 //  case ATA_ACARD_ID:

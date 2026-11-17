@@ -5,6 +5,8 @@
 #define UNIATA_QUIRK_LEGACY_BMDMA 0x00000001
 // Use a ScsiPort PCI owner separate from the two compatibility-mode channels.
 #define UNIATA_QUIRK_SCSIPORT_PCI_CLAIM 0x00000002
+// The callback replaces vendor initialization, including cable detection.
+#define UNIATA_QUIRK_OWN_INIT 0x00000004
 
 struct UNIATA_CONTROLLER_QUIRKS {
     ULONG DeviceId;
@@ -13,11 +15,15 @@ struct UNIATA_CONTROLLER_QUIRKS {
     BOOLEAN (*Initialize)(PHW_DEVICE_EXTENSION extension);
     VOID (*SetTiming)(PHW_DEVICE_EXTENSION extension, ULONG device,
                       ULONG channel, ULONG pioMode, ULONG transferMode);
+    BOOLEAN (*SetMode)(PHW_DEVICE_EXTENSION extension, ULONG device,
+                       ULONG channel, ULONG pioMode, ULONG transferMode);
+    ULONG MaxChannels; // physical channels, before compatibility-mode splitting
 };
 
 const UNIATA_CONTROLLER_QUIRKS* UniataGetControllerQuirks(ULONG deviceId);
 BOOLEAN UniataHasLegacyBusMaster(const PCI_COMMON_CONFIG* pci);
 BOOLEAN UniataInitControllerQuirks(PHW_DEVICE_EXTENSION extension);
+BOOLEAN UniataLimitControllerChannels(PHW_DEVICE_EXTENSION extension);
 /* TRUE means a controller operation handled mode selection (including a
  * drive rejecting all modes); FALSE leaves the existing vendor path in charge.
  */

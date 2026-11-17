@@ -112,6 +112,7 @@ LINK32_OBJS= \
 	"$(INTDIR)\id_init.obj" \
 	"$(INTDIR)\controller_quirks.obj" \
 	"$(INTDIR)\cs5530.obj" \
+	"$(INTDIR)\cs5536.obj" \
 	"$(INTDIR)\pci_owner.obj" \
 	"$(INTDIR)\id_queue.obj" \
 	"$(INTDIR)\id_sata.obj" \
@@ -329,6 +330,9 @@ SRC=controller_quirks
 !INCLUDE build.mak
 
 SRC=cs5530
+!INCLUDE build.mak
+
+SRC=cs5536
 !INCLUDE build.mak
 
 SRC=pci_owner

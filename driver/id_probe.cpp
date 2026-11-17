@@ -1183,6 +1183,11 @@ UniataFindBusMasterController(
     deviceExtension->slotNumber = slotNumber;
     deviceExtension->SystemIoBusNumber = SystemIoBusNumber;
     deviceExtension->DevID = dev_id;
+    {
+        const UNIATA_CONTROLLER_QUIRKS* q = UniataGetControllerQuirks(dev_id);
+        if(q && q->MaxChannels && channel >= q->MaxChannels)
+            goto exit_notfound; // reject an absent physical channel before probing ATA ports
+    }
     deviceExtension->RevID = RevID;
     deviceExtension->NumberChannels = IDE_DEFAULT_MAX_CHAN; // default
     deviceExtension->NumberLuns = IDE_MAX_LUN_PER_CHAN; // default
@@ -1419,7 +1424,11 @@ UniataFindBusMasterController(
     }
 
     if(simplexOnly && MasterDev) {
-        if(deviceExtension->NumberChannels < IDE_DEFAULT_MAX_CHAN) {
+        const UNIATA_CONTROLLER_QUIRKS* q = UniataGetControllerQuirks(deviceExtension->DevID);
+        // Simplex arbitration cannot create a second physical channel on a
+        // single-channel controller (nor index beyond its allocated channels).
+        if((!q || !q->MaxChannels || q->MaxChannels >= IDE_DEFAULT_MAX_CHAN) &&
+           deviceExtension->NumberChannels < IDE_DEFAULT_MAX_CHAN) {
             KdPrint2((PRINT_PREFIX "set NumberChannels = %d\n", IDE_DEFAULT_MAX_CHAN));
             deviceExtension->NumberChannels = IDE_DEFAULT_MAX_CHAN;
             if(BaseIoAddressBM_0) {

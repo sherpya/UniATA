@@ -23,6 +23,7 @@ typedef bool BOOLEAN;
 typedef void VOID;
 #define PCI_ENABLE_BUS_MASTER 4
 #define ATA_CYRIX_5530 0x01021078
+#define ATA_AMD5536 0x209a1022
 #define ATA_PIO0 0x08
 #define ATA_PIO4 0x0c
 #define ATA_WDMA0 0x20
@@ -38,7 +39,7 @@ struct HW_LU_EXTENSION {};
 typedef HW_LU_EXTENSION* PHW_LU_EXTENSION;
 struct HW_CHANNEL { ULONG MaxTransferMode; PHW_LU_EXTENSION lun[2]; };
 struct HW_DEVICE_EXTENSION {
-    ULONG DevID, BusMaster, MaxTransferMode, NumberChannels;
+    ULONG DevID, BusMaster, MaxTransferMode, NumberChannels, Channel;
     BOOLEAN UnknownDev;
     HW_CHANNEL chan[2];
 };
@@ -60,12 +61,12 @@ static void rejected(Pci p) {
     assert(bool(IsMasterDev(&p)) == original(p));
 }
 static void classification() {
-    // Exhaustively preserve all ProgIf values except the captured CS5530 case.
+    // Both known compatibility-mode controllers accept ProgIf 0 or 0x80 only.
     const uint16_t vendors[] = {0, 0x1078, 0x8086, 0x1022, 0xffff};
-    const uint16_t devices[] = {0, 2, 0x0100, 0x0102, 0x0103, 0x208f, 0xffff};
+    const uint16_t devices[] = {0, 2, 0x0100, 0x0102, 0x0103, 0x208f, 0x209a, 0xffff};
     for (auto v : vendors) for (auto d : devices) for (unsigned pi=0; pi<256; ++pi) {
         Pci p = captured(); p.VendorID=v; p.DeviceID=d; p.ProgIf=pi;
-        bool quirk = true && v==0x1078 && d==0x0102 && pi==0;
+        bool quirk = ((v==0x1078 && d==0x0102) || (v==0x1022 && d==0x209a)) && (pi==0 || pi==0x80);
         assert(bool(UniataHasLegacyBusMaster(&p)) == quirk);
         assert(bool(IsMasterDev(&p)) == (original(p) || quirk));
     }
@@ -106,6 +107,10 @@ static bool initSuccess;
 static unsigned initCalls, timingCalls, acceptedMode, lastMode, lastPio;
 static std::vector<unsigned> attempts;
 BOOLEAN UniataCs5530Init(PHW_DEVICE_EXTENSION) { ++initCalls; return initSuccess; }
+BOOLEAN UniataCs5536Init(PHW_DEVICE_EXTENSION) { ++initCalls; return initSuccess; }
+BOOLEAN UniataCs5536SetMode(PHW_DEVICE_EXTENSION, ULONG, ULONG, ULONG pio, ULONG mode) {
+    attempts.push_back(mode); lastPio=pio; lastMode=mode; return mode==acceptedMode;
+}
 VOID UniataCs5530Timing(PHW_DEVICE_EXTENSION, ULONG d, ULONG c, ULONG pio, ULONG mode) {
     assert(d<2 && c<2); ++timingCalls; lastMode=mode; lastPio=pio;
 }
@@ -160,7 +165,22 @@ static void dispatch() {
 }
 int main() {
     classification(); dispatch();
-    puts("PASS controller quirks: 8960 PCI combinations, BAR guards, init fallback and negotiated-mode dispatch");
+    auto e=setup(); e.DevID=ATA_AMD5536;
+    assert(UniataGetControllerQuirks(e.DevID)->Flags & UNIATA_QUIRK_OWN_INIT);
+    assert(UniataLimitControllerChannels(&e) && e.NumberChannels==1);
+    e.Channel=1; assert(!UniataLimitControllerChannels(&e));
+    e=setup(); e.Channel=1;
+    assert(UniataLimitControllerChannels(&e) && e.NumberChannels==1);
+    e.Channel=2; assert(!UniataLimitControllerChannels(&e));
+    e=setup(); e.DevID=0x70108086; e.Channel=2;
+    assert(UniataLimitControllerChannels(&e) && e.NumberChannels==2);
+    for(unsigned accepted: {0x45u,0x43u,0x40u,0x22u,0x0cu}) {
+        e=setup(); e.DevID=ATA_AMD5536; acceptedMode=accepted;
+        assert(UniataSetControllerTransferMode(&e,0,0,6,4,6));
+        assert(attempts.front()==0x45 && attempts.back()==accepted && lastPio==4);
+        assert(timingCalls==0); // complete-mode callback, not the CS5530 timing callback
+    }
+    puts("PASS controller quirks: 10240 PCI combinations, BAR guards, init fallback and negotiated-mode dispatch");
 }
 '''
 
@@ -169,7 +189,7 @@ macros=header[header.index('#define IsBusMaster('):header.index('//#define INT_Q
 with tempfile.TemporaryDirectory(prefix='uniata-quirks-') as tmp:
     path=Path(tmp)
     (path/'stdafx.h').write_text(platform)
-    for name in ('controller_quirks.h','controller_quirks.cpp','cs5530.h'):
+    for name in ('controller_quirks.h','controller_quirks.cpp','cs5530.h','cs5536.h'):
         shutil.copyfile(root/'driver'/name,path/name)
     # Headers precede classification; its tests precede the main dispatch test.
     split=harness.index('static bool initSuccess;')

@@ -1210,7 +1210,8 @@ typedef struct _HW_LU_EXTENSION {
            mainly for mapping SATA ports to compatible PATA registers
            Treated as PHYSICAL port number, regardless of logical mapping.
          */
-        ULONG          SATA_lun_map; 
+        ULONG          SATA_lun_map;
+        ULONG          PataPioMode; // negotiated PIO timing for shared command cycles
     };
 
     struct _HW_DEVICE_EXTENSION* DeviceExtension;
